@@ -2,38 +2,41 @@
 
 Sistem operasi bisnis berbasis AI untuk agensi dan startup software: portofolio produk/klien, subscription dan invoice, pipeline lead, tiket maintenance, dan **AI Action Center** dengan approval manusia. Dibuat untuk Meta Global AI Developer Hackathon (track Startup).
 
-**Status: fase dokumentasi.** Belum ada fitur bisnis; pustaka komponen form (M14) sudah ada, lihat galeri di `/dev/komponen` saat `pnpm dev`. Baca `CLAUDE.md` dulu.
+**Status dan jadwal terkini: [`docs/PLAN.md`](docs/PLAN.md)** (satu-satunya sumber status; README tidak menyalinnya). Baca [`CLAUDE.md`](CLAUDE.md) dulu sebelum bekerja.
 
 ## Dokumen
 
 | Dokumen | Isi |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Panduan kerja wajib (alur dokumen, kerja dua jalur, DoD, aturan teknis, skill) |
-| [`docs/PLAN.md`](docs/PLAN.md) | Status tahap, jadwal, pemilik modul, pertanyaan terbuka |
+| [`docs/PLAN.md`](docs/PLAN.md) | Status tahap dan implementasi, jadwal, pemilik modul, pertanyaan terbuka |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Log keputusan |
 | [`docs/00-visi-produk.md`](docs/00-visi-produk.md) | Visi, masalah, prinsip AI, cerita demo |
 | [`docs/01-aturan-hackathon.md`](docs/01-aturan-hackathon.md) | Aturan, jadwal, penilaian hackathon |
-| [`docs/02-meta-model-api.md`](docs/02-meta-model-api.md) | Model Meta, harga, limit, yang tidak ada |
+| [`docs/02-meta-model-api.md`](docs/02-meta-model-api.md) | Model Meta, harga, limit, hasil uji nyata |
 | [`docs/03-arsitektur.md`](docs/03-arsitektur.md) | Stack, struktur, lapisan, AI, Telegram, keamanan |
-| [`docs/04-workflow-pengembangan.md`](docs/04-workflow-pengembangan.md) | Kerja dua jalur (dua jalur paralel), git, testing |
+| [`docs/04-workflow-pengembangan.md`](docs/04-workflow-pengembangan.md) | Kerja dua jalur, git, testing |
 | [`docs/05-uiux-dan-komponen.md`](docs/05-uiux-dan-komponen.md) | Design system dan kontrak komponen form |
 | [`docs/09-breakdown-fitur.md`](docs/09-breakdown-fitur.md) | Modul dan keterkaitannya |
 | [`docs/BRD.md`](docs/BRD.md) | BRD induk: tujuan, aktor, aturan lintas modul (CR), glosarium, template |
-| [`docs/brd/README.md`](docs/brd/README.md) | Indeks 14 BRD modul (satu file per modul), 📝 draf menunggu review |
-| [`docs/PRD.md`](docs/PRD.md) | ✅ disetujui |
-| [`docs/ERD.md`](docs/ERD.md) | ✅ disetujui |
+| [`docs/brd/README.md`](docs/brd/README.md) | Indeks BRD per modul (satu file per modul) |
+| [`docs/PRD.md`](docs/PRD.md) | Kebutuhan produk: halaman, layanan, kontrak AI dan Telegram, pengujian |
+| [`docs/ERD.md`](docs/ERD.md) | Skema data, batasan, penjaga di database, rencana migrasi |
 
-## Menjalankan (scaffold saja)
+## Menjalankan
 
-Prasyarat: Node >= 22.23.4, pnpm, PostgreSQL lokal.
+Prasyarat: Node >= 22.23.4, pnpm, PostgreSQL, `ffmpeg`.
 
 ```bash
-cp .env.example .env     # isi DATABASE_URL dan MODEL_API_KEY (jangan di-commit)
+cp .env.example .env     # isi nilai; jangan pernah di-commit
 pnpm install
+pnpm dev                 # galeri komponen: /dev/komponen
+pnpm test                # unit, komponen, dan pemeriksaan sinkronisasi dokumen
+pnpm typecheck
 pnpm build
 ```
 
-Belum ada skema database: skema dan migrasi baru dibuat setelah ERD disetujui (`docs/DECISIONS.md` D-006).
+Skema database dan migrasi hanya berasal dari `docs/ERD.md` (lihat `CLAUDE.md`).
 
 ## Kontribusi dan asal-usul
 

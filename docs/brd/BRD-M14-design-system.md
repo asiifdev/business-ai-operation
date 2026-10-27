@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | 🚧 Komponen form + token dikerjakan (izin eksplisit owner, 2026-10-28); komponen UI lain dan lint penuh menyusul |
+| **Status** | ✅ Disetujui owner (2026-10-28), v0.1.0. Progres implementasi: lihat `docs/PLAN.md` §1a |
 | **Tanggal** | 2026-10-28 |
 | **Gelombang / Jalur** | 1 — Fondasi / B |
 | **Level usulan** | ✅ lebih dulu |

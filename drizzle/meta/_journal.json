@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793138751579,
+      "tag": "0000_auth_org",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793138779969,
+      "tag": "0001_guard_last_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793138781268,
+      "tag": "0002_ai_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793138789390,
+      "tag": "0003_guard_append_only",
+      "breakpoints": true
+    }
+  ]
+}

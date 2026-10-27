@@ -64,7 +64,7 @@ Checklist (tempel di setiap PR):
 - [ ] Unit test untuk kalkulasi dan state machine
 - [ ] **E2E**: uji manual di browser untuk verifikasi eksploratif, **Playwright** untuk regression yang masuk CI
 - [ ] Dicoba manual di browser minimal sekali
-- [ ] `docs/PLAN.md`, `CHANGELOG.md`, dan `README.md` (bila relevan) diperbarui di commit yang sama
+- [ ] `docs/PLAN.md` (§1 status dokumen, §1a status implementasi), `CHANGELOG.md`, dan `README.md` (bila relevan) diperbarui di commit yang sama. **`pnpm test` memeriksa sinkronisasi dokumen** (`tests/docs-sync.test.ts`): jangan menyalin status ke dokumen lain, tautkan ke `docs/PLAN.md`
 
 ## Aturan teknis yang tidak boleh dilanggar
 

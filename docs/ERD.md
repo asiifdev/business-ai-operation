@@ -149,7 +149,7 @@ Batasan: `UNIQUE (org_id, id)` (untuk FK komposit). Penjaga Pemilik terakhir di 
 |---|---|---|
 | `id` | text PK | |
 | `org_id`, `user_id` | text | ref `users` |
-| `chat_id` | bigint | `UNIQUE`; satu chat hanya satu pengguna |
+| `chat_id` | bigint | unik **di antara tautan aktif** (`WHERE unlinked_at IS NULL`); satu chat hanya satu pengguna pada satu waktu, dan boleh dihubungkan ulang setelah `/putus` |
 | `username` | text N | |
 | `linked_at` | timestamptz | |
 | `unlinked_at` | timestamptz N | `/putus`; baris aktif = `unlinked_at IS NULL` |
@@ -349,18 +349,18 @@ Skrip `pnpm db:seed` menolak jalan bila `NODE_ENV=production` (BR-M01-10). Semua
 
 ## 9. Rencana migrasi
 
-Urutan (satu migrasi per kelompok, mudah ditinjau):
-1. `0000_auth_org`: `organizations`, tabel Better Auth, `users` (+ pemicu pemilik terakhir), `telegram_*`
-2. `0001_portfolio`: produk, paket, klien, deployment
-3. `0002_billing`: subscription, invoice, item, pembayaran, penghitung (+ pemicu append-only dan kunci invoice)
-4. `0003_ai_core`: `ai_runs`, `ai_budgets`, `audit_log` (+ pemicu append-only), `automation_runs`, `jobs`
-5. `0004_files_meetings`: `files`, `meetings`, `meeting_turns`
-6. `0005_pipeline_tasks`: `leads`, `tasks`
-7. `0006_documents`: dokumen dan item (+ pemicu final), FK `meetings.minutes_document_id`
-8. `0007_action_center`: `findings`, `approvals`, `briefings`
-9. `0008_marketing`: `brand_kits`, `marketing_assets`
+Urutan kelompok (satu migrasi per kelompok, mudah ditinjau). Nomor berkas mengikuti urutan pembuatan di `drizzle/` (penjaga SQL kustom mendapat nomor sendiri), dan **status pengerjaannya ada di `docs/PLAN.md` §1a**, bukan di sini.
+1. `auth_org`: `organizations`, tabel Better Auth, `users`, `telegram_*`; lalu penjaga Pemilik terakhir
+2. `ai_core`: `ai_runs`, `ai_budgets`, `audit_log`, `automation_runs`, `jobs`; lalu penjaga append-only (termasuk `TRUNCATE`)
+3. `portfolio`: produk, paket, klien, deployment
+4. `billing`: subscription, invoice, item, pembayaran, penghitung (+ pemicu append-only pembayaran dan kunci invoice)
+5. `files_meetings`: `files`, `meetings`, `meeting_turns`
+6. `pipeline_tasks`: `leads`, `tasks`
+7. `documents`: dokumen dan item (+ pemicu final), FK `meetings.minutes_document_id`
+8. `action_center`: `findings`, `approvals`, `briefings`
+9. `marketing`: `brand_kits`, `marketing_assets`
 
-Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterapkan**, tidak pernah diubah setelah diterapkan di server live (koreksi = migrasi baru). Basis data uji (`DATABASE_URL_TEST`) dibangun dari migrasi yang sama.
+Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterapkan**, tidak pernah diubah setelah diterapkan di server live (koreksi = migrasi baru). Basis data uji (`DATABASE_URL_TEST`, nama wajib berakhiran `_test`) dibangun ulang dari migrasi yang sama pada setiap `pnpm test` dan dipakai tes penjaga di `tests/db/`.
 
 ## 10. Keterlacakan ke BRD
 

@@ -6,7 +6,7 @@ Terakhir diperbarui: 2026-10-28. Diperbarui di commit yang sama dengan perubahan
 
 | Tahap | Dokumen | Status |
 |---|---|---|
-| Konsep | `docs/00`–`06`, `09`, DECISIONS | ✅ ditulis 2026-10-28, ⏳ review owner |
+| Konsep | `docs/00`–`05`, `09`, DECISIONS | ✅ disetujui owner 2026-10-28 |
 | BRD | `docs/BRD.md` (induk) + `docs/brd/BRD-Mxx-*.md` (14 modul; indeks `docs/brd/README.md`) | ✅ disetujui owner 2026-10-28 (v0.1.0) |
 | PRD | `docs/PRD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
 | ERD | `docs/ERD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
@@ -15,14 +15,26 @@ Terakhir diperbarui: 2026-10-28. Diperbarui di commit yang sama dengan perubahan
 
 PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 
+## 1a. Status implementasi (diperbarui setiap kali kode berubah)
+
+| Area | Status | Catatan |
+|---|---|---|
+| M14 Design system | 🚧 | token, Tailwind v4, komponen form, `Button`, `ThemeToggle`, `LocaleSwitch`, galeri `/dev/komponen`; sisa: `Card`, `Modal`, `Table`, `Toast`, `AppShell`, dst. (PRD §4 M14) |
+| Skema DB (ERD) | 🚧 | kelompok `auth_org` dan `ai_core` ditulis, 4 migrasi dibuat, 14 tes penjaga lulus di DB uji; **belum diterapkan ke DB dev** (menunggu tinjauan owner); 7 kelompok lain ⬜ |
+| M01 Auth dan tenancy | 🚧 | skema + konfigurasi Better Auth ditulis; belum terhubung ke halaman (registrasi, login, middleware) dan belum diuji end-to-end |
+| M15 Audit dan guardrail | 🚧 | tabel dan penjaga di DB ditulis dan diuji; layanan `audit.record`, `automation.once`, dan keputusan persetujuan belum |
+| M02–M13 | ⬜ | menunggu Gelombang 2 dan 3 |
+| Skill `meta-model-api-integration`, `telegram-bot-integration` | ⬜ | ditulis sebelum coding lapisan AI / Telegram |
+
 ## 2. Jadwal (WIB)
+
+Target awal ("BRD 29 Okt, ERD 30 Okt, coding mulai 30 Okt") **dipercepat**: konsep, BRD, PRD, dan ERD disetujui seluruhnya pada **28 Okt**.
 
 | Tanggal | Target |
 |---|---|
-| 28 Okt | Konsep + CLAUDE.md + skill; review owner; BRD draf |
-| 29 Okt | BRD disetujui → PRD draf → disetujui; uji kemampuan model Meta (setelah akun pulih); tulis skill Meta + Telegram |
-| 30 Okt | ERD disetujui (menggantikan draf skema); **coding dimulai** |
-| 30 Okt – 2 Nov | Implementasi per jalur (urutan di `docs/09`) |
+| 28 Okt | ✅ Konsep, BRD, PRD, ERD disetujui; pustaka komponen form; uji STT nyata; **coding Gelombang 1 dimulai** |
+| 29 Okt | Gelombang 1: skema dan migrasi, auth, audit, AppShell; skill Meta dan Telegram |
+| 30 Okt – 2 Nov | Gelombang 2 (M02–M05) dan Gelombang 3 (M07–M12), urutan di `docs/PRD.md` §12 |
 | 2 Nov | Deploy live, E2E |
 | 3 Nov | Video 3 menit, README, post X |
 | 4 Nov | Buffer + submit sore WIB (batas 5 Nov 09:00 WIB) |
