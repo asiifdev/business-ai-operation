@@ -18,6 +18,7 @@ BRD induk: [`../BRD.md`](../BRD.md) (aturan lintas modul CR-xx, glosarium, templ
 | 3 | M10 | [Marketing Studio](BRD-M10-marketing-studio.md) | ◐ | ✅ disetujui 2026-10-28 |
 | 3 | M11 | [Telegram Assistant](BRD-M11-telegram-assistant.md) | ✅ target | ✅ disetujui 2026-10-28 |
 | 3 | M12 | [Dashboard & BI](BRD-M12-dashboard-bi.md) | ◐ | ✅ disetujui 2026-10-28 |
+| 3 | M16 | [Landing & Marketing Site](BRD-M16-landing-site.md) | ◐ | 📝 draf v0.1.0 |
 | — | M13 | Knowledge base / RAG | ❌ ditunda (tanpa embedding di Meta) | tidak ditulis |
 
 Legenda: ✅ penuh/inti · ◐ minimal (demo-able) · ❌ ditunda. Level adalah **usulan**, keputusan akhir owner (D-014).

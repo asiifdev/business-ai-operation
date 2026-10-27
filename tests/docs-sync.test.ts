@@ -24,12 +24,19 @@ function headerStatus(file: string): string | null {
   return ICON.exec(cell)?.[1] ?? null;
 }
 
-function planRow(label: string): string {
-  const row = read('docs/PLAN.md').split('\n').find((l) => l.startsWith(`| ${label} |`));
-  if (!row) throw new Error(`docs/PLAN.md has no stage row "${label}"`);
-  return row;
+function planRow(label: string): string | undefined {
+  return read('docs/PLAN.md').split('\n').find((l) => l.startsWith(`| ${label} |`));
 }
-const planIcon = (label: string) => ICON.exec(planRow(label).split('|')[3].trim())?.[1] ?? null;
+const planIcon = (label: string) => {
+  const row = planRow(label);
+  if (!row) throw new Error(`docs/PLAN.md has no stage row "${label}"`);
+  return ICON.exec(row.split('|')[3].trim())?.[1] ?? null;
+};
+/** A module BRD may have its own PLAN row ("BRD M16") while it is still a draft; otherwise it follows the "BRD" row. */
+const planIconForBrdFile = (file: string) => {
+  const m = /BRD-(M\d+)/.exec(file);
+  return m && planRow(`BRD ${m[1]}`) ? planIcon(`BRD ${m[1]}`) : planIcon('BRD');
+};
 
 describe('links and references', () => {
   it('has no broken relative markdown links', () => {
@@ -90,7 +97,9 @@ describe('status consistency (source of truth: docs/PLAN.md)', () => {
         if (headerStatus(f) !== planIcon(label)) mismatches.push(`${f}: header ${headerStatus(f)} vs PLAN ${label} ${planIcon(label)}`);
       }
     };
-    check('BRD', ['docs/BRD.md', ...readdirSync('docs/brd').filter((f) => /^BRD-M\d+/.test(f)).map((f) => `docs/brd/${f}`)]);
+    for (const f of ['docs/BRD.md', ...readdirSync('docs/brd').filter((x) => /^BRD-M\d+/.test(x)).map((x) => `docs/brd/${x}`)]) {
+      if (headerStatus(f) !== planIconForBrdFile(f)) mismatches.push(`${f}: header ${headerStatus(f)} vs PLAN ${planIconForBrdFile(f)}`);
+    }
     check('PRD', ['docs/PRD.md']);
     check('ERD', ['docs/ERD.md']);
     expect(mismatches).toEqual([]);

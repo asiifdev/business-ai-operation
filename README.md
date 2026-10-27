@@ -38,6 +38,19 @@ pnpm build
 
 Skema database dan migrasi hanya berasal dari `docs/ERD.md` (lihat `CLAUDE.md`).
 
+## Deploy ke server
+
+Server publik **harus menjalankan build produksi**, bukan `pnpm dev` (mode dev membuka galeri dan alat pengembangan, lebih lambat, dan menolak host selain localhost).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm db:migrate          # tinjau migrasi baru di drizzle/ sebelum menerapkan
+pnpm build
+pnpm start               # mendengarkan di HOST:PORT dari .env
+```
+
+Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
+
 ## Kontribusi dan asal-usul
 
 - **Pembuat:** satu peserta hackathon yang approved (pemilik repo).

@@ -1,0 +1,18 @@
+---
+import Base from './Base.astro';
+import { AppHeader } from '../components/AppHeader';
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const user = Astro.locals.user!;
+const organizationName = Astro.locals.organizationName ?? '';
+---
+
+<Base title={title}>
+  <AppHeader client:load organizationName={organizationName} userName={user.name} role={user.role} />
+  <main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+    <slot />
+  </main>
+</Base>

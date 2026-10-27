@@ -1,5 +1,4 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -8,15 +7,12 @@ import * as schema from '../../src/db/schema';
 
 /**
  * Integration tests for the guards that live in the database itself (ERD section 5).
- * Runs against a throwaway database that is rebuilt from the migrations on every run.
+ * Runs against the throwaway database that tests/global-setup.ts rebuilds from the migrations on every run.
  * It NEVER touches the development database: the name must end in `_test`.
  */
 
-const TEST_URL = process.env.DATABASE_URL_TEST ?? 'postgres://root@127.0.0.1:5432/ai_business_operation_test';
-const dbName = new URL(TEST_URL).pathname.slice(1);
-if (!/^[a-z0-9_]+_test$/.test(dbName)) throw new Error(`Refusing to run: "${dbName}" is not a *_test database`);
+import { TEST_URL } from '../test-env';
 
-let admin: ReturnType<typeof postgres>;
 let client: ReturnType<typeof postgres>;
 let db: ReturnType<typeof drizzle<typeof schema>>;
 
@@ -47,20 +43,13 @@ async function makeUser(orgId: string, over: Partial<typeof schema.users.$inferI
   return user;
 }
 
-beforeAll(async () => {
-  const adminUrl = new URL(TEST_URL);
-  adminUrl.pathname = '/postgres';
-  admin = postgres(adminUrl.toString(), { max: 1 });
-  await admin.unsafe(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
-  await admin.unsafe(`CREATE DATABASE ${dbName}`);
+beforeAll(() => {
   client = postgres(TEST_URL, { max: 4, onnotice: () => {} });
   db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: './drizzle' });
-}, 60_000);
+});
 
 afterAll(async () => {
   await client?.end();
-  await admin?.end();
 });
 
 describe('migrations', () => {

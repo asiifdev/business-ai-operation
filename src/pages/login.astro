@@ -1,0 +1,10 @@
+---
+import Base from '../layouts/Base.astro';
+import { AuthForms } from '../components/AuthForms';
+
+export const prerender = false;
+---
+
+<Base title="Sign in">
+  <AuthForms client:load mode="login" />
+</Base>

@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
-    "db:migrate": "node --env-file=.env ./node_modules/.bin/drizzle-kit migrate"
+    "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
+    "start": "node --env-file-if-exists=.env dist/server/entry.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.9",

@@ -4,7 +4,8 @@ export default defineConfig({
   dialect: 'postgresql',
   schema: './src/db/schema/index.ts',
   out: './drizzle',
-  dbCredentials: { url: process.env.DATABASE_URL ?? 'postgres://root@127.0.0.1:5432/ai_business_operation' },
+  // No silent default: `db:migrate` must be pointed at a database explicitly (from .env or the environment).
+  dbCredentials: { url: process.env.DATABASE_URL ?? '' },
   strict: true,
   verbose: true,
 });
