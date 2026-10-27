@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | 📝 Draf v0.1.0, menunggu review owner |
+| **Status** | ✅ Disetujui owner (2026-10-28), v0.1.0 |
 | **Tanggal** | 2026-10-28 |
 | **Gelombang / Jalur** | 3 — AI & pengalaman / A |
 | **Level usulan** | ◐ |

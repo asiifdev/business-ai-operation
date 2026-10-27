@@ -22,8 +22,8 @@ Nama folder/kerja: `business-ai-operation`. Nama brand final masih TBD (`docs/DE
 ## Alur dokumen berjenjang (wajib)
 
 1. **Dokumen konsep** `docs/00`–`06` dan `docs/09` (sudah ada, menunggu review owner).
-2. **BRD**: induk `docs/BRD.md` (aturan lintas modul CR-xx, glosarium) + **satu file per modul** `docs/brd/BRD-Mxx-*.md` (indeks `docs/brd/README.md`). Draf v0.1.0 sudah ditulis; menunggu approval owner (boleh per gelombang).
-3. **PRD** (`docs/PRD.md`): kebutuhan produk dan fungsional per modul. Dibuat **setelah** BRD disetujui.
+2. **BRD**: induk `docs/BRD.md` (aturan lintas modul CR-xx, glosarium) + **satu file per modul** `docs/brd/BRD-Mxx-*.md` (indeks `docs/brd/README.md`). **Disetujui owner 2026-10-28.**
+3. **PRD** (`docs/PRD.md`): kebutuhan produk dan fungsional per modul. Draf v0.1.0 ditulis 2026-10-28, menunggu approval owner. Dibuat **setelah** BRD disetujui.
 4. **ERD** (`docs/ERD.md`): skema data final. Dibuat **setelah** PRD disetujui; menggantikan draf skema.
 5. **Coding** dimulai hanya setelah ketiganya disetujui, kecuali owner mengizinkan eksplisit bagian tertentu (mis. pustaka komponen UI yang tidak bergantung pada ERD).
 
@@ -31,7 +31,7 @@ Jangan loncat tahap dan jangan generate dokumen tahap berikutnya otomatis karena
 
 ## Kerja paralel: satu jalur (detail: `docs/04-workflow-pengembangan.md`)
 
-Dirancang untuk **dua jalur kerja paralel (dua jalur paralel)**. Untuk hackathon, kedua jalur dipegang owner (dua sesi paralel); jalur hanya boleh dipegang **peserta approved** (aturan 4 di atas). Agar tidak tabrakan:
+Dirancang untuk **dua jalur kerja paralel**. Untuk hackathon, kedua jalur dipegang owner (dua sesi paralel); jalur hanya boleh dipegang **peserta approved** (aturan 4 di atas). Agar tidak tabrakan:
 
 - **Jalur A — Platform & Data:** tenancy/auth, ERD dan migrasi, modul Portfolio, Billing (subscription, invoice, PDF), scheduler/overdue, Pipeline, audit log.
 - **Jalur B — AI & Pengalaman:** `AiProvider` + registri tool, Action Center dan approval, alur rapat (STT), Marketing Studio, **bot Telegram interaktif**, pustaka komponen UI dan design system.
@@ -90,7 +90,7 @@ Skill dibaca **sebelum** menyentuh area terkait. Skill integrasi baru wajib ditu
 | Skill / MCP | Fungsi | Status |
 |---|---|---|
 | `hallmark` (`.claude/skills/hallmark`) | Desain anti-slop, audit/redesign | ✅ dipasang 2026-10-28 dari `nutlope/hallmark` @ `6033bab`. **Jangan jalankan `scripts/install-hook.mjs`** tanpa persetujuan owner (mengubah `settings.json`) |
-| `tailwind-4-docs` (`.claude/skills/tailwind-4-docs`) | Panduan Tailwind v4 | ✅ dipasang dari `Lombiq/Tailwind-Agent-Skills` @ `634ec18` (BSD-3). ⬜ **snapshot dokumen belum diinisialisasi**: owner harus menjalankan sendiri `python .claude/skills/tailwind-4-docs/scripts/sync_tailwind_docs.py --accept-docs-license` (lisensi repo dokumen Tailwind *source-available*, penerimaan harus dari owner) |
+| `tailwind-4-docs` (`.claude/skills/tailwind-4-docs`) | Panduan Tailwind v4 | ✅ dipasang dari `Lombiq/Tailwind-Agent-Skills` @ `634ec18` (BSD-3). ✅ snapshot docs disinkronkan 2026-10-28 (commit `7f92c22`, lisensi diterima owner). Berkas docs **tidak di-commit** (`.gitignore`, lisensi *source-available*); jalankan ulang skripnya `.claude/skills/tailwind-4-docs/scripts/sync_tailwind_docs.py --accept-docs-license` di mesin baru |
 | `astro-docs` MCP (`.mcp.json`) | Dokumentasi Astro terkini | ✅ `https://mcp.docs.astro.build/mcp` |
 | `context7` MCP | Dokumentasi pustaka lain | ✅ (konfigurasi global pengguna) |
 | `meta-model-api-integration` | Responses/Chat API, tool calling, structured output, gambar, STT, limit | ⬜ **wajib ditulis sebelum coding lapisan AI** (jangan dari ingatan; `docs/02` baru ringkasan) |

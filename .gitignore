@@ -27,3 +27,10 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+# Tailwind docs snapshot: source-available license, keep local (do not redistribute)
+.claude/skills/tailwind-4-docs/references/docs/
+.claude/skills/tailwind-4-docs/references/docs-index.tsx
+
+# Local file storage driver
+storage/

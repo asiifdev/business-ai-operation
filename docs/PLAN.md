@@ -7,13 +7,13 @@ Terakhir diperbarui: 2026-10-28. Diperbarui di commit yang sama dengan perubahan
 | Tahap | Dokumen | Status |
 |---|---|---|
 | Konsep | `docs/00`–`06`, `09`, DECISIONS | ✅ ditulis 2026-10-28, ⏳ review owner |
-| BRD | `docs/BRD.md` (induk) + `docs/brd/BRD-Mxx-*.md` (14 modul, satu file per modul; indeks `docs/brd/README.md`) | 📝 draf v0.1.0 ditulis 2026-10-28, ⏳ review owner (boleh disetujui per gelombang) |
-| PRD | `docs/PRD.md` | ⬜ setelah BRD disetujui |
+| BRD | `docs/BRD.md` (induk) + `docs/brd/BRD-Mxx-*.md` (14 modul; indeks `docs/brd/README.md`) | ✅ disetujui owner 2026-10-28 (v0.1.0) |
+| PRD | `docs/PRD.md` | 📝 draf v0.1.0 ditulis 2026-10-28, ⏳ review owner |
 | ERD | `docs/ERD.md` | ⬜ setelah PRD disetujui |
 | Skill integrasi | `meta-model-api-integration`, `telegram-bot-integration` | ⬜ sebelum coding lapisan terkait |
 | Coding | | 🔒 terkunci sampai BRD+PRD+ERD disetujui (kecuali izin eksplisit) |
 
-Usulan pemadatan karena tenggat: **BRD satu dokumen berisi bagian per modul** (bukan satu file per modul), PRD dan ERD disusun berurutan. Persetujuan tetap per tahap.
+PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 
 ## 2. Jadwal (WIB)
 
@@ -43,7 +43,7 @@ Selama D-018 belum berubah, kedua jalur dipegang owner. Nama developer baru diis
 
 1. ~~Akses Meta Model API~~ — **API terbukti jalan** (uji 2026-10-28, `docs/02` §0).
 2. ~~Jumlah kontributor~~ — hanya peserta approved yang boleh terlibat (D-018, dikonfirmasi forum). **Owner memutuskan solo dengan scope penuh**, dua jalur kerja paralel. Risiko: scope penuh solo dalam ±4 hari coding; mitigasi: urutan gelombang BRD (yang paling akhir dipangkas lebih dulu) dan fallback Telegram ke minimal.
-3. ~~Hosting live~~ — tersedia (D-007); detail di PRD.
+3. ~~Hosting live~~ — satu server + PostgreSQL + `ffmpeg`, domain `ai-business.asiifdev.com`, berkas di Cloudflare R2 (D-007, D-023).
 4. ~~Bahasa UI~~ — ID/EN dengan pengalih (D-013).
 5. Pemilahan modul MVP (D-014), ditentukan saat BRD.
 6. ~~Draf skema~~ — dihapus, database kosong (D-006). Skema baru hanya setelah ERD disetujui.

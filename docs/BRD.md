@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | 📝 Draf v0.1.0, menunggu review owner |
+| **Status** | ✅ Disetujui owner (2026-10-28), v0.1.0 |
 | **Tanggal** | 2026-10-28 |
 | **Dasar** | `docs/00`–`05`, `docs/09`, `docs/DECISIONS.md` |
 | **BRD modul** | `docs/brd/BRD-Mxx-<slug>.md`, satu file satu modul satu approval. Indeks: [`brd/README.md`](brd/README.md) |

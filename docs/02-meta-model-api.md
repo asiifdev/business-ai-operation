@@ -11,9 +11,12 @@ Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-lim
 | Tool calling | ✅ `finish_reason:"tool_calls"`, `tool_calls[0].function.arguments` JSON valid (`{"org":"acme"}`). Model juga menulis teks pembuka sebelum tool |
 | Structured output `response_format: json_schema` (`strict:true`) | ✅ JSON sesuai skema (`{"branches":2,"budget_idr":15000000,"client":"Budi","deadline_weeks":6}`); 378 dari 419 token adalah reasoning |
 | Prompt | `prompt_tokens` ≈ 548 untuk permintaan kecil (ada konteks steering dari Meta; per dokumentasi tidak ditagih) |
+| **STT `POST /v1/asr/transcribe`** (`muse-voice-transcribe-1.0`) | ✅ Rekaman suara Indonesia nyata (22 dtk, satu pembicara). **HTTP 200 dalam ±5 dtk** (≈ 0,2× durasi). Teks benar dan terbaca utuh; `mode:"DIARIZATION"` mengembalikan `turns[]` dengan `speaker:"A"`, `startMs`, `endMs` per giliran. Bahasa terdeteksi otomatis tanpa `languageBias` |
+| **Format audio STT** | ⚠️ **m4a/AAC ditolak**: HTTP 400 `The 'audio' part must be a mono 16-bit PCM WAV at 16 or 24 kHz`. Wajib dikonversi: `ffmpeg -i in -ac 1 -ar 24000 -c:a pcm_s16le -map_metadata -1 out.wav` (rekaman 22 dtk = 1 MB WAV). Voice note Telegram (OGG/Opus) dan rekaman ponsel (m4a) sama-sama butuh langkah ini |
+| **Biasing kosakata** (`keywords`, `languageBias`) | Memperbaiki nama (`AsiifDev` dieja benar), tetapi **menambah derau**: muncul kata sisipan ("oh"), "agensi" menjadi "agency", dan satu kata terulang. **Pakai hemat**: hanya nama produk/klien, bukan istilah umum; `languageBias` tidak diperlukan untuk Indonesia |
 | Muse Image `/images/generations` | ✅ HTTP 200, respons `data[0].b64_json` (WebP, `output_format:"webp"`, `background:"opaque"`), `usage` memuat token. Satu gambar ≈ $0,01 per dokumentasi |
 
-**Belum diuji:** STT (butuh audio), image/video understanding, Responses API, streaming, `-contributor`, SAM, edit gambar multi-turn, akurasi teks dalam gambar, akurasi bahasa Indonesia STT.
+**Belum diuji:** STT dengan **dua pembicara** dan rekaman berderau/code-switching, STT > 1 menit, image/video understanding, Responses API, streaming, `-contributor`, SAM, edit gambar multi-turn, akurasi teks dalam gambar.
 
 ## 1. Akses
 
@@ -38,6 +41,7 @@ Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-lim
 
 - Bahasa Indonesia **didukung** (25 bahasa + code-switching), diarization (pembicara A/B), biasing kosakata, deteksi giliran bicara.
 - **File maks 10 menit** (HTTP 400 jika lebih) dan **32 MB** (HTTP 413). Rekaman lebih panjang harus dipotong dan transkripnya digabung di aplikasi.
+- **Format masukan: WAV mono 16-bit PCM 16 atau 24 kHz saja** (lihat §0). Parameter permintaan: `mode` (`PUSH_TO_TALK`/`ENDPOINTING`/`DIARIZATION`), `languageBias`, `keywords`, `audioEncoding`; hasil `application/json` (`transcript`, `turns[]`) atau `text/plain` lewat header `Accept`. Dikirim `multipart/form-data` dengan bagian `request` (JSON) dan `audio`.
 - Timestamp per giliran, **bukan per kata**. Tanpa confidence score, emosi, atau reformatting.
 - Hanya STT: tidak ada sintesis suara.
 
