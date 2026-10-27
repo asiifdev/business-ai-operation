@@ -1,0 +1,48 @@
+import type { ComponentPropsWithRef } from 'react';
+import { cx } from '../../lib/cx';
+
+type Variant = 'primary' | 'secondary' | 'danger' | 'link';
+
+interface Props extends Omit<ComponentPropsWithRef<'button'>, 'type'> {
+  variant?: Variant;
+  size?: 'md' | 'sm';
+  loading?: boolean;
+  type?: 'button' | 'submit' | 'reset';
+}
+
+const base =
+  'inline-flex items-center justify-center gap-2 rounded-input font-display font-medium whitespace-nowrap select-none ' +
+  'transition-[transform,box-shadow,background-color] duration-(--duration-micro) ease-(--ease-out) ' +
+  'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0';
+
+const variants: Record<Variant, string> = {
+  primary:
+    'border border-accent-edge bg-accent text-accent-ink shadow-key-accent hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
+  secondary:
+    'border border-rule-2 bg-key-face text-ink shadow-key hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
+  danger:
+    'border border-danger bg-danger text-paper shadow-key hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
+  link: 'border border-transparent bg-transparent px-1 text-accent underline decoration-rule-2 underline-offset-4 hover:decoration-accent',
+};
+
+const sizes = { md: 'min-h-10 px-4 text-base', sm: 'min-h-8 px-3 text-sm' } as const;
+
+export function Button({ variant = 'secondary', size = 'md', loading = false, type = 'button', className, disabled, children, ...rest }: Props) {
+  return (
+    <button
+      type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={cx(base, variants[variant], variant !== 'link' && sizes[size], className)}
+      {...rest}
+    >
+      {loading && (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="3">
+          <circle cx="12" cy="12" r="9" opacity="0.25" />
+          <path d="M21 12a9 9 0 0 0-9-9" strokeLinecap="round" />
+        </svg>
+      )}
+      {children}
+    </button>
+  );
+}

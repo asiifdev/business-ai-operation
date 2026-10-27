@@ -1,0 +1,12 @@
+---
+import Base from '../../layouts/Base.astro';
+import { ComponentGallery } from '../../components/ComponentGallery';
+
+// Development-only gallery (docs/05 section 4). Not served in production builds.
+export const prerender = false;
+if (!import.meta.env.DEV) return new Response(null, { status: 404 });
+---
+
+<Base title="Form components">
+  <ComponentGallery client:load />
+</Base>

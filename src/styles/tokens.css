@@ -1,0 +1,67 @@
+/* Hallmark · component: form-controls · genre: modern-minimal · theme: Cobalt (provisional, see DECISIONS D-021)
+ * states: default · hover · focus · active · disabled · loading · error · success
+ * Every colour and font in components comes from these tokens (BR-M14-01).
+ */
+@theme {
+  --color-paper: oklch(98.6% 0.005 250);
+  --color-paper-2: oklch(96.2% 0.008 252);
+  --color-paper-3: oklch(93% 0.011 252);
+  --color-ink: oklch(21% 0.028 262);
+  --color-ink-2: oklch(36% 0.022 260);
+  --color-muted: oklch(47% 0.018 258);
+  --color-rule: oklch(90% 0.009 252);
+  --color-rule-2: oklch(80% 0.014 252);
+  --color-accent: oklch(52% 0.19 258);
+  --color-accent-ink: oklch(98.6% 0.005 250);
+  --color-accent-wash: oklch(95% 0.028 256);
+  --color-accent-edge: oklch(39% 0.16 260);
+  --color-focus: oklch(52% 0.19 258);
+  --color-danger: oklch(50% 0.19 27);
+  --color-danger-wash: oklch(96% 0.025 27);
+  --color-success: oklch(48% 0.12 155);
+  --color-key-face: oklch(99.4% 0.003 250);
+  --color-key-edge: oklch(80% 0.016 254);
+
+  --font-display: "Familjen Grotesk", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-card: 8px;
+  --radius-input: 6px;
+
+  --shadow-card: 0 1px 2px oklch(21% 0.028 262 / 0.06);
+  --shadow-pop: 0 8px 24px -8px oklch(21% 0.028 262 / 0.28), 0 1px 2px oklch(21% 0.028 262 / 0.08);
+  --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.9);
+  --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.22);
+  --shadow-key-press: inset 0 1px 2px oklch(21% 0.028 262 / 0.18);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-micro: 120ms;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: oklch(19% 0.022 262);
+  --color-paper-2: oklch(22.5% 0.024 262);
+  --color-paper-3: oklch(27% 0.026 262);
+  --color-ink: oklch(94% 0.01 250);
+  --color-ink-2: oklch(82% 0.014 252);
+  --color-muted: oklch(70% 0.02 256);
+  --color-rule: oklch(30% 0.024 262);
+  --color-rule-2: oklch(40% 0.026 260);
+  --color-accent: oklch(68% 0.16 258);
+  --color-accent-ink: oklch(18% 0.03 262);
+  --color-accent-wash: oklch(27% 0.055 258);
+  --color-accent-edge: oklch(52% 0.15 258);
+  --color-focus: oklch(74% 0.14 256);
+  --color-danger: oklch(70% 0.17 25);
+  --color-danger-wash: oklch(27% 0.06 25);
+  --color-success: oklch(72% 0.13 155);
+  --color-key-face: oklch(25% 0.026 262);
+  --color-key-edge: oklch(14% 0.02 262);
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.4);
+  --shadow-pop: 0 8px 24px -8px oklch(0% 0 0 / 0.6), 0 1px 2px oklch(0% 0 0 / 0.4);
+  --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.06);
+  --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.2);
+  --shadow-key-press: inset 0 1px 2px oklch(0% 0 0 / 0.5);
+}

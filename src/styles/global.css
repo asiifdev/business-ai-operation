@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@layer base {
+  html { color-scheme: light; }
+  html[data-theme="dark"] { color-scheme: dark; }
+  html, body { overflow-x: clip; }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+}
