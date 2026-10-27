@@ -8,10 +8,10 @@ Terakhir diperbarui: 2026-10-28. Diperbarui di commit yang sama dengan perubahan
 |---|---|---|
 | Konsep | `docs/00`–`06`, `09`, DECISIONS | ✅ ditulis 2026-10-28, ⏳ review owner |
 | BRD | `docs/BRD.md` (induk) + `docs/brd/BRD-Mxx-*.md` (14 modul; indeks `docs/brd/README.md`) | ✅ disetujui owner 2026-10-28 (v0.1.0) |
-| PRD | `docs/PRD.md` | 📝 draf v0.1.0 ditulis 2026-10-28, ⏳ review owner |
-| ERD | `docs/ERD.md` | ⬜ setelah PRD disetujui |
-| Skill integrasi | `meta-model-api-integration`, `telegram-bot-integration` | ⬜ sebelum coding lapisan terkait |
-| Coding | | 🔒 terkunci sampai BRD+PRD+ERD disetujui (kecuali izin eksplisit) |
+| PRD | `docs/PRD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
+| ERD | `docs/ERD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
+| Skill integrasi | `meta-model-api-integration`, `telegram-bot-integration` | ⬜ ditulis sebelum coding lapisan AI / Telegram |
+| Coding | | 🟢 **terbuka** (BRD+PRD+ERD disetujui 2026-10-28); mulai Gelombang 1 |
 
 PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 

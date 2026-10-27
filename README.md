@@ -20,8 +20,8 @@ Sistem operasi bisnis berbasis AI untuk agensi dan startup software: portofolio 
 | [`docs/09-breakdown-fitur.md`](docs/09-breakdown-fitur.md) | Modul dan keterkaitannya |
 | [`docs/BRD.md`](docs/BRD.md) | BRD induk: tujuan, aktor, aturan lintas modul (CR), glosarium, template |
 | [`docs/brd/README.md`](docs/brd/README.md) | Indeks 14 BRD modul (satu file per modul), 📝 draf menunggu review |
-| [`docs/PRD.md`](docs/PRD.md) | 📝 draf v0.1.0, menunggu review |
-| `docs/ERD.md` | ⬜ setelah PRD disetujui |
+| [`docs/PRD.md`](docs/PRD.md) | ✅ disetujui |
+| [`docs/ERD.md`](docs/ERD.md) | ✅ disetujui |
 
 ## Menjalankan (scaffold saja)
 

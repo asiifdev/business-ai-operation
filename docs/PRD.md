@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | 📝 Draf v0.1.0, menunggu review owner |
+| **Status** | ✅ Disetujui owner (2026-10-28), v0.1.0 |
 | **Tanggal** | 2026-10-28 |
 | **Dasar** | BRD induk dan 14 BRD modul (disetujui owner 2026-10-28), `docs/02`, `docs/03`, `docs/05`, `docs/DECISIONS.md` |
-| **Tahap berikutnya** | `docs/ERD.md` (skema data) setelah PRD disetujui |
+| **Tahap berikutnya** | `docs/ERD.md` (draf v0.1.0 ditulis, menunggu review) |
 
 > PRD menjawab **"bagaimana produk berperilaku"**: halaman, endpoint, layanan, state, job, dan kontrak AI/Telegram. Aturan bisnis **tidak diulang**; PRD merujuk ID-nya (`BR-Mxx-nn`, `CR-nn`). Skema tabel dan kolom ada di ERD, bukan di sini. Item bertanda ⚠️ menunggu keputusan owner; PRD tidak mengisi asumsi diam-diam, hanya memberi **default** yang jelas dan dapat diganti.
 

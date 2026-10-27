@@ -6,9 +6,12 @@ Nama folder/kerja: `business-ai-operation`. Nama brand final masih TBD (`docs/DE
 
 ## Status saat ini
 
-**Fase dokumentasi.** Belum ada kode aplikasi yang sah. Yang ada di repo hanya scaffolding (Astro 7 + React + adapter Node) dan koneksi database lokal yang **kosong**. Draf skema/migrasi yang sempat dibuat sebelum dokumen ada sudah **dihapus** (`docs/DECISIONS.md` D-006): **tidak ada skema, tabel, atau migrasi sampai ERD disetujui owner.**
+**Dokumen disetujui owner (2026-10-28): BRD, PRD, dan ERD.** Coding **terbuka**, dikerjakan per gelombang (`docs/PRD.md` §12). Aturan:
 
-**Pengecualian izin owner (2026-10-28, D-021): pustaka komponen UI/M14 (token, komponen form, galeri) sudah dikerjakan karena tidak bergantung pada ERD.** Selain itu, **jangan menulis kode fitur, skema, atau migrasi sebelum BRD, PRD, dan ERD disetujui owner.** Hackathon punya tenggat keras, tetapi tanpa dokumen yang sama, sesi kerja yang berbeda akan bergerak ke arah berbeda.
+- **Skema dan migrasi hanya dari `docs/ERD.md`.** Perubahan skema = ubah ERD dulu (catat di `docs/DECISIONS.md`), baru migrasi. Migrasi ditinjau sebelum diterapkan dan tidak diubah setelah diterapkan di server live (D-006).
+- Pustaka komponen UI/M14 sudah sebagian dibangun (D-021); sisanya mengikuti PRD §4 M14.
+- **Skill integrasi** `meta-model-api-integration` dan `telegram-bot-integration` **wajib ditulis sebelum** coding lapisan AI dan Telegram (tabel skill di bawah).
+- Hanya data demo palsu (seed); jangan ada data klien nyata.
 
 ## Aturan hackathon yang mengikat kode (detail: `docs/01-aturan-hackathon.md`)
 
@@ -23,8 +26,8 @@ Nama folder/kerja: `business-ai-operation`. Nama brand final masih TBD (`docs/DE
 
 1. **Dokumen konsep** `docs/00`–`06` dan `docs/09` (sudah ada, menunggu review owner).
 2. **BRD**: induk `docs/BRD.md` (aturan lintas modul CR-xx, glosarium) + **satu file per modul** `docs/brd/BRD-Mxx-*.md` (indeks `docs/brd/README.md`). **Disetujui owner 2026-10-28.**
-3. **PRD** (`docs/PRD.md`): kebutuhan produk dan fungsional per modul. Draf v0.1.0 ditulis 2026-10-28, menunggu approval owner. Dibuat **setelah** BRD disetujui.
-4. **ERD** (`docs/ERD.md`): skema data final. Dibuat **setelah** PRD disetujui; menggantikan draf skema.
+3. **PRD** (`docs/PRD.md`): kebutuhan produk dan fungsional per modul. **Disetujui owner 2026-10-28.** Dibuat **setelah** BRD disetujui.
+4. **ERD** (`docs/ERD.md`): skema data final. **Disetujui owner 2026-10-28.** Dibuat **setelah** PRD disetujui; menggantikan draf skema.
 5. **Coding** dimulai hanya setelah ketiganya disetujui, kecuali owner mengizinkan eksplisit bagian tertentu (mis. pustaka komponen UI yang tidak bergantung pada ERD).
 
 Jangan loncat tahap dan jangan generate dokumen tahap berikutnya otomatis karena tahap sebelumnya selesai ditulis. Alur per dokumen: tulis → ringkas ke owner dengan pertanyaan bersaran → tunggu persetujuan → finalisasi dan commit. Detail yang butuh keputusan bisnis yang belum ada ditandai `⚠️ PERLU KEPUTUSAN OWNER`: **jangan diisi dengan asumsi**.

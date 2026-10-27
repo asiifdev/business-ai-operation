@@ -51,7 +51,7 @@ Rekaman rapat atau voice note menjadi **transkrip, notulen, lead, task, dan draf
 | BR-M09-07 | Hasil berlabel **"dibantu AI"** dan menautkan kutipan transkrip sebagai sumber tiap action item | Final (CR-13) |
 | BR-M09-08 | Pemrosesan **async** dengan status (`Diunggah`, `Memotong`, `Mentranskripsi`, `Menyusun`, `Selesai`, `Gagal`) dan percobaan ulang aman; kegagalan sebagian tidak membuang bagian yang berhasil | Usulan |
 | BR-M09-09 | Setiap pemrosesan memeriksa **anggaran AI** dan tercatat di `ai_runs` (detik audio × tarif, token) | Final (CR-11) |
-| BR-M09-10 | Audio mentah dihapus setelah transkripsi bila pengguna memilih; transkrip dapat dihapus kapan saja oleh pemilik/Admin | Usulan ⚠️ |
+| BR-M09-10 | **Rekaman dan transkrip adalah satu kesatuan**: menghapus salah satunya menghapus keduanya (berkas audio di penyimpanan, transkrip per giliran, dan pemetaan pembicara) dalam **satu aksi**. Catatan rapat (judul, tanggal), notulen (dokumen), dan draf lead/task yang sudah dihasilkan **tetap ada** | Final (keputusan owner 2026-10-28) |
 | BR-M09-11 | **Hanya rekaman demo/palsu** di lingkungan hackathon; peringatan privasi (persetujuan peserta rapat) ditampilkan sebelum unggah | Final (CR-16) |
 | BR-M09-12 | Pembicara A/B dipetakan manual ke nama; sistem tidak menebak identitas | Final |
 
@@ -80,7 +80,7 @@ Notifikasi "hasil rapat siap" (web/Telegram). Notulen sebagai dokumen/PDF.
 - [ ] Kalimat berisi perintah di dalam rekaman tidak memicu aksi apa pun.
 - [ ] File di atas batas atau format tak didukung ditolak dengan pesan jelas.
 - [ ] Anggaran habis menghentikan pemrosesan baru dengan pesan jelas; fitur lain tetap jalan.
-- [ ] Menghapus rekaman menghapus berkas dan transkripnya (sesuai pilihan).
+- [ ] Menghapus rekaman (atau transkrip) menghapus keduanya sekaligus: berkas audio hilang dari penyimpanan dan transkrip tidak dapat dibuka lagi; notulen dan draf yang sudah dihasilkan tetap ada.
 
 ## 11. Risiko & pertanyaan terbuka
 
@@ -88,4 +88,4 @@ Notifikasi "hasil rapat siap" (web/Telegram). Notulen sebagai dokumen/PDF.
 2. ⚠️ **Format audio** yang diterima endpoint belum diuji.
 3. ⚠️ **Pemotongan audio** butuh alat (ffmpeg?) di server: dependensi baru.
 4. ⚠️ Rekaman terhubung ke lead/klien sejak awal atau dipilih setelah selesai?
-5. ⚠️ Retensi audio mentah.
+5. ✅ Retensi audio mentah: audio disimpan selama pengguna tidak menghapus rapat; hapus rekaman = hapus transkrip (BR-M09-10).
