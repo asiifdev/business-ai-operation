@@ -59,13 +59,14 @@ describe('registerOrganization', () => {
 
   it('rolls everything back when the email is already taken (case-insensitive) and leaves no stray organization', async () => {
     const first = await register();
-    const [{ value: before }] = await db.select({ value: count() }).from(organizations);
+    const name = `Dupe ${unique()}`;
     await rejects(
-      registerOrganization({ organizationName: 'Dupe', name: 'Dupe', email: first.email.toUpperCase(), password: PASSWORD }),
+      registerOrganization({ organizationName: name, name: 'Dupe', email: first.email.toUpperCase(), password: PASSWORD }),
       'email_taken',
     );
-    const [{ value: after }] = await db.select({ value: count() }).from(organizations);
-    expect(after).toBe(before);
+    // Other test files register organizations in parallel, so look for this one by name instead of counting all.
+    const [{ value: strays }] = await db.select({ value: count() }).from(organizations).where(eq(organizations.name, name));
+    expect(strays).toBe(0);
   });
 
   it('rejects a short password before touching the database', async () => {

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Orbyte">
+  <!-- Mark for DARK surfaces (ring 4.2:1, nodes 12:1 on #030b1b). Provisional redraw; replace with the official export. -->
+  <circle cx="50" cy="50" r="33" fill="none" stroke="#3b78d8" stroke-width="9"/>
+  <circle cx="50" cy="50" r="9" fill="#8bd9d1"/>
+  <circle cx="50" cy="17" r="8" fill="#8bd9d1"/>
+  <circle cx="21.4" cy="66.5" r="8" fill="#8bd9d1"/>
+  <circle cx="78.6" cy="66.5" r="8" fill="#8bd9d1"/>
+</svg>

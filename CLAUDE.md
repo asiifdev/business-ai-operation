@@ -2,7 +2,7 @@
 
 Sistem operasi bisnis berbasis AI untuk **agensi dan startup software** (portofolio produk/klien, subscription & invoice, pipeline lead, tiket maintenance, knowledge, marketing studio) dengan **AI Action Center** yang bekerja berdasarkan event, bukan sekadar chat. Dibuat untuk **Meta Global AI Developer Hackathon**, **track Startup**, dan dirancang SaaS-ready (multi-tenant).
 
-Nama folder/kerja: `business-ai-operation`. Nama brand final masih TBD (`docs/DECISIONS.md` D-002). Jangan hardcode nama brand di kode atau dokumen kecuali sebagai placeholder yang jelas.
+Nama folder/kerja: `business-ai-operation`. Nama produk/merek: **Orbyte** (`docs/DECISIONS.md` D-002, D-029; verifikasi domain dan merek dagang masih ⚠️). Nama merek dibaca dari satu berkas konfigurasi (`src/config/brand.ts`), jangan ditulis ulang di komponen atau dokumen.
 
 ## Status saat ini
 

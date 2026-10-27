@@ -1,0 +1,26 @@
+---
+import { LogoMark } from '../brand/LogoMark';
+import { buttonClasses } from '../ui/Button';
+import { pagePath, type Locale } from '../../config/site';
+import { ui } from '../../content/site/ui';
+
+interface Props {
+  locale: Locale;
+  text: string;
+  cta: string;
+}
+const { locale, text, cta } = Astro.props;
+---
+
+<section class="band-cta" data-reveal>
+  <div aria-hidden="true" class="pointer-events-none absolute -right-16 -bottom-24 opacity-20 sm:-right-8">
+    <LogoMark size={360} />
+  </div>
+  <div class="wrap relative py-20 sm:py-28">
+    <p class="m-0 max-w-3xl font-display text-3xl font-semibold leading-tight sm:text-5xl">{text}</p>
+    <p class="mt-10 mb-0 flex flex-wrap items-center gap-4">
+      <a href="/register" data-cta="register" class={`${buttonClasses('primary', 'md', undefined, 'pill')} !bg-(--color-band-accent) !text-(--color-band) !border-transparent`}>{cta}</a>
+      <a href={pagePath(locale, 'pricing')} class="font-display text-base text-(--color-band-ink) underline underline-offset-4">{ui[locale].labels.allPlans}</a>
+    </p>
+  </div>
+</section>

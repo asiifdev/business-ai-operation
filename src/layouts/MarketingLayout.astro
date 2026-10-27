@@ -1,0 +1,89 @@
+---
+import '../styles/global.css';
+import displayFont from '@fontsource-variable/familjen-grotesk/files/familjen-grotesk-latin-wght-normal.woff2?url';
+import bodyFont from '@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2?url';
+import { site, type Locale } from '../config/site';
+import type { PageSlug } from '../content/site/types';
+import { pagePath } from '../config/site';
+import { ui } from '../content/site/ui';
+import { ConsentManager } from '../components/marketing/ConsentManager';
+import Footer from '../components/marketing/Footer.astro';
+import Header from '../components/marketing/Header.astro';
+import Seo from '../components/marketing/Seo.astro';
+
+interface Props {
+  locale: Locale;
+  slug: PageSlug | null;
+  title: string;
+  description: string;
+  jsonLd?: object;
+  noindex?: boolean;
+  /** True when a full-width band sits directly above the footer. */
+  flushFooter?: boolean;
+}
+const { locale, slug, title, description, jsonLd, noindex, flushFooter = false } = Astro.props;
+const u = ui[locale];
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="preload" as="font" type="font/woff2" href={displayFont} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={bodyFont} crossorigin />
+    <Seo locale={locale} slug={slug} title={title} description={description} jsonLd={jsonLd} noindex={noindex} />
+    <script is:inline>
+      // Theme only. The page language is fixed by the URL (/ for English, /id for Indonesian).
+      try {
+        var saved = localStorage.getItem('theme');
+        var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
+  </head>
+  <body class="canvas">
+    <a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-ink">{u.skip}</a>
+    <div class="scroll-progress" aria-hidden="true"></div>
+    <Header locale={locale} slug={slug} />
+    <slot />
+    <Footer locale={locale} flush={flushFooter} />
+    <script is:inline>
+      // Fade-in once as sections enter the viewport. Content stays fully visible without JavaScript or with reduced motion.
+      (function () {
+        if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        var els = document.querySelectorAll('[data-reveal]');
+        if (!els.length) return;
+        document.documentElement.classList.add('js-reveal');
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+          });
+        }, { rootMargin: '0px 0px -8% 0px' });
+        els.forEach(function (el) { io.observe(el); });
+      })();
+      // 3D tilt and light that follows the pointer on cards. Skipped on touch screens and with reduced motion.
+      (function () {
+        if (!matchMedia('(hover: hover)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        document.querySelectorAll('[data-tilt]').forEach(function (el) {
+          el.addEventListener('pointermove', function (e) {
+            var r = el.getBoundingClientRect();
+            var x = (e.clientX - r.left) / r.width;
+            var y = (e.clientY - r.top) / r.height;
+            el.style.setProperty('--ry', ((x - 0.5) * 8).toFixed(2) + 'deg');
+            el.style.setProperty('--rx', ((0.5 - y) * 8).toFixed(2) + 'deg');
+            el.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+            el.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+            el.classList.add('is-tilting');
+          });
+          el.addEventListener('pointerleave', function () { el.classList.remove('is-tilting'); el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); });
+        });
+      })();
+    </script>
+    <ConsentManager client:idle measurementId={site.gaMeasurementId} labels={u.consent} privacyHref={pagePath(locale, 'privacy')} />
+  </body>
+</html>

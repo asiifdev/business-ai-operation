@@ -12,7 +12,7 @@ const organizationName = Astro.locals.organizationName ?? '';
 
 <Base title={title}>
   <AppHeader client:load organizationName={organizationName} userName={user.name} role={user.role} />
-  <main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+  <main class="wrap py-8">
     <slot />
   </main>
 </Base>

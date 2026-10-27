@@ -5,6 +5,8 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 ## [Unreleased]
 
 ### Added
+- M16 (tampilan): palet Cobalt Soft (krem hangat di mode terang, biru-abu lembut di mode gelap, token `--color-warm`), efek gerak yang mati saat "kurangi gerakan" (latar bergerak, muncul 3D, kartu tilt, parallax hero, bar kemajuan scroll); teks Indonesia ditulis ulang di semua halaman publik; perbaikan hidrasi `PriceEstimator`.
+- M16 (sebagian): situs publik multi-halaman EN dan ID (17 halaman) dengan SEO teknis, data terstruktur, `robots.txt`, `sitemap.xml`, `llms.txt`, `llms-full.txt`, `pricing.md`, gambar Open Graph, GA4 dengan persetujuan, halaman privasi dari registri, beranda dengan hero beranimasi, "Cara kerja" interaktif, kalkulator harga; merek Orbyte (wordmark Krona One, logo dengan kontras terkoreksi); 400+ tes termasuk pemeriksaan atas hasil build.
 - M01 (sebagian): registrasi organisasi + Pemilik dalam satu transaksi, login/keluar (Better Auth), middleware sesi dan penolakan pengguna nonaktif, `AppShell` dan dasbor sementara, layanan pengguna (tambah, ubah peran, nonaktifkan), matriks izin, pembatas laju, `/api/health`. Halaman `/login`, `/register`, `/app`. 20 tes baru termasuk uji login terhadap hash buatan layanan.
 - M15 (sebagian): `recordAudit` yang ditulis dalam transaksi yang sama dengan perubahan datanya.
 - Konfigurasi produksi: `pnpm start`, `security.allowedDomains` dan `allowedHosts` dari `APP_URL`, bagian "Deploy ke server" di README.

@@ -206,6 +206,55 @@ Lihat kontrak lengkap di §6.
 - **Layanan:** `metrics.summary(ctx)` **satu-satunya** sumber angka, dipakai dashboard, briefing, Telegram, dan tool `get_business_summary` (CR-06). Draf tidak ikut dihitung. Cache pendek (maks 30 detik) dibolehkan; pencatatan pembayaran membatalkan cache org itu.
 - **Uji:** dengan seed yang diketahui angka sama dengan hitungan manual; angka identik di keempat permukaan.
 
+### M16 Landing dan situs pemasaran (BRD-M16)
+
+> ✅ **Revisi PRD disetujui owner (2026-10-28):** bagian ini menambah spesifikasi M16 pada PRD v0.1.0. Tidak ada perubahan pada modul lain dan **tidak ada tabel baru** (ERD tidak berubah).
+
+**Prinsip.** Satu konten untuk manusia dan mesin (BR-M16-18). Semua halaman publik **dirender statis saat build** dengan konten penting di HTML awal (BR-M16-12); JavaScript hanya untuk ilustrasi interaktif, banner persetujuan, dan pengalih bahasa. Tidak ada klaim yang tidak didukung kode (BR-M16-02).
+
+**Routing dan bahasa.** Astro i18n: `defaultLocale: 'en'`, `locales: ['en','id']`, `prefixDefaultLocale: false`. Inggris di `/…`, Indonesia di `/id/…`. Satu templat halaman membaca konten dari `src/content/site/<locale>/<slug>.ts`, jadi kedua bahasa selalu memiliki halaman yang sama (tes menolak halaman yang hanya ada di satu bahasa). Pengalih bahasa di situs publik adalah **tautan ke URL padanan** (bukan keadaan klien). `/` menampilkan landing untuk semua orang; pengguna masuk melihat tombol "Buka aplikasi" (BR-M16-09 usulan). Peta halaman: BRD-M16 Lampiran B. Halaman tak dikenal mengembalikan **404 sungguhan**.
+
+**Struktur berkas**
+```
+src/config/brand.ts            # nama, tagline, logo, URL situs (D-029)
+src/config/site.ts             # URL kanonik dari APP_URL, locale, ID verifikasi/GA dari env
+src/content/features.ts        # registri fitur: status + rujukan baris PLAN (BR-M16-02)
+src/content/data-practices.ts  # registri praktik data (BR-M16-32)
+src/content/pricing.ts         # paket terencana + sumber riset + tanggal (BR-M16-26/27)
+src/content/site/{en,id}/*.ts  # konten halaman (judul, jawaban langsung, bagian, FAQ)
+src/layouts/MarketingLayout.astro, src/components/marketing/*   # Seo, Header, Footer, Breadcrumbs, FaqList, PricingTable, ConsentBanner, ActionCenterIllustration
+src/pages/[...slug].astro, src/pages/id/[...slug].astro         # halaman statis dari konten
+src/pages/{robots.txt,sitemap.xml,llms.txt,llms-full.txt,pricing.md}.ts   # berkas penemuan (BR-M16-15/21/22)
+```
+
+**Komponen `Seo`** memasang di `<head>`: `title`, `description`, `canonical` absolut, `hreflang` (en, id, x-default), Open Graph dan Twitter, `robots` (indeks/ikuti), JSON-LD `@graph`, dan tag verifikasi Search Console dan Bing bila variabel lingkungan ada. **Data terstruktur per halaman**: semua halaman `Organization` + `WebSite` (tanpa `SearchAction`) + `BreadcrumbList` (halaman anak); `SoftwareApplication` di beranda dan produk (`applicationCategory: BusinessApplication`, `operatingSystem: Web`, **tanpa `offers`** sampai penagihan nyata, BR-M16-23); `FAQPage` di `/faq` dan halaman dengan FAQ yang terlihat, hanya sebagai penanda semantik; `TechArticle` untuk entri changelog bila relevan. Setiap fakta di JSON-LD juga ada sebagai teks terlihat.
+
+**Berkas penemuan**
+- `robots.txt`: dihasilkan dari konfigurasi kebijakan perayap (BR-M16-21). Grup `User-agent: *` mengizinkan; grup bernama hanya untuk pengecualian sadar (pelatihan model sesuai keputusan owner); `Disallow` untuk `/app/`, `/api/`, `/login`, `/register`; menunjuk `Sitemap:`.
+- `sitemap.xml`: semua halaman publik kedua bahasa, `xhtml:link rel="alternate" hreflang`, `lastmod` dari tanggal pembaruan nyata konten.
+- `llms.txt` dan `llms-full.txt`: dihasilkan dari konten halaman yang sama (tanpa teks terpisah); tautan ke keduanya dan ke `pricing.md` dan `sitemap.xml` ada di *footer* (berkas yang tidak ditautkan jarang diambil agen).
+- `pricing.md`: paket, harga, batas, dan tanggal sebagai teks mentah, dihasilkan dari `src/content/pricing.ts` sehingga identik dengan halaman `/pricing`.
+
+**Performa dan aset.** Font dihosting sendiri (paket `@fontsource*`), tanpa Google Fonts (juga menghapus transfer data ke Google tanpa persetujuan); gambar lewat `astro:assets` dengan ukuran eksplisit; CSS kritis dari Tailwind; tidak ada pustaka animasi. Target di BRD-M16 BR-M16-16. Logo: berkas resmi di `public/brand/` (menunggu ekspor owner), sementara SVG sederhana bertanda sementara.
+
+**Ilustrasi interaktif `ActionCenterIllustration`.** Menjelaskan empat langkah dengan **data contoh berlabel**: (1) temuan "invoice lewat jatuh tempo", (2) penjelasan dan draf pesan oleh AI, (3) persetujuan manusia (Setujui/Tolak), (4) jejak audit. **Peningkatan progresif:** HTML awal sudah memuat keempat langkah sebagai daftar berurutan yang dapat dibaca mesin dan pengguna tanpa JavaScript; JavaScript menambah kontrol Sebelumnya/Berikutnya/Ulang. Dapat dioperasikan dengan keyboard, tidak berputar otomatis, menghormati `prefers-reduced-motion`, angka diformat lewat `format.ts`.
+
+**Persetujuan dan GA4 (BR-M16-30/31).** `ConsentBanner` (island `client:idle`): tombol Setuju dan Tolak setara, pilihan tersimpan di penyimpanan lokal (kunci tercatat di registri praktik data) dan dapat diubah dari *footer*. Sebelum persetujuan: tidak ada permintaan ke Google. Setelah Setuju: Consent Mode v2 `analytics_storage: granted`, skrip `gtag.js` dimuat dengan ID dari `PUBLIC_GA_MEASUREMENT_ID`. Peristiwa: `cta_click` (tujuan, halaman) dan `signup_start`. Tidak dimuat pada `/app`, `/api`, `/login`, `/register`.
+
+**Pendaftaran terbuka (D-032, BR-M16-35).** `/api/register` mendapat: batas harian total organisasi baru (`REGISTRATION_DAILY_CAP`, default 50), batas per IP (sudah ada), dan verifikasi **Cloudflare Turnstile** (`TURNSTILE_SECRET_KEY` di server, kunci situs publik di formulir) bila kunci tersedia; tanpa kunci, hanya dua batas pertama dan peringatan di log.
+
+**Pemeriksaan otomatis (BR-M16-24)** `tests/seo/*.test.ts`, berjalan atas `dist` hasil `pnpm build` (dilewati bila `dist` belum ada; `pnpm verify` = build + semua tes):
+1. per halaman: satu `<h1>`, `title` ≤ 60 dan `description` ≤ 160 karakter dan unik, kanonik absolut, `lang` benar, tidak ada `noindex`;
+2. hreflang timbal-balik, EN dan ID memiliki himpunan halaman yang sama, sitemap memuat semuanya;
+3. JSON-LD dapat di-*parse*, berisi properti wajib, dan fakta (nama merek, FAQ, harga bila ada) cocok dengan teks halaman;
+4. semua tautan internal tembus, semua `<img>` ber-`alt`, tidak ada tautan `#` sebagai satu-satunya navigasi;
+5. `llms.txt`, `llms-full.txt`, `pricing.md`, dan `robots.txt` konsisten dengan halaman dan registri;
+6. **tidak ada permintaan ke host pihak ketiga** di HTML awal; satu-satunya pemuat pihak ketiga adalah pemuat GA4 yang menunggu persetujuan; tidak ada Google Fonts.
+
+**Registri dan tes kejujuran.** (a) `features.ts`: tiap kemampuan punya `status` dan `planRef`; tes menolak `available` bila baris PLAN tersebut belum ✅. (b) `data-practices.ts`: tiap kunci `localStorage`, kuki, dan host eksternal yang ditemukan di `src/` harus tercatat; halaman privasi dibuat dari registri ini dalam dua bahasa.
+
+**Uji.** Selain pemeriksaan SEO: uji komponen (banner persetujuan tidak memuat GA4 sebelum Setuju; pilihan Tolak tidak memuat), uji ilustrasi (urutan langkah, navigasi keyboard), uji pembatas pendaftaran harian, Lighthouse manual sebelum rilis. Tindakan owner yang tidak dapat diautomasi: verifikasi Search Console dan Bing, pengiriman sitemap, IndexNow/Brave, dan pembuatan ID GA4 dan kunci Turnstile.
+
 ## 5. Kontrak AI (M07)
 
 **Antarmuka `AiProvider`** (`src/ai/provider`): `chat({messages, tools?, schema?, effort, maxTokens})`, `transcribe({file, language, hints})`, `generateImage({prompt, n, size})`. Implementasi: `MetaProvider` (base `https://api.meta.ai/v1`, Bearer `MODEL_API_KEY`) dan `FakeProvider` (skrip balasan untuk tes tanpa jaringan, BRD-M07).
@@ -303,6 +352,7 @@ Mengikuti gelombang BRD (yang paling akhir dipangkas lebih dulu). Dikerjakan sol
 | **Gelombang 1** | M01 auth/tenancy, M15 audit/guardrail, sisa M14 (AppShell, Table, Modal, Toast, dst.) | A + B |
 | **Gelombang 2** | M02 → M03 (inti: subscription, invoice, pembayaran, PDF, scheduler) → M04 → M05 | A |
 | **Gelombang 3** | M07 AI Core → M08 Action Center → M09 Meeting → M11 Telegram → M06 Dokumen → M10 Marketing → M12 Dashboard | B (+ A untuk M06, M12) |
+| Landing M16 | Fase A: merek, layout, `Seo`, i18n routing, berkas penemuan, font sendiri, persetujuan + GA4, tes SEO; Fase B: halaman dan konten EN lalu ID; Fase C: ilustrasi interaktif; Fase D (akhir): kunci klaim fitur terhadap status modul | B |
 | Penutup | E2E, deploy live, seed demo, video 3 menit, README | A + B |
 
 **Urutan pangkas bila waktu habis** (dari yang pertama dikorbankan): foto→task di M11 → M10 revisi gambar → tren di M12 → M05 saran pengelompokan → M11 bahasa alami (tetap notifikasi + tombol) → M06 Quotation. **Tidak boleh dipangkas** karena inti demo: M03, M07, M08, M09, M15 dan Telegram minimal.
@@ -340,3 +390,4 @@ Sisa ⚠️ yang menunggu: pembeda dua pembicara STT dan rekaman lebih panjang (
 | M10 | `brd/BRD-M10-marketing-studio.md` | §4 M10 |
 | M11 | `brd/BRD-M11-telegram-assistant.md` | §6 |
 | M12 | `brd/BRD-M12-dashboard-bi.md` | §4 M12 |
+| M16 | `brd/BRD-M16-landing-site.md` | §4 M16 |

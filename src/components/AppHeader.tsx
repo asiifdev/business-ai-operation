@@ -27,7 +27,8 @@ export function AppHeader({ organizationName, userName, role }: Props) {
   }
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rule bg-paper px-4 py-3 sm:px-6">
+    <header className="border-b border-rule bg-paper">
+      <div className="wrap flex flex-wrap items-center justify-between gap-3 py-3">
       <div className="min-w-0">
         <p className="m-0 truncate font-display text-base font-semibold text-ink">{organizationName}</p>
         <p className="m-0 truncate text-sm text-muted">
@@ -40,6 +41,7 @@ export function AppHeader({ organizationName, userName, role }: Props) {
         <Button size="sm" onClick={signOut} loading={busy}>
           {t('signOut')}
         </Button>
+      </div>
       </div>
     </header>
   );

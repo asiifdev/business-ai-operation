@@ -1,0 +1,82 @@
+---
+import { features } from '../../content/features';
+import { pagePath, type Locale } from '../../config/site';
+import { ui } from '../../content/site/ui';
+import { LogoMark } from '../brand/LogoMark';
+import StatusBadge from './StatusBadge.astro';
+
+interface Props {
+  locale: Locale;
+  /** 'paper' = cards lighter than the surface behind them (use on a soft band). */
+  tone?: 'soft' | 'paper';
+}
+const { locale, tone = 'soft' } = Astro.props;
+const cardBg = tone === 'paper' ? 'bg-paper hover:bg-paper-3' : 'bg-paper-2 hover:bg-paper-3';
+const innerBg = tone === 'paper' ? 'bg-paper-2' : 'bg-paper';
+const L = ui[locale].labels;
+const sample = ui[locale].illustration.sample;
+const byId = Object.fromEntries(features.map((f) => [f.id, f]));
+const order = ['action-center', 'billing', 'meetings', 'telegram', 'marketing-studio', 'accounts', 'audit'] as const;
+const bars = [30, 55, 38, 72, 48, 85, 60, 40, 66, 34, 58, 44, 78, 36, 52, 28];
+---
+
+<ul class="m-0 grid list-none gap-5 p-0 sm:grid-cols-2 lg:grid-cols-3">
+  {order.map((id) => {
+    const f = byId[id];
+    return (
+      <li data-reveal data-tilt class={`tilt-card group flex flex-col rounded-card border border-rule ${cardBg} p-6 ${id === 'audit' ? 'lg:col-start-2' : ''}`}>
+        <div class="flex flex-col items-start gap-2">
+          <StatusBadge status={f.status} locale={locale} />
+          <h3 class="m-0 font-display text-lg font-semibold text-ink">{f.name[locale]}</h3>
+        </div>
+        <p class="mt-2 mb-4 text-sm text-ink-2">{f.summary[locale]}</p>
+
+        <div class={`mt-auto flex min-h-36 flex-col justify-center rounded-input ${innerBg} p-4`} aria-hidden="true">
+          {id === 'action-center' && (
+            <div class="flex flex-col gap-3 text-sm">
+              <p class="m-0 font-medium text-ink">{ui[locale].illustration.labels.finding}</p>
+              <p class="m-0 text-xs text-ink-2">{sample.client} · {sample.amount}</p>
+              <p class="m-0 flex gap-2"><span class="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-ink">{ui[locale].illustration.labels.approve}</span><span class="rounded-full border border-rule-2 px-3 py-1 text-xs text-ink">{ui[locale].illustration.labels.reject}</span></p>
+            </div>
+          )}
+          {id === 'billing' && (
+            <div class="space-y-1 text-sm text-ink-2">
+              <p class="m-0 flex justify-between"><span>{locale === 'id' ? 'Paket bulanan' : 'Monthly plan'}</span><span>Rp 10.000.000</span></p>
+              <p class="m-0 flex justify-between"><span>{locale === 'id' ? 'Perawatan' : 'Upkeep'}</span><span>Rp 2.500.000</span></p>
+              <p class="m-0 flex justify-between font-semibold text-ink"><span>Total</span><span>{sample.amount}</span></p>
+            </div>
+          )}
+          {id === 'meetings' && (
+            <div class="flex h-12 items-end gap-1">
+              {bars.map((h) => <span class="w-full rounded-sm bg-accent" style={`height:${h}%`}></span>)}
+            </div>
+          )}
+          {id === 'telegram' && (
+            <div class="space-y-2 text-xs">
+              <p class="m-0 w-fit max-w-[85%] rounded-lg bg-paper-2 p-2 text-ink-2">{ui[locale].illustration.labels.finding}<br /><span>{sample.client} · {sample.amount}</span></p>
+              <p class="m-0 flex gap-2"><span class="rounded-md bg-paper-3 px-2 py-1 text-ink">{ui[locale].illustration.labels.approve}</span><span class="rounded-md bg-paper-3 px-2 py-1 text-ink">{ui[locale].illustration.labels.reject}</span></p>
+            </div>
+          )}
+          {id === 'marketing-studio' && (
+            <div class="grid grid-cols-3 gap-2">
+              <span class="grid h-14 place-items-center rounded bg-accent-wash"><LogoMark size={22} /></span>
+              <span class="grid h-14 place-items-center rounded bg-paper-3"><LogoMark size={22} /></span>
+              <span class="grid h-14 place-items-center rounded bg-accent-wash"><LogoMark size={22} /></span>
+            </div>
+          )}
+          {id === 'accounts' && (
+            <p class="m-0 text-sm text-ink-2">{sample.client}<br />{locale === 'id' ? 'Peran: Pemilik' : 'Role: Owner'}</p>
+          )}
+          {id === 'audit' && (
+            <p class="m-0 text-sm text-ink-2">{sample.audit}</p>
+          )}
+        </div>
+
+        <p class="mt-3 mb-0 flex items-center justify-between gap-2 text-xs text-muted">
+          <span>{L.sampleData}</span>
+          {f.page && <a href={pagePath(locale, f.page)} class="text-sm text-accent underline underline-offset-4">{L.readMore}<span class="sr-only"> · {f.name[locale]}</span></a>}
+        </p>
+      </li>
+    );
+  })}
+</ul>

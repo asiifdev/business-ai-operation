@@ -8,7 +8,6 @@ Terakhir diperbarui: 2026-10-28. Diperbarui di commit yang sama dengan perubahan
 |---|---|---|
 | Konsep | `docs/00`–`05`, `09`, DECISIONS | ✅ disetujui owner 2026-10-28 |
 | BRD | `docs/BRD.md` (induk) + `docs/brd/BRD-Mxx-*.md` (14 modul; indeks `docs/brd/README.md`) | ✅ disetujui owner 2026-10-28 (v0.1.0) |
-| BRD M16 | `docs/brd/BRD-M16-landing-site.md` (landing publik, ditambahkan 2026-10-28) | 📝 draf v0.1.0, ⏳ review owner |
 | PRD | `docs/PRD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
 | ERD | `docs/ERD.md` | ✅ disetujui owner 2026-10-28 (v0.1.0) |
 | Skill integrasi | `meta-model-api-integration`, `telegram-bot-integration` | ⬜ ditulis sebelum coding lapisan AI / Telegram |
@@ -22,10 +21,22 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 |---|---|---|
 | M14 Design system | 🚧 | token, Tailwind v4, komponen form, `Button`, `ThemeToggle`, `LocaleSwitch`, galeri `/dev/komponen`; sisa: `Card`, `Modal`, `Table`, `Toast`, `AppShell`, dst. (PRD §4 M14) |
 | Skema DB (ERD) | 🚧 | kelompok `auth_org` dan `ai_core` ditulis dan **diterapkan ke DB dev** (4 migrasi, 14 tes penjaga); 7 kelompok lain ⬜ |
-| M01 Auth dan tenancy | 🚧 | selesai dan diuji (tes + browser): registrasi atomik, login/keluar, middleware sesi, AppShell dasar, layanan pengguna (tambah, ubah peran, nonaktifkan) dan matriks izin. Sisa: halaman Pengguna dan Pengaturan Organisasi, wajib ganti kata sandi awal (`mustChangePassword`), E2E Playwright |
+| M01 Registrasi dan login | ✅ | registrasi atomik, login/keluar, middleware sesi, `AppShell` dasar; diuji (tes + browser) |
+| M01 Pengguna dan pengaturan | 🚧 | layanan pengguna dan matriks izin selesai; sisa: halaman Pengguna dan Pengaturan Organisasi, wajib ganti kata sandi awal, E2E Playwright |
 | M15 Audit dan guardrail | 🚧 | selesai: tabel, penjaga DB, `recordAudit` dalam transaksi. Sisa: `automation.once`, keputusan persetujuan atomik, halaman audit |
-| M02–M13 | ⬜ | menunggu Gelombang 2 dan 3 |
+| M02 Portfolio | ⬜ | produk, paket, klien, deployment |
+| M03 Billing | ⬜ | langganan, invoice, pembayaran, PDF, penjadwal |
+| M04 Pipeline | ⬜ | lead sampai klien |
+| M05 Tasks dan maintenance | ⬜ | |
+| M06 Dokumen | ⬜ | proposal, quotation, notulen |
+| M07 AI Core | ⬜ | provider, tool, anggaran, `ai_runs` |
+| M08 Action Center | ⬜ | temuan, persetujuan, briefing |
+| M09 Rapat | ⬜ | STT, notulen, draf lead/task |
+| M10 Marketing Studio | ⬜ | gambar dan caption |
+| M11 Telegram | ⬜ | asisten interaktif |
+| M12 Dashboard | ⬜ | |
 | Deploy live | 🚧 | `https://ai-business.asiifdev.com` aktif tetapi **masih menjalankan dev server**; perlu `pnpm build` + `pnpm start` di belakang proxy HTTPS (README, bagian Deploy) dan migrasi pada DB server |
+| M16 Landing dan situs pemasaran | 🚧 | selesai: fondasi SEO/GEO/AEO dan tes build, 17 halaman EN dan ID, GA4 dengan persetujuan, beranda modern (hero beranimasi, cara kerja interaktif, bento, kalkulator harga, pita penutup). Sisa: berkas logo resmi, ID GA4 dan kunci Turnstile dari owner, kunci klaim fitur di hari terakhir, audit `hallmark`, uji Lighthouse |
 | Skill `meta-model-api-integration`, `telegram-bot-integration` | ⬜ | ditulis sebelum coding lapisan AI / Telegram |
 
 ## 2. Jadwal (WIB)

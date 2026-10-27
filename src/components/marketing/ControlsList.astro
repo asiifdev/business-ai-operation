@@ -1,0 +1,30 @@
+---
+import { pagePath, type Locale } from '../../config/site';
+import { ui } from '../../content/site/ui';
+import StatusBadge from './StatusBadge.astro';
+
+interface Props {
+  locale: Locale;
+  heading: string;
+  items: { title: string; body: string; status: 'available' | 'in_development' }[];
+}
+const { locale, heading, items } = Astro.props;
+---
+
+<div class="grid gap-10 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-16">
+  <div class="lg:sticky lg:top-28 lg:self-start">
+    <h2 class="m-0 font-display text-3xl font-semibold text-ink sm:text-5xl">{heading}</h2>
+    <p class="mt-4 mb-0"><a href={pagePath(locale, 'security')} class="text-accent underline underline-offset-4">{ui[locale].nav.security}</a></p>
+  </div>
+  <ol class="m-0 list-none p-0">
+    {items.map((c, i) => (
+      <li data-reveal class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-rule py-7 first:border-t-0 first:pt-0 sm:grid-cols-[5rem_minmax(0,1fr)]">
+        <span aria-hidden="true" class="font-display text-4xl font-semibold text-gradient sm:text-5xl">{String(i + 1).padStart(2, '0')}</span>
+        <div>
+          <p class="m-0 flex flex-wrap items-center gap-3 font-display text-xl font-semibold text-ink sm:text-2xl">{c.title} <StatusBadge status={c.status} locale={locale} /></p>
+          <p class="mt-2 mb-0 max-w-xl text-ink-2">{c.body}</p>
+        </div>
+      </li>
+    ))}
+  </ol>
+</div>

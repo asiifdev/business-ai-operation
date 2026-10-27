@@ -1,4 +1,10 @@
 @import "tailwindcss";
+/* Fonts are self-hosted (no request to Google Fonts; BR-M16-16). */
+@import "@fontsource-variable/familjen-grotesk";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/jetbrains-mono";
+/* Wordmark only (the logo lettering). Not used for headings or body text. */
+@import "@fontsource/krona-one/latin-400.css";
 @import "./tokens.css";
 
 @layer base {
@@ -17,4 +23,182 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
   }
+}
+
+/* ------------------------------------------------------------------ public site (BRD-M16) */
+
+/* Atmosphere: two fixed radial blooms, never animated, tokens only (hallmark: atmospheric genre). */
+.canvas { position: relative; isolation: isolate; }
+.canvas::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(34vmax 34vmax at 88% -4%, color-mix(in oklab, var(--color-brand-node) 20%, transparent), transparent 70%),
+    radial-gradient(40vmax 40vmax at 4% 2%, color-mix(in oklab, var(--color-brand-ring) 26%, transparent), transparent 70%);
+}
+:root:not([data-theme="dark"]) .canvas::before {
+  background:
+    radial-gradient(34vmax 34vmax at 88% -4%, color-mix(in oklab, var(--color-brand-node) 14%, transparent), transparent 70%),
+    radial-gradient(40vmax 40vmax at 4% 2%, color-mix(in oklab, var(--color-brand-ring) 12%, transparent), transparent 70%);
+}
+
+/* Reveal once: rise, un-tilt and fade. Content is fully visible without JavaScript or with reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .js-reveal [data-reveal] {
+    opacity: 0;
+    transform: perspective(900px) translateY(28px) rotateX(6deg);
+    transform-origin: 50% 100%;
+    transition: opacity 0.7s var(--ease-out), transform 0.8s var(--ease-out);
+  }
+  .js-reveal [data-reveal].is-in { opacity: 1; transform: none; }
+  /* Cards in a grid arrive one after another. */
+  .js-reveal li[data-reveal]:nth-child(3n + 2) { transition-delay: 80ms; }
+  .js-reveal li[data-reveal]:nth-child(3n) { transition-delay: 160ms; }
+
+  /* Living background: the blooms drift slowly and a warm one joins them. */
+  .canvas::before { animation: aurora 28s ease-in-out infinite alternate; }
+  @keyframes aurora {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(2.5%, 3%, 0) scale(1.06); }
+    100% { transform: translate3d(-3%, 1.5%, 0) scale(1.1); }
+  }
+  .canvas::after { animation: aurora 36s ease-in-out infinite alternate-reverse; }
+
+  /* Scroll-driven depth (progressive: browsers without animation-timeline just skip it). */
+  @supports (animation-timeline: view()) {
+    .parallax-slow { animation: drift-up linear both; animation-timeline: view(); animation-range: entry 0% exit 100%; }
+    @keyframes drift-up { from { transform: translateY(40px); } to { transform: translateY(-40px); } }
+    .scroll-progress { animation: grow-x linear both; animation-timeline: scroll(root); }
+    @keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  }
+}
+.canvas::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(30vmax 30vmax at 70% 92%, color-mix(in oklab, var(--color-warm) 16%, transparent), transparent 70%);
+}
+
+/* Thin reading-progress bar under the header. */
+.scroll-progress { position: fixed; inset: 0 0 auto 0; z-index: 60; height: 3px; transform-origin: 0 50%; transform: scaleX(0); pointer-events: none; background: linear-gradient(90deg, var(--color-brand-node), var(--color-accent), var(--color-warm)); }
+
+/* 3D tilt card: script sets --rx/--ry (tilt) and --mx/--my (light position) while the pointer moves. */
+.tilt-card { position: relative; transition: background-color var(--duration-micro), border-color 0.3s, box-shadow 0.4s var(--ease-out); }
+.tilt-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 70%);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tilt-card.is-tilting,
+  .js-reveal .tilt-card.is-tilting.is-in { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0); transition: box-shadow 0.4s var(--ease-out), border-color 0.3s; box-shadow: var(--shadow-pop); border-color: color-mix(in oklab, var(--color-accent) 45%, var(--color-rule)); }
+  .tilt-card:hover::after { opacity: 1; }
+}
+
+html { scroll-padding-top: 5.5rem; }
+
+/* Accent words in headings: brand gradient, readable on both themes (tokens only). */
+.text-gradient {
+  background-image: linear-gradient(90deg, var(--color-brand-node), var(--color-brand-ring));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme="dark"] .text-gradient { background-image: linear-gradient(90deg, var(--color-brand-node), color-mix(in oklab, var(--color-brand-ring) 70%, white)); }
+
+/* Hero demo: a looping product walkthrough made only of CSS animation. The base (no animation) is the finished state,
+   so it reads correctly with reduced motion and without JavaScript. The island only toggles data-paused. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-demo [class*='demo-'] { animation-duration: 16s; animation-iteration-count: infinite; animation-fill-mode: both; animation-timing-function: var(--ease-out); }
+  .hero-demo .demo-finding { animation-name: demo-finding; }
+  .hero-demo .demo-draft { animation-name: demo-draft; }
+  .hero-demo .demo-type { animation-name: demo-type; animation-timing-function: steps(60, end); }
+  .hero-demo .demo-actions { animation-name: demo-actions; }
+  .hero-demo .demo-telegram { animation-name: demo-telegram; }
+  .hero-demo .demo-approve { animation-name: demo-approve; }
+  .hero-demo .demo-approved { animation-name: demo-approved; }
+  .hero-demo .demo-audit { animation-name: demo-audit; }
+  .hero-demo[data-paused='true'] [class*='demo-'] { animation-play-state: paused; }
+  @keyframes demo-finding { 0% { opacity: 0; transform: translateY(10px); } 5%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+  @keyframes demo-draft { 0%, 10% { opacity: 0; transform: translateY(10px); } 16%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+  @keyframes demo-type { 0%, 16% { clip-path: inset(0 100% 0 0); } 40%, 100% { clip-path: inset(0 0 0 0); } }
+  @keyframes demo-actions { 0%, 42% { opacity: 0; transform: translateY(10px); } 48%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+  @keyframes demo-telegram { 0%, 46% { opacity: 0; transform: translate(-14px, 14px); } 53%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+  @keyframes demo-approve { 0%, 60% { transform: none; } 63% { transform: scale(0.93); } 67%, 100% { transform: none; } }
+  @keyframes demo-approved { 0%, 66% { opacity: 0; transform: scale(0.9); } 71%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+  @keyframes demo-audit { 0%, 72% { opacity: 0; transform: translateY(8px); } 79%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+}
+
+.skip-fade { transition: opacity 0.25s var(--ease-out); }
+
+/* The ONE content container of the public site. Header, sections and footer all use it, so their edges line up.
+   tests/layout.test.ts rejects any other max-width container in the marketing components. */
+.wrap { margin-inline: auto; width: 100%; max-width: 72rem; padding-inline: 1rem; }
+@media (min-width: 40rem) { .wrap { padding-inline: 1.5rem; } }
+
+/* ---- section characters (each part of the home page looks different, on purpose) ---- */
+
+/* Full-width soft band. */
+.band-soft { background: color-mix(in oklab, var(--color-paper-2) 90%, var(--color-warm) 10%); }
+:root[data-theme="dark"] .band-soft { background: color-mix(in oklab, var(--color-paper-2) 88%, var(--color-brand-ring) 12%); }
+
+/* Dot-grid band, faded at the top and bottom. */
+.band-grid { position: relative; background-color: color-mix(in oklab, var(--color-paper-2) 55%, transparent); }
+.band-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in oklab, var(--color-ink) 16%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+  animation: dots-drift 40s linear infinite;
+  -webkit-mask-image: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.9) 18%, rgb(0 0 0 / 0.9) 82%, transparent);
+  mask-image: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.9) 18%, rgb(0 0 0 / 0.9) 82%, transparent);
+}
+.band-grid > * { position: relative; }
+
+/* Ticker: slow horizontal drift, paused on hover, static and wrapped when motion is reduced. */
+.marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, rgb(0 0 0) 8%, rgb(0 0 0) 92%, transparent); mask-image: linear-gradient(90deg, transparent, rgb(0 0 0) 8%, rgb(0 0 0) 92%, transparent); }
+.marquee__track { display: flex; width: max-content; gap: 0.5rem; padding-block: 0.25rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .marquee__track { animation: marquee 42s linear infinite; }
+  .marquee:hover .marquee__track { animation-play-state: paused; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee { -webkit-mask-image: none; mask-image: none; }
+  .marquee__track { width: auto; flex-wrap: wrap; justify-content: center; }
+  .marquee__dup { display: none; }
+}
+
+/* Dark closing band with a brand glow. */
+.band-cta {
+  position: relative;
+  overflow: hidden;
+  color: var(--color-band-ink);
+  background:
+    radial-gradient(60% 140% at 85% -10%, color-mix(in oklab, var(--color-brand-ring) 60%, transparent), transparent 62%),
+    radial-gradient(40% 120% at 0% 110%, color-mix(in oklab, var(--color-band-accent) 22%, transparent), transparent 60%),
+    var(--color-band);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes dots-drift { to { background-position: 22px 22px; } }
+}
+@media (prefers-reduced-motion: reduce) { .band-grid::before { animation: none !important; } }
+
+/* Headline accent words shimmer slowly. */
+@media (prefers-reduced-motion: no-preference) {
+  .text-gradient { background-size: 200% 100%; animation: shimmer 9s ease-in-out infinite alternate; }
+  @keyframes shimmer { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
 }

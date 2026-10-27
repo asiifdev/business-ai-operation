@@ -1,0 +1,45 @@
+---
+import { brand } from '../../config/brand';
+import { pageUrl, site, type Locale } from '../../config/site';
+import type { PageSlug } from '../../content/site/types';
+import { alternates, fill } from '../../lib/marketing';
+
+interface Props {
+  locale: Locale;
+  slug: PageSlug | null;
+  title: string;
+  description: string;
+  jsonLd?: object;
+  noindex?: boolean;
+}
+const { locale, slug, title, description, jsonLd, noindex = false } = Astro.props;
+const canonical = slug === null ? undefined : pageUrl(locale, slug);
+const ogImage = `${site.url}/og/${locale}.png`;
+const t = fill(title);
+const d = fill(description);
+---
+
+<title>{t}</title>
+<meta name="description" content={d} />
+{canonical && <link rel="canonical" href={canonical} />}
+{slug !== null && alternates(slug).map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
+<meta name="robots" content={noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large, max-snippet:-1'} />
+<meta name="theme-color" content={brand.themeColor} />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={brand.name} />
+<meta property="og:title" content={t} />
+<meta property="og:description" content={d} />
+{canonical && <meta property="og:url" content={canonical} />}
+<meta property="og:locale" content={locale === 'en' ? 'en_US' : 'id_ID'} />
+<meta property="og:locale:alternate" content={locale === 'en' ? 'id_ID' : 'en_US'} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={`${brand.name}: ${brand.tagline[locale]}`} />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={t} />
+<meta name="twitter:description" content={d} />
+<meta name="twitter:image" content={ogImage} />
+{site.googleSiteVerification && <meta name="google-site-verification" content={site.googleSiteVerification} />}
+{site.bingSiteVerification && <meta name="msvalidate.01" content={site.bingSiteVerification} />}
+{jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}

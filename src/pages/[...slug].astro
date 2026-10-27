@@ -1,0 +1,13 @@
+---
+import MarketingPage from '../components/marketing/MarketingPage.astro';
+import { PAGE_SLUGS } from '../content/site/types';
+
+export const prerender = true;
+
+export function getStaticPaths() {
+  return PAGE_SLUGS.map((slug) => ({ params: { slug: slug === '' ? undefined : slug }, props: { slug } }));
+}
+const { slug } = Astro.props;
+---
+
+<MarketingPage locale="en" slug={slug} />

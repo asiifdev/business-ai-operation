@@ -1,0 +1,12 @@
+---
+import MarketingLayout from '../layouts/MarketingLayout.astro';
+
+export const prerender = true;
+---
+
+<MarketingLayout locale="en" slug={null} title="Page not found" description="This page does not exist." noindex>
+  <main id="content" class="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6">
+    <h1 class="m-0 font-display text-4xl font-semibold text-ink">Page not found</h1>
+    <p class="mt-4 text-ink-2">The page you are looking for does not exist. Try the <a href="/" class="text-accent underline underline-offset-4">home page</a> or the <a href="/faq" class="text-accent underline underline-offset-4">FAQ</a>.</p>
+  </main>
+</MarketingLayout>

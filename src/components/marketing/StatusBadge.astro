@@ -1,0 +1,18 @@
+---
+import type { FeatureStatus } from '../../content/features';
+import { statusLabel } from '../../content/features';
+import type { Locale } from '../../config/site';
+
+interface Props {
+  status: FeatureStatus;
+  locale: Locale;
+}
+const { status, locale } = Astro.props;
+const tone = {
+  available: 'border-success text-success',
+  in_development: 'border-accent text-accent',
+  planned: 'border-warm text-warm-ink bg-warm/10',
+}[status];
+---
+
+<span class={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${tone}`}>{statusLabel[status][locale]}</span>

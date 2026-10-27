@@ -10,7 +10,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.user = null;
   context.locals.ctx = null;
   context.locals.organizationName = null;
-  if (isAsset(pathname)) return next();
+  // Public marketing pages are rendered at build time: no session lookup, no database, no request headers.
+  if (context.isPrerendered || isAsset(pathname)) return next();
 
   const resolved = await resolveSession(context.request.headers);
   if (resolved) {

@@ -27,13 +27,18 @@ const variants: Record<Variant, string> = {
 
 const sizes = { md: 'min-h-10 px-4 text-base', sm: 'min-h-8 px-3 text-sm' } as const;
 
+/** Class names of a button, so links can look like buttons (public pages use <a>). */
+export function buttonClasses(variant: Variant = 'secondary', size: 'md' | 'sm' = 'md', className?: string, shape: 'default' | 'pill' = 'default'): string {
+  return cx(shape === 'pill' ? base.replace('rounded-input', 'rounded-full') : base, variants[variant], variant !== 'link' && sizes[size], shape === 'pill' && variant !== 'link' && 'px-6', className);
+}
+
 export function Button({ variant = 'secondary', size = 'md', loading = false, type = 'button', className, disabled, children, ...rest }: Props) {
   return (
     <button
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cx(base, variants[variant], variant !== 'link' && sizes[size], className)}
+      className={buttonClasses(variant, size, className)}
       {...rest}
     >
       {loading && (

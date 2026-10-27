@@ -1,0 +1,22 @@
+---
+import type { Locale } from '../../config/site';
+import { ui } from '../../content/site/ui';
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+/** Honest "built on" ticker: real components of the stack, as text. No customer logos, no usage numbers (BR-M16-01). */
+const stack = ['Meta Model API', 'Muse Spark', 'Muse Voice Transcribe', 'Muse Image', 'PostgreSQL', 'Astro', 'React', 'Cloudflare', 'Telegram Bot API'];
+const chip = 'whitespace-nowrap rounded-full bg-paper-2 px-5 py-2 font-display text-sm text-ink-2';
+---
+
+<section class="py-8" aria-label={ui[locale].labels.builtOn}>
+  <p class="wrap m-0 text-center text-sm text-muted">{ui[locale].labels.builtOn}</p>
+  <div class="marquee mt-4">
+    <ul class="marquee__track m-0 list-none p-0">
+      {stack.map((s) => <li class={chip}>{s}</li>)}
+      {stack.map((s) => <li class={`${chip} marquee__dup`} aria-hidden="true">{s}</li>)}
+    </ul>
+  </div>
+</section>

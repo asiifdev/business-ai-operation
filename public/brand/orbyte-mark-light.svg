@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Orbyte">
+  <!-- Mark for LIGHT surfaces (ring 7.9:1, nodes 4.0:1 on near-white). Provisional redraw. -->
+  <circle cx="50" cy="50" r="33" fill="none" stroke="#1f4f9e" stroke-width="9"/>
+  <circle cx="50" cy="50" r="9" fill="#0e8a82"/>
+  <circle cx="50" cy="17" r="8" fill="#0e8a82"/>
+  <circle cx="21.4" cy="66.5" r="8" fill="#0e8a82"/>
+  <circle cx="78.6" cy="66.5" r="8" fill="#0e8a82"/>
+</svg>

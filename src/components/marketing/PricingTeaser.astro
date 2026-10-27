@@ -1,0 +1,38 @@
+---
+import { pagePath, type Locale } from '../../config/site';
+import { formatIdr, formatUsd, plans } from '../../content/pricing';
+import { ui } from '../../content/site/ui';
+import { buttonClasses } from '../ui/Button';
+import { PriceEstimator } from './PriceEstimator';
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const L = ui[locale].labels;
+const usd = locale === 'en';
+const shown = plans.filter((p) => p.id !== 'enterprise');
+---
+
+<div class="rounded-card bg-paper-2 p-6 sm:p-10">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 class="m-0 font-display text-3xl font-semibold text-ink sm:text-4xl">{L.pricingTeaser}</h2>
+      <p class="mt-2 mb-0 text-ink-2">{L.pricingTeaserNote}</p>
+    </div>
+    <a href={pagePath(locale, 'pricing')} class={buttonClasses('secondary', 'md', undefined, 'pill')}>{L.allPlans}</a>
+  </div>
+  <div class="mt-8"><PriceEstimator client:visible plans={shown} locale={locale} labels={{ ...L.estimator, perMonth: L.estimator.perMonth }} /></div>
+  <ul class="m-0 mt-4 grid list-none gap-4 p-0 sm:grid-cols-3">
+    {shown.map((p) => (
+      <li class="rounded-input bg-paper p-5">
+        <p class="m-0 font-display text-lg font-semibold text-ink">{p.name}</p>
+        <p class="mt-1 mb-0 font-display text-3xl font-semibold text-ink">
+          {usd ? (p.usdAnnual === 0 ? L.free : formatUsd(p.usdAnnual ?? 0)) : p.idrAnnual === 0 ? L.free : formatIdr(p.idrAnnual ?? 0)}
+        </p>
+        {p.usdAnnual !== 0 && <p class="mt-1 mb-0 text-sm text-muted">{L.perUserMonth} · {L.billedAnnually}</p>}
+        <p class="mt-3 mb-0 text-sm text-ink-2">{p.audience[locale]}</p>
+      </li>
+    ))}
+  </ul>
+</div>

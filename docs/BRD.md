@@ -66,7 +66,7 @@ Pengguna utama: pendiri/CTO agensi atau startup software kecil-menengah. Detail 
 | M12 | Dashboard & BI | A | ◐ |
 | M14 | Design System & UI Kit | B | ✅ lebih dulu |
 | M15 | Audit & Guardrail Data | A | ✅ |
-| M16 | Landing & Marketing Site (publik) | B | ◐ |
+| M16 | Landing & Marketing Site (publik) | B | ✅ |
 
 ### 4.2 Di luar lingkup (dicatat, tidak dibangun di hackathon)
 
