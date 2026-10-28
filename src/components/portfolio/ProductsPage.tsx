@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { ProductRow } from '../../domain/portfolio/products';
 import { api, badFields, errorKey } from '../../lib/api-client';
 import type { Jsonify } from '../../lib/json-types';
@@ -8,8 +8,10 @@ import { FormField } from '../forms/FormField';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { Toggle } from '../forms/Toggle';
+import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
@@ -23,17 +25,14 @@ export function ProductsPage({ role }: { role: Role }) {
   const canWrite = role !== 'staff';
   const [archived, setArchived] = useState(false);
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('new') === '1') setAdding(true);
+  }, []);
   const list = useLoad(() => api<{ products: Row[] }>('GET', `/api/products${archived ? '?archived=1' : ''}`), [archived]);
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-prose">
-          <h1 className="m-0 text-2xl font-semibold text-ink lg:text-3xl">{t('productsTitle')}</h1>
-          <p className="mt-2 mb-0 text-muted">{t('productsIntro')}</p>
-        </div>
-        {canWrite && <Button variant="primary" aria-expanded={adding} onClick={() => setAdding((v) => !v)}>{t('newProduct')}</Button>}
-      </header>
+      <PageHeader title={t('productsTitle')} intro={t('productsIntro')} action={canWrite && <Button variant="primary" aria-expanded={adding} onClick={() => setAdding((v) => !v)}><Icon name="plus" className="size-4" />{t('newProduct')}</Button>} />
 
       {adding && canWrite && (
         <Panel aria-label={t('newProduct')}>
@@ -64,7 +63,7 @@ export function ProductsPage({ role }: { role: Role }) {
                 {list.value.data.products.map((p) => (
                   <tr key={p.id} role="row" className={tbl.row + ' align-middle'}>
                     <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium max-sm:p-0 ' + tbl.full}>
-                      <a href={`/app/produk/${p.id}`} className="text-ink underline decoration-rule-2 underline-offset-4 hover:decoration-accent">{p.name}</a>
+                      <a href={`/app/produk/${p.id}`} className="font-medium text-ink no-underline transition-colors hover:text-accent">{p.name}</a>
                       {p.archivedAt && <Badge className="ml-2">{t('archivedBadge')}</Badge>}
                     </th>
                     <td role="cell" data-label={t('colVersion')} className={'py-3 pr-3 text-ink tabular-nums max-sm:p-0 ' + tbl.label}>{p.currentVersion ?? t('noValue')}</td>

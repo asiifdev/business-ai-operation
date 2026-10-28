@@ -12,16 +12,13 @@ interface Props extends Omit<ComponentPropsWithRef<'button'>, 'type'> {
 
 const base =
   'inline-flex items-center justify-center gap-2 rounded-input font-display font-medium whitespace-nowrap select-none ' +
-  'transition-[transform,box-shadow,background-color] duration-(--duration-micro) ease-(--ease-out) ' +
-  'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0';
+  'transition-[transform,box-shadow,background-color,filter] duration-(--duration-micro) ease-(--ease-out) ' +
+  'active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:active:scale-100';
 
 const variants: Record<Variant, string> = {
-  primary:
-    'border border-accent-edge bg-accent text-accent-ink shadow-key-accent hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
-  secondary:
-    'border border-rule-2 bg-key-face text-ink shadow-key hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
-  danger:
-    'border border-danger bg-danger text-paper shadow-key hover:-translate-y-px active:translate-y-[3px] active:shadow-key-press',
+  primary: 'border border-accent-edge/60 bg-accent text-accent-ink shadow-btn-accent hover:brightness-110',
+  secondary: 'border border-rule-2 bg-key-face text-ink shadow-btn hover:bg-paper-2',
+  danger: 'border border-danger bg-danger text-paper shadow-btn hover:brightness-110',
   link: 'border border-transparent bg-transparent px-1 text-accent underline decoration-rule-2 underline-offset-4 hover:decoration-accent',
 };
 

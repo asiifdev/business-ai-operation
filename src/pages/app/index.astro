@@ -1,11 +1,17 @@
 ---
 import AppShell from '../../layouts/AppShell.astro';
 import { DashboardHome } from '../../components/DashboardHome';
+import { getCalendarMonth } from '../../domain/billing/summary';
+import { getDashboardOverview } from '../../domain/dashboard/overview';
 
 export const prerender = false;
 const user = Astro.locals.user!;
+const ctx = Astro.locals.ctx!;
+// Read on the server so the first paint already holds the figures: no empty frame that fills in a moment later.
+const overview = await getDashboardOverview(ctx);
+const calendar = overview.finance ? await getCalendarMonth(ctx, overview.finance.month) : null;
 ---
 
 <AppShell title="Dashboard" current="dashboard">
-  <DashboardHome client:load name={user.name} />
+  <DashboardHome client:load name={user.name} role={user.role} overview={overview} timezone={Astro.locals.timezone} calendar={calendar} />
 </AppShell>

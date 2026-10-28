@@ -5,7 +5,9 @@ import { messages } from '../../lib/i18n';
 import { AppChrome } from '../shell/AppChrome';
 
 const html = (current?: 'dashboard' | 'assistant' | 'ai', role: 'owner' | 'admin' | 'staff' = 'owner') =>
-  renderToStaticMarkup(<AppChrome organizationName="Orbit Studio" userName="Rina" role={role} current={current} />);
+  renderToStaticMarkup(
+    <AppChrome organizationName="Orbit Studio" userName="Rina" role={role} current={current} today="2026-10-28" counts={{ behindDeployments: 3, overdueInvoices: 1, draftsToReview: 2, pendingApprovals: 0 }} />,
+  );
 
 describe('app shell', () => {
   it('renders a sidebar for wide screens and a tab bar for phones, both with every destination', () => {
@@ -35,12 +37,26 @@ describe('app shell', () => {
     expect(phone).toContain('aria-haspopup="dialog"');
   });
 
-  it('shows the organization and the person, and offers sign out, language and theme in the account block', () => {
+  it('shows the organization and the person, with the account menu (language, theme, sign out) one click away', () => {
     const out = html();
     expect(out).toContain('Orbit Studio');
     expect(out).toContain('Rina');
-    expect(out).toContain(messages.id.signOut);
-    expect(out).toContain('aria-pressed'); // language and theme switches
+    expect(out).toContain(`aria-label="${messages.id.accountMenuOpen}"`);
+    expect(out).toContain('aria-expanded="false"'); // closed until opened
+  });
+
+  it('puts the search box in the top bar and on the phone, and announces its shortcut', () => {
+    const out = html();
+    expect(out.match(new RegExp(`aria-label="${messages.id.searchPlaceholder}"`, 'g'))).toHaveLength(2); // wide top bar, phone header
+    expect(out).toContain('aria-keyshortcuts="Control+K Meta+K"');
+  });
+
+  it('shows the page title and the date in the top bar, and a count of what needs attention on the bell and the products pill', () => {
+    const out = html('dashboard');
+    expect(out).toContain('Rabu, 28 Oktober 2026');
+    expect(out).toContain(messages.id.navDashboard);
+    expect(out.match(/aria-label="Buka pemberitahuan, 6"/g)).toHaveLength(2); // 1 overdue + 2 drafts + 3 behind, on the top bar and the phone header
+    expect(out).toMatch(/>3<\/span><\/a>/); // the behind-version pill beside Products
   });
 
   it('gives each role only the destinations it may see', () => {

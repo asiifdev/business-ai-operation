@@ -208,3 +208,19 @@ html { scroll-padding-top: 5.5rem; }
   .text-gradient { background-size: 200% 100%; animation: shimmer 9s ease-in-out infinite alternate; }
   @keyframes shimmer { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
 }
+
+/* ------------------------------------------------------------------ signed-in app */
+
+/* Small surfaces that open over the page (account menu, command palette) arrive with a short rise and fade. */
+@media (prefers-reduced-motion: no-preference) {
+  .pop { animation: pop-in 0.14s var(--ease-out); transform-origin: 50% 100%; }
+  .palette { animation: pop-in 0.16s var(--ease-out); transform-origin: 50% 0; }
+  .palette-backdrop { animation: fade-in 0.16s var(--ease-out); }
+  @keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  /* Dashboard cards rise one after another on first paint. */
+  .rise { animation: rise-in 0.45s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 55ms); }
+  .bar { transform-origin: 50% 100%; animation: bar-grow 0.6s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms + 250ms); }
+  @keyframes bar-grow { from { transform: scaleY(0); } to { transform: none; } }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+}

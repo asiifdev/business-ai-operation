@@ -10,7 +10,7 @@ const { title, noindex = true } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="id">
+<html lang={Astro.locals.locale ?? 'id'}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -20,10 +20,8 @@ const { title, noindex = true } = Astro.props;
     <title>{title}</title>
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <script is:inline>
-      // Apply the saved or system theme and language before first paint to avoid a flash.
+      // Apply the saved or system theme before first paint to avoid a flash. The language comes from the server (cookie).
       try {
-        var lang = localStorage.getItem('locale');
-        document.documentElement.lang = lang === 'en' || lang === 'id' ? lang : navigator.language && navigator.language.toLowerCase().indexOf('en') === 0 ? 'en' : 'id';
         var saved = localStorage.getItem('theme');
         var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';

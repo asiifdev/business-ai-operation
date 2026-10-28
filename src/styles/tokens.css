@@ -37,12 +37,16 @@
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
   --font-wordmark: "Krona One", "Familjen Grotesk Variable", system-ui, sans-serif;
 
-  --radius-card: 8px;
+  --radius-card: 12px;
   --radius-input: 6px;
 
   --shadow-card: 0 1px 2px oklch(21% 0.028 262 / 0.06);
   --shadow-pop: 0 8px 24px -8px oklch(21% 0.028 262 / 0.28), 0 1px 2px oklch(21% 0.028 262 / 0.08);
   --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.9);
+  /* Flat, modern buttons and surfaces for the signed-in app: a hairline ring plus a soft drop, no chunky edge. */
+  --shadow-btn: 0 1px 2px oklch(21% 0.028 262 / 0.08), 0 0 0 1px oklch(21% 0.028 262 / 0.02);
+  --shadow-btn-accent: 0 1px 2px oklch(39% 0.16 260 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.18);
+  --shadow-soft: 0 1px 2px oklch(21% 0.028 262 / 0.04), 0 4px 16px -6px oklch(21% 0.028 262 / 0.1);
   --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.22);
   --shadow-key-press: inset 0 1px 2px oklch(21% 0.028 262 / 0.18);
 
@@ -77,6 +81,9 @@
   --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.4);
   --shadow-pop: 0 8px 24px -8px oklch(0% 0 0 / 0.6), 0 1px 2px oklch(0% 0 0 / 0.4);
   --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.06);
+  --shadow-btn: 0 1px 2px oklch(0% 0 0 / 0.4);
+  --shadow-btn-accent: 0 1px 2px oklch(0% 0 0 / 0.45), inset 0 1px 0 oklch(100% 0 0 / 0.2);
+  --shadow-soft: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px -8px oklch(0% 0 0 / 0.55);
   --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.2);
   --shadow-key-press: inset 0 1px 2px oklch(0% 0 0 / 0.5);
 }

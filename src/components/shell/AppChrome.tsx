@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import type { AttentionCounts } from '../../domain/dashboard/overview';
 import type { Role } from '../../domain/permissions';
+import { formatFullDate } from '../../lib/format';
+import { BILLING_PAGES_READY } from '../../lib/nav';
 import { cx } from '../../lib/cx';
-import { itemsFor, TAB_LIMIT, type NavId, type NavItem } from '../../lib/nav';
+import { GROUP_LABEL, groupedFor, itemsFor, TAB_LIMIT, type NavId, type NavItem } from '../../lib/nav';
 import { useT } from '../../lib/use-t';
 import { LogoMark } from '../brand/LogoMark';
-import { Button } from '../ui/Button';
+import { Button, buttonClasses } from '../ui/Button';
 import { LocaleSwitch } from '../ui/LocaleSwitch';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { CommandPalette } from './CommandPalette';
 import { Icon } from './Icon';
+import { CountPill } from '../dashboard/primitives';
+import { Avatar, UserMenu } from './UserMenu';
 import { useSignOut } from './useSignOut';
 
 export interface ChromeProps {
@@ -15,19 +21,37 @@ export interface ChromeProps {
   userName: string;
   role: Role;
   current?: NavId;
+  /** The organization's today (ISO date), shown under the page title. */
+  today: string;
+  /** What needs a person's attention, for the sidebar pills and the bell. */
+  counts: AttentionCounts;
 }
 
 const roleKey = { owner: 'roleOwner', admin: 'roleAdmin', staff: 'roleStaff' } as const;
 
 /**
- * The frame of every signed-in page. On a wide screen it is a sidebar. Under 64rem it becomes a phone app: a slim top
- * bar, a tab bar at the bottom, and a sheet for the rest (language, theme, sign out). Content sits beside or between them.
+ * The frame of every signed-in page. On a wide screen it is a sidebar plus a slim top bar with the ⌘K search. Under 64rem
+ * it becomes a phone app: a top bar, a tab bar at the bottom, and a sheet for the rest (language, theme, sign out).
  */
 export function AppChrome(props: ChromeProps) {
+  const [palette, setPalette] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPalette((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  const openPalette = () => setPalette(true);
   return (
     <>
       <Sidebar {...props} />
-      <PhoneChrome {...props} />
+      <TopBar onSearch={openPalette} role={props.role} current={props.current} today={props.today} counts={props.counts} />
+      <PhoneChrome {...props} onSearch={openPalette} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} role={props.role} />
     </>
   );
 }
@@ -37,9 +61,12 @@ function AccountBlock({ userName, role, stacked = false }: Pick<ChromeProps, 'us
   const { signOut, busy } = useSignOut();
   return (
     <div className="flex flex-col gap-3">
-      <div className="min-w-0">
-        <p className="m-0 truncate text-sm font-medium text-ink">{userName}</p>
-        <p className="m-0 truncate text-sm text-muted">{t(roleKey[role])}</p>
+      <div className="flex items-center gap-3">
+        <Avatar name={userName} />
+        <div className="min-w-0">
+          <p className="m-0 truncate text-sm font-medium text-ink">{userName}</p>
+          <p className="m-0 truncate text-sm text-muted">{t(roleKey[role])}</p>
+        </div>
       </div>
       <div className={cx('flex items-center gap-2', stacked && 'justify-between')}>
         <LocaleSwitch />
@@ -53,52 +80,163 @@ function AccountBlock({ userName, role, stacked = false }: Pick<ChromeProps, 'us
   );
 }
 
-function Sidebar({ organizationName, userName, role, current }: ChromeProps) {
+/** The search pill. It looks like a field but opens the palette, so there is one place to search from everywhere. */
+function SearchTrigger({ onSearch, className }: { onSearch: () => void; className?: string }) {
   const t = useT();
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 overflow-y-auto border-r border-rule bg-paper-2 px-3 py-5 lg:flex">
-      <a href="/app" className="flex items-center gap-3 rounded-input px-2 py-1 text-ink no-underline">
-        <LogoMark size={28} />
-        <span className="min-w-0">
-          <span className="block truncate font-display text-base font-semibold">{organizationName}</span>
-        </span>
+    <button
+      type="button"
+      onClick={onSearch}
+      aria-label={t('searchPlaceholder')}
+      aria-keyshortcuts="Control+K Meta+K"
+      className={cx('group flex h-9 items-center gap-2 rounded-input border border-rule bg-key-face px-3 text-sm text-muted shadow-btn transition-colors hover:border-rule-2 hover:text-ink', className)}
+    >
+      <Icon name="search" className="size-4" />
+      <span className="flex-1 truncate text-left">{t('searchShort')}</span>
+      <kbd className="hidden rounded border border-rule bg-paper-2 px-1.5 font-mono text-xs text-muted sm:inline">⌘K</kbd>
+    </button>
+  );
+}
+
+function TopBar({ onSearch, role, current, today, counts }: { onSearch: () => void } & Pick<ChromeProps, 'role' | 'current' | 'today' | 'counts'>) {
+  const t = useT();
+  const item = itemsFor(role).find((i) => i.id === current);
+  return (
+    <header className="fixed top-0 right-0 left-64 z-20 hidden h-16 items-center gap-4 border-b border-rule bg-paper/85 px-8 backdrop-blur-md lg:flex">
+      <div className="min-w-0">
+        <p className="m-0 truncate font-display text-lg leading-tight font-semibold text-ink">{item ? t(item.label) : ''}</p>
+        <p className="m-0 truncate text-sm leading-tight text-muted">{formatFullDate(today)}</p>
+      </div>
+      <div className="ml-auto flex items-center gap-2">
+        <SearchTrigger onSearch={onSearch} className="w-56" />
+        <AttentionBell counts={counts} />
+        <ThemeToggle />
+      </div>
+    </header>
+  );
+}
+
+/** The bell: a count of things waiting for a person, and a short list of what and where. */
+function AttentionBell({ counts }: { counts: AttentionCounts }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const rows = [
+    { n: counts.overdueInvoices ?? 0, label: t('bellOverdue', { n: counts.overdueInvoices ?? 0 }), href: '/app/invoice?overdue=1', ready: BILLING_PAGES_READY },
+    { n: counts.draftsToReview ?? 0, label: t('bellDrafts', { n: counts.draftsToReview ?? 0 }), href: '/app/invoice?status=draft', ready: BILLING_PAGES_READY },
+    { n: counts.pendingApprovals ?? 0, label: t('bellApprovals', { n: counts.pendingApprovals ?? 0 }), href: '/app', ready: false },
+    { n: counts.behindDeployments, label: t('bellBehind', { n: counts.behindDeployments }), href: '/app/produk', ready: true },
+  ].filter((r) => r.n > 0);
+  const total = rows.reduce((s, r) => s + r.n, 0);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`${t('bellOpen')}${total ? `, ${total}` : ''}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className="relative grid size-9 place-items-center rounded-input border border-rule bg-key-face text-ink-2 shadow-btn transition-colors hover:bg-paper-2 hover:text-ink"
+      >
+        <Icon name="bell" className="size-4" />
+        {total > 0 && <span aria-hidden="true" className="absolute -top-1.5 -right-1.5 grid min-w-4.5 place-items-center rounded-full bg-danger px-1 font-mono text-[10px] leading-4.5 font-semibold text-paper">{total > 99 ? '99+' : total}</span>}
+      </button>
+      {open && (
+        <div role="dialog" aria-label={t('bellTitle')} className="pop absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-rule bg-key-face p-2 shadow-pop">
+          <p className="m-0 px-2 pt-1 pb-2 text-sm font-semibold text-ink">{t('bellTitle')}</p>
+          {rows.length === 0 ? (
+            <p className="m-0 px-2 pb-2 text-sm text-muted">{t('bellEmpty')}</p>
+          ) : (
+            <ul className="m-0 flex list-none flex-col p-0">
+              {rows.map((r) => {
+                const inner = (
+                  <>
+                    <span className="flex-1">{r.label}</span>
+                    {r.ready && <Icon name="arrow" className="size-4 text-muted" />}
+                  </>
+                );
+                return (
+                  <li key={r.label}>
+                    {r.ready ? <a href={r.href} className="flex min-h-10 items-center gap-2 rounded-input px-2 text-sm text-ink no-underline hover:bg-paper-2">{inner}</a> : <span className="flex min-h-10 items-center gap-2 px-2 text-sm text-ink">{inner}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Sidebar({ organizationName, userName, role, current, counts }: ChromeProps) {
+  const t = useT();
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-5 overflow-y-auto border-r border-rule bg-paper-2 px-3 py-4 lg:flex">
+      <a href="/app" className="flex h-10 items-center gap-3 rounded-input px-2 text-ink no-underline">
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent font-display text-sm font-semibold text-accent-ink">{(organizationName.trim()[0] ?? 'O').toUpperCase()}</span>
+        <span className="block min-w-0 truncate font-display text-base font-semibold">{organizationName}</span>
       </a>
-      <nav aria-label={t('navLabel')} className="flex flex-1 flex-col gap-1">
-        {itemsFor(role).map((item) => (
-          <a
-            key={item.id}
-            href={item.href}
-            aria-current={current === item.id ? 'page' : undefined}
-            className={cx(
-              'relative flex min-h-11 items-center gap-3 rounded-input px-3 text-base no-underline transition-colors duration-(--duration-micro)',
-              current === item.id ? 'bg-paper-3 font-medium text-ink' : 'text-ink-2 hover:bg-paper-3 hover:text-ink',
-            )}
-          >
-            {current === item.id && <span aria-hidden="true" className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-accent" />}
-            <Icon name={item.icon} />
-            {t(item.label)}
-          </a>
+      <nav aria-label={t('navLabel')} className="flex flex-1 flex-col gap-5">
+        {groupedFor(role).map(({ group, items }) => (
+          <div key={group} className="flex flex-col gap-0.5">
+            <p className="m-0 px-3 pb-1 text-xs font-medium tracking-wide text-muted uppercase">{t(GROUP_LABEL[group])}</p>
+            {items.map((item) => {
+              const active = current === item.id;
+              return (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cx(
+                    'group relative flex min-h-10 items-center gap-3 rounded-input px-3 text-base no-underline transition-colors duration-(--duration-micro)',
+                    active ? 'bg-accent-wash font-medium text-ink' : 'text-ink-2 hover:bg-paper-3 hover:text-ink',
+                  )}
+                >
+                  <Icon name={item.icon} className={cx('size-5 transition-colors', active ? 'text-accent' : 'text-muted group-hover:text-ink')} />
+                  <span className="flex-1">{t(item.label)}</span>
+                  {item.badge === 'behind' && counts.behindDeployments > 0 && <CountPill n={counts.behindDeployments} />}
+                </a>
+              );
+            })}
+          </div>
         ))}
       </nav>
-      <div className="border-t border-rule pt-4">
-        <AccountBlock userName={userName} role={role} />
+      <div className="border-t border-rule pt-3">
+        <UserMenu userName={userName} role={role} />
       </div>
     </aside>
   );
 }
 
-function PhoneChrome({ organizationName, userName, role, current }: ChromeProps) {
+function PhoneChrome({ organizationName, userName, role, current, counts, onSearch }: ChromeProps & { onSearch: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const items = itemsFor(role);
   const tabs = items.slice(0, TAB_LIMIT);
-  const initial = (userName.trim()[0] ?? '?').toUpperCase();
 
   return (
     <div className="lg:hidden">
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-rule bg-paper px-4 pt-[env(safe-area-inset-top)] [min-height:calc(3.5rem+env(safe-area-inset-top))]">
+      <header className="sticky top-0 z-30 flex items-center gap-1 border-b border-rule bg-paper/90 px-4 backdrop-blur-md pt-[env(safe-area-inset-top)] [min-height:calc(3.5rem+env(safe-area-inset-top))]">
         <LogoMark size={26} />
         <p className="m-0 min-w-0 flex-1 truncate font-display text-base font-semibold text-ink">{organizationName}</p>
+        <button type="button" onClick={onSearch} aria-label={t('searchPlaceholder')} className="grid size-11 place-items-center rounded-full text-ink-2">
+          <Icon name="search" />
+        </button>
+        <AttentionBell counts={counts} />
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -106,7 +244,7 @@ function PhoneChrome({ organizationName, userName, role, current }: ChromeProps)
           aria-haspopup="dialog"
           className="grid size-11 place-items-center rounded-full"
         >
-          <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-accent-wash font-display text-sm font-semibold text-ink">{initial}</span>
+          <Avatar name={userName} size="sm" />
         </button>
       </header>
 

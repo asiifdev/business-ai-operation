@@ -11,7 +11,7 @@ type SessionUser = NonNullable<App.Locals['user']>;
  * Resolves the signed-in user and the request context from the cookie. The organization and role always come from
  * the stored user record, never from request input (BR-M01-01). Deactivated users resolve to null (BR-M01-06).
  */
-export async function resolveSession(headers: Headers): Promise<{ user: SessionUser; ctx: Ctx; organizationName: string } | null> {
+export async function resolveSession(headers: Headers): Promise<{ user: SessionUser; ctx: Ctx; organizationName: string; timezone: string } | null> {
   const session = await auth.api.getSession({ headers });
   if (!session) return null;
   const u = session.user as typeof session.user & { orgId: string; role: Role; locale?: 'id' | 'en'; isActive?: boolean; mustChangePassword?: boolean };
@@ -25,7 +25,7 @@ export async function resolveSession(headers: Headers): Promise<{ user: SessionU
     locale: u.locale ?? 'id',
     mustChangePassword: Boolean(u.mustChangePassword),
   };
-  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, user.orgId)).limit(1);
+  const [org] = await db.select({ name: organizations.name, timezone: organizations.timezone }).from(organizations).where(eq(organizations.id, user.orgId)).limit(1);
   if (!org) return null;
-  return { user, ctx: userCtx({ orgId: user.orgId, userId: user.id, role: user.role }), organizationName: org.name };
+  return { user, ctx: userCtx({ orgId: user.orgId, userId: user.id, role: user.role }), organizationName: org.name, timezone: org.timezone };
 }

@@ -32,9 +32,9 @@ export const storageItems: StorageItem[] = [
   },
   {
     name: 'locale',
-    kind: 'localStorage',
+    kind: 'cookie',
     essential: true,
-    purpose: { en: 'Remembers your language in the app.', id: 'Mengingat bahasa Anda di aplikasi.' },
+    purpose: { en: 'Remembers your language in the app so pages load in it straight away. First-party, kept for a year.', id: 'Mengingat bahasa Anda di aplikasi agar halaman langsung tampil dalam bahasa itu. Milik sendiri, disimpan setahun.' },
     whenSet: { en: 'When you switch the language in the app', id: 'Saat Anda mengganti bahasa di aplikasi' },
   },
   {

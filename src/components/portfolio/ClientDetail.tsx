@@ -182,7 +182,7 @@ function Deployments({ clientId, deployments, canAdd, isManager, onChanged }: { 
                 ) : (
                   <tr key={d.id} role="row" className={tbl.row + ' align-top'}>
                     <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium max-sm:p-0 ' + tbl.full}>
-                      <a href={`/app/produk/${d.productId}`} className="text-ink underline decoration-rule-2 underline-offset-4 hover:decoration-accent">{d.productName}</a>
+                      <a href={`/app/produk/${d.productId}`} className="font-medium text-ink no-underline transition-colors hover:text-accent">{d.productName}</a>
                       {d.label && <span className="ml-2 text-sm font-normal text-muted">{d.label}</span>}
                       {d.status === 'inactive' && <Badge className="ml-2">{t('statusInactive')}</Badge>}
                     </th>

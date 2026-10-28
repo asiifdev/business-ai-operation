@@ -103,7 +103,7 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
                 {deployments.map((d: Dep) => (
                   <tr key={d.id} role="row" className={tbl.row + ' align-middle'}>
                     <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium max-sm:p-0 ' + tbl.full}>
-                      <a href={`/app/klien/${d.clientId}`} className="text-ink underline decoration-rule-2 underline-offset-4 hover:decoration-accent">{d.clientName}</a>
+                      <a href={`/app/klien/${d.clientId}`} className="font-medium text-ink no-underline transition-colors hover:text-accent">{d.clientName}</a>
                       {d.label && <span className="ml-2 text-sm font-normal text-muted">{d.label}</span>}
                     </th>
                     <td role="cell" data-label={t('colEnvironment')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{d.environment}</td>

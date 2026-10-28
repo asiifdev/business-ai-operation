@@ -227,6 +227,131 @@ const dict = {
     loadError: 'Could not load this.',
     loading: 'Loading…',
     askAssistantCta: 'Ask the assistant',
+    bellTitle: 'Needs your attention',
+    bellEmpty: 'Nothing needs your attention right now.',
+    bellOverdue: 'Overdue invoices: {n}',
+    bellDrafts: 'Renewal drafts to review: {n}',
+    bellApprovals: 'Actions awaiting approval: {n}',
+    bellBehind: 'Deployments behind on version: {n}',
+    bellOpen: 'Open notifications',
+    searchShort: 'Search',
+    financeTitle: 'Finance, {month}',
+    financeReceived: 'Received this month',
+    financeReceivedNote: 'Payments minus corrections',
+    financeMrr: 'Monthly recurring revenue',
+    financeMrrNote: 'Active subscriptions: {n}',
+    financeOutstanding: 'Unpaid invoices',
+    financeOutstandingNote: 'Invoices sent: {n}',
+    financeOverdue: 'Overdue',
+    financeOverdueNote: 'Invoices past due: {n}',
+    financeOverdueNone: 'Nothing is overdue',
+    overdueBanner: 'Overdue invoices: {n}',
+    overdueLate: '{n} days late',
+    chartTitle: 'Received vs invoiced',
+    chartIntro: 'Last 6 months. Invoiced counts invoices by issue date; received counts payments by payment date.',
+    legendReceived: 'Received',
+    legendInvoiced: 'Invoiced',
+    chartTable: 'View as table',
+    colMonth: 'Month',
+    chartEmpty: 'No invoices or payments in the last 6 months.',
+    compTitle: 'Deployment status',
+    compTotal: 'deployments',
+    compCurrent: 'Up to date',
+    compBehind: 'Behind',
+    compUnknown: 'Cannot compare',
+    compInactive: 'Inactive',
+    todayDueTitle: 'Due today',
+    todayDueEmpty: 'No invoice is due today.',
+    renewalsTitle: 'Renewals in the next 7 days',
+    renewalsEmpty: 'No subscription renews in the next 7 days.',
+    calTitle: 'Operations calendar',
+    calIntro: 'Invoice due dates and subscription renewals. Pick a day to see its details.',
+    calToday: 'Today',
+    calDue: 'Due',
+    calOverdue: 'Overdue',
+    calPaid: 'Paid',
+    calDraft: 'Draft',
+    calRenewal: 'Renewal',
+    calMore: '+{n} more',
+    calDayEmpty: 'Nothing on this day.',
+    calLoadError: 'The calendar could not be loaded.',
+    actionsTitle: 'Waiting for action',
+    actionsOverdue: 'Overdue invoices to follow up',
+    actionsDrafts: 'Renewal drafts to review',
+    actionsApprovals: 'Actions waiting for approval',
+    actionsBehind: 'Deployments behind on version',
+    actionsNone: 'You are all caught up.',
+    auditAiBudgetUpdated: 'AI budget changed',
+    auditApprovalRequested: 'Approval requested',
+    auditClientDeleted: 'Client deleted',
+    auditInvoiceCancelled: 'Invoice cancelled',
+    auditInvoiceDraftCreated: 'Invoice draft created',
+    auditInvoiceDraftDeleted: 'Invoice draft deleted',
+    auditInvoiceDraftGenerated: 'Renewal draft prepared',
+    auditInvoiceDraftUpdated: 'Invoice draft edited',
+    auditInvoiceSent: 'Invoice sent',
+    auditOrgCreated: 'Organization created',
+    auditPackageArchived: 'Package archived',
+    auditPackageCreated: 'Package added',
+    auditPackageUnarchived: 'Package restored',
+    auditPackageUpdated: 'Package changed',
+    auditPaymentRecorded: 'Payment recorded',
+    auditPaymentCorrected: 'Payment corrected',
+    auditProductArchived: 'Product archived',
+    auditProductCreated: 'Product added',
+    auditProductDeleted: 'Product deleted',
+    auditProductUnarchived: 'Product restored',
+    auditProductUpdated: 'Product changed',
+    auditSubscriptionAdvanced: 'Subscription renewed',
+    auditSubscriptionCreated: 'Subscription started',
+    auditSubscriptionStopped: 'Subscription stopped',
+    auditSubscriptionUpdated: 'Subscription changed',
+    auditUserCreated: 'Team member added',
+    auditUserDeactivated: 'Team member deactivated',
+    auditUserRoleChanged: 'Role changed',
+    navGroupWorkspace: 'Workspace',
+    navGroupIntelligence: 'Intelligence',
+    searchPlaceholder: 'Search or jump to…',
+    searchShortcutHint: 'Search',
+    cmdNavigate: 'Go to',
+    cmdActions: 'Quick actions',
+    cmdClients: 'Clients',
+    cmdNoMatch: 'Nothing matches “{q}”.',
+    cmdHint: '↑↓ to move · ↵ to open · esc to close',
+    cmdNewClient: 'New client',
+    cmdNewProduct: 'New product',
+    cmdAskAssistant: 'Ask the assistant',
+    cmdClose: 'Close search',
+    accountMenuOpen: 'Account menu',
+    greetMorning: 'Good morning, {name}',
+    greetAfternoon: 'Good afternoon, {name}',
+    greetEvening: 'Good evening, {name}',
+    homeSubtitle: 'Here is where your portfolio stands today.',
+    kpiClients: 'Active clients',
+    kpiProducts: 'Products',
+    kpiDeployments: 'Live deployments',
+    kpiBehind: 'Behind on version',
+    kpiBehindNone: 'All up to date',
+    kpiApprovals: 'Waiting for approval',
+    kpiAi: 'AI spend today',
+    kpiAiOf: 'of {limit} cap · {runs} runs',
+    attentionTitle: 'Needs attention',
+    attentionIntro: 'Deployments running an older version than the product.',
+    attentionEmpty: 'Nothing needs attention. Every deployment is on the current version.',
+    attentionRow: '{installed} → {current}',
+    attentionAll: 'View all',
+    activityTitle: 'Activity, last 14 days',
+    activityIntro: 'Changes recorded in the audit trail.',
+    activityTotal: '{n} changes',
+    activityRecent: 'Latest changes',
+    activityEmpty: 'No activity yet.',
+    activityBar: '{date}: {n}',
+    actorUser: 'Person',
+    actorAi: 'AI',
+    actorSystem: 'System',
+    assistantCardTitle: 'Ask the assistant',
+    quickActions: 'Quick actions',
+    comingSoonBilling: 'Billing figures appear here as soon as invoices are live.',
     dashboardAssistantHint: 'Ask about your team, AI usage and activity. Answers come only from your data.',
   },
   id: {
@@ -455,6 +580,131 @@ const dict = {
     loadError: 'Gagal memuat.',
     loading: 'Memuat…',
     askAssistantCta: 'Tanya asisten',
+    bellTitle: 'Perlu perhatian Anda',
+    bellEmpty: 'Tidak ada yang perlu Anda tangani sekarang.',
+    bellOverdue: '{n} invoice lewat jatuh tempo',
+    bellDrafts: '{n} draf perpanjangan perlu ditinjau',
+    bellApprovals: '{n} aksi menunggu persetujuan',
+    bellBehind: '{n} deployment tertinggal versi',
+    bellOpen: 'Buka pemberitahuan',
+    searchShort: 'Cari',
+    financeTitle: 'Keuangan, {month}',
+    financeReceived: 'Diterima bulan ini',
+    financeReceivedNote: 'Pembayaran dikurangi koreksi',
+    financeMrr: 'Pendapatan berulang bulanan',
+    financeMrrNote: '{n} langganan aktif',
+    financeOutstanding: 'Belum dibayar',
+    financeOutstandingNote: '{n} invoice terkirim',
+    financeOverdue: 'Lewat jatuh tempo',
+    financeOverdueNote: '{n} invoice melewati jatuh tempo',
+    financeOverdueNone: 'Tidak ada yang terlambat',
+    overdueBanner: '{n} invoice lewat jatuh tempo',
+    overdueLate: 'terlambat {n} hari',
+    chartTitle: 'Diterima vs ditagihkan',
+    chartIntro: '6 bulan terakhir. Ditagihkan menghitung invoice menurut tanggal terbit; diterima menghitung pembayaran menurut tanggal bayar.',
+    legendReceived: 'Diterima',
+    legendInvoiced: 'Ditagihkan',
+    chartTable: 'Lihat sebagai tabel',
+    colMonth: 'Bulan',
+    chartEmpty: 'Belum ada invoice atau pembayaran dalam 6 bulan terakhir.',
+    compTitle: 'Status deployment',
+    compTotal: 'deployment terdaftar',
+    compCurrent: 'Terbaru',
+    compBehind: 'Tertinggal',
+    compUnknown: 'Tak terbandingkan',
+    compInactive: 'Nonaktif',
+    todayDueTitle: 'Jatuh tempo hari ini',
+    todayDueEmpty: 'Tidak ada invoice yang jatuh tempo hari ini.',
+    renewalsTitle: 'Perpanjangan 7 hari ke depan',
+    renewalsEmpty: 'Tidak ada langganan yang jatuh tempo 7 hari ke depan.',
+    calTitle: 'Kalender operasional',
+    calIntro: 'Jatuh tempo invoice dan perpanjangan langganan. Pilih tanggal untuk melihat rinciannya.',
+    calToday: 'Hari ini',
+    calDue: 'Jatuh tempo',
+    calOverdue: 'Terlambat',
+    calPaid: 'Lunas',
+    calDraft: 'Draf',
+    calRenewal: 'Perpanjangan',
+    calMore: '+{n} lagi',
+    calDayEmpty: 'Tidak ada agenda di tanggal ini.',
+    calLoadError: 'Kalender tidak dapat dimuat.',
+    actionsTitle: 'Menunggu tindakan',
+    actionsOverdue: 'Invoice lewat jatuh tempo untuk ditindaklanjuti',
+    actionsDrafts: 'Draf perpanjangan perlu ditinjau',
+    actionsApprovals: 'Aksi menunggu persetujuan',
+    actionsBehind: 'Deployment tertinggal versi',
+    actionsNone: 'Semua sudah beres.',
+    auditAiBudgetUpdated: 'Anggaran AI diubah',
+    auditApprovalRequested: 'Persetujuan diminta',
+    auditClientDeleted: 'Klien dihapus',
+    auditInvoiceCancelled: 'Invoice dibatalkan',
+    auditInvoiceDraftCreated: 'Draf invoice dibuat',
+    auditInvoiceDraftDeleted: 'Draf invoice dihapus',
+    auditInvoiceDraftGenerated: 'Draf perpanjangan disiapkan',
+    auditInvoiceDraftUpdated: 'Draf invoice diubah',
+    auditInvoiceSent: 'Invoice dikirim',
+    auditOrgCreated: 'Organisasi dibuat',
+    auditPackageArchived: 'Paket diarsipkan',
+    auditPackageCreated: 'Paket ditambahkan',
+    auditPackageUnarchived: 'Paket dipulihkan',
+    auditPackageUpdated: 'Paket diubah',
+    auditPaymentRecorded: 'Pembayaran dicatat',
+    auditPaymentCorrected: 'Pembayaran dikoreksi',
+    auditProductArchived: 'Produk diarsipkan',
+    auditProductCreated: 'Produk ditambahkan',
+    auditProductDeleted: 'Produk dihapus',
+    auditProductUnarchived: 'Produk dipulihkan',
+    auditProductUpdated: 'Produk diubah',
+    auditSubscriptionAdvanced: 'Langganan diperpanjang',
+    auditSubscriptionCreated: 'Langganan dimulai',
+    auditSubscriptionStopped: 'Langganan dihentikan',
+    auditSubscriptionUpdated: 'Langganan diubah',
+    auditUserCreated: 'Anggota tim ditambahkan',
+    auditUserDeactivated: 'Anggota tim dinonaktifkan',
+    auditUserRoleChanged: 'Peran diubah',
+    navGroupWorkspace: 'Ruang kerja',
+    navGroupIntelligence: 'Kecerdasan',
+    searchPlaceholder: 'Cari atau lompat ke…',
+    searchShortcutHint: 'Cari',
+    cmdNavigate: 'Buka halaman',
+    cmdActions: 'Aksi cepat',
+    cmdClients: 'Klien',
+    cmdNoMatch: 'Tidak ada yang cocok dengan “{q}”.',
+    cmdHint: '↑↓ pindah · ↵ buka · esc tutup',
+    cmdNewClient: 'Klien baru',
+    cmdNewProduct: 'Produk baru',
+    cmdAskAssistant: 'Tanya asisten',
+    cmdClose: 'Tutup pencarian',
+    accountMenuOpen: 'Menu akun',
+    greetMorning: 'Selamat pagi, {name}',
+    greetAfternoon: 'Selamat siang, {name}',
+    greetEvening: 'Selamat malam, {name}',
+    homeSubtitle: 'Begini kondisi portofolio Anda hari ini.',
+    kpiClients: 'Klien aktif',
+    kpiProducts: 'Produk',
+    kpiDeployments: 'Deployment berjalan',
+    kpiBehind: 'Tertinggal versi',
+    kpiBehindNone: 'Semua sudah terbaru',
+    kpiApprovals: 'Menunggu persetujuan',
+    kpiAi: 'Biaya AI hari ini',
+    kpiAiOf: 'dari batas {limit} · {runs} proses',
+    attentionTitle: 'Perlu perhatian',
+    attentionIntro: 'Deployment yang versinya lebih lama dari produknya.',
+    attentionEmpty: 'Tidak ada yang perlu ditangani. Semua deployment sudah di versi terbaru.',
+    attentionRow: '{installed} → {current}',
+    attentionAll: 'Lihat semua',
+    activityTitle: 'Aktivitas 14 hari terakhir',
+    activityIntro: 'Perubahan yang tercatat di jejak audit.',
+    activityTotal: '{n} perubahan',
+    activityRecent: 'Perubahan terbaru',
+    activityEmpty: 'Belum ada aktivitas.',
+    activityBar: '{date}: {n}',
+    actorUser: 'Orang',
+    actorAi: 'AI',
+    actorSystem: 'Sistem',
+    assistantCardTitle: 'Tanya asisten',
+    quickActions: 'Aksi cepat',
+    comingSoonBilling: 'Angka tagihan muncul di sini begitu invoice aktif.',
     dashboardAssistantHint: 'Tanyakan tentang tim, pemakaian AI, dan aktivitas. Jawaban hanya dari data Anda.',
   },
 } as const;
@@ -464,28 +714,39 @@ export type Locale = keyof typeof dict;
 export type MessageKey = keyof (typeof dict)['en'];
 
 const DEFAULT_LOCALE: Locale = 'id';
-const STORAGE_KEY = 'locale';
+/** The cookie that holds the language. The server reads it, so the first HTML is already in the right language. */
+export const LOCALE_COOKIE = 'locale';
 
 let locale: Locale = DEFAULT_LOCALE;
 let resolved = false;
 const listeners = new Set<() => void>();
 
-const isLocale = (v: unknown): v is Locale => v === 'id' || v === 'en';
+export const isLocale = (v: unknown): v is Locale => v === 'id' || v === 'en';
 
-/** Saved choice first, then the browser language, then Indonesian. Runs once, in the browser only. */
+/**
+ * On the server the language belongs to the request being rendered, not to the process, so the server registers a
+ * resolver (see `locale-server.ts`) that returns it. Without one, the module value is used (tests, scripts).
+ */
+let serverResolver: (() => Locale | undefined) | null = null;
+export function setServerLocaleResolver(fn: () => Locale | undefined) {
+  serverResolver = fn;
+}
+
+/** In the browser the server already chose the language and wrote it to `<html lang>`: read that, never guess again. */
+function fromDocument(): Locale | null {
+  if (typeof document === 'undefined') return null;
+  const lang = document.documentElement.lang;
+  return isLocale(lang) ? lang : null;
+}
+
 function resolveInBrowser() {
   if (resolved || typeof window === 'undefined') return;
   resolved = true;
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (isLocale(saved)) locale = saved;
-    else if (navigator.language?.toLowerCase().startsWith('en')) locale = 'en';
-  } catch {
-    /* Storage can be blocked; fall back to the default. */
-  }
+  locale = fromDocument() ?? locale;
 }
 
 export function getLocale(): Locale {
+  if (typeof window === 'undefined') return serverResolver?.() ?? locale;
   resolveInBrowser();
   return locale;
 }
@@ -493,11 +754,10 @@ export function getLocale(): Locale {
 export function setLocale(next: Locale) {
   locale = next;
   resolved = true;
-  if (typeof document !== 'undefined') document.documentElement.lang = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, next);
-  } catch {
-    /* The choice then lasts for this page view only. */
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = next;
+    const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${LOCALE_COOKIE}=${next}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
   }
   listeners.forEach((fn) => fn());
 }
@@ -507,8 +767,11 @@ export function subscribeLocale(fn: () => void) {
   return () => listeners.delete(fn);
 }
 
-/** What the server renders: the module default, never the visitor's choice. */
-export const getServerLocale = (): Locale => (typeof window === 'undefined' ? locale : DEFAULT_LOCALE);
+/**
+ * What React renders first. On the server: the request's language. In the browser during hydration: the language the
+ * server wrote into `<html lang>`, which is the same one, so hydration matches and nothing flips afterwards.
+ */
+export const getServerLocale = (): Locale => (typeof window === 'undefined' ? (serverResolver?.() ?? locale) : (fromDocument() ?? DEFAULT_LOCALE));
 
 /** Pure lookup for a given language. Components get this bound to the active language through `useT`. */
 export function translate(lang: Locale, key: MessageKey, vars?: Record<string, string | number>): string {
