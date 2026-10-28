@@ -5,6 +5,7 @@ import { recordAudit, type AuditWho } from '../audit/service';
 import { automationOnce } from '../automation/once';
 import { addDays, todayIn } from '../billing/dates';
 import { loadOrgBilling } from '../billing/invoices';
+import { listLateTasks } from '../tasks/service';
 import { expireApprovals } from './approvals';
 import { RENEWAL_WINDOW_DAYS } from './facts';
 import { sweepFindings } from './findings';
@@ -48,6 +49,32 @@ export async function emitRenewalUpcoming(orgId: string, now: Date): Promise<{ r
   return { raised };
 }
 
+/**
+ * `rule.task_late` (BRD-M08 section 3, BR-M05-03): an accepted, unfinished task past its due date raises ONE finding per
+ * (task, due date). The dedupe key carries the due date (D-046), so a task that is rescheduled and runs late again gets a
+ * fresh card, while the same lateness never raises two.
+ */
+export async function emitTaskLate(orgId: string, now: Date): Promise<{ raised: string[] }> {
+  const late = await listLateTasks(orgId, now);
+  const audit: AuditWho = { orgId, actor: 'system:rule.task_late' };
+  const raised: string[] = [];
+  for (const task of late) {
+    await db.transaction(async (tx) => {
+      const once = await automationOnce(tx, orgId, 'task_late', `late:${task.id}:${task.dueDate}`, async () => {
+        const [row] = await tx
+          .insert(findings)
+          .values({ orgId, rule: 'task_late', entityType: 'task', entityId: task.id, periodKey: task.dueDate })
+          .onConflictDoNothing()
+          .returning({ id: findings.id });
+        if (row) await recordAudit(tx, audit, { action: 'finding.created', entityType: 'finding', entityId: row.id, summary: { rule: 'task_late', taskId: task.id } });
+        return { findingId: row?.id ?? null };
+      });
+      if (once.ran) raised.push(task.id);
+    });
+  }
+  return { raised };
+}
+
 /** Cheap housekeeping the ticker runs every minute: closes findings whose condition is gone, wakes snoozed ones, expires approvals. */
 export async function sweepActionCenter(orgId: string, now: Date) {
   const findingsSwept = await sweepFindings(orgId, now);
@@ -58,6 +85,7 @@ export async function sweepActionCenter(orgId: string, now: Date) {
 /** The Action Center's part of the daily run, after the billing rules have raised their own findings. */
 export async function runActionCenterRules(orgId: string, now: Date) {
   const upcoming = await emitRenewalUpcoming(orgId, now);
+  const late = await emitTaskLate(orgId, now);
   const swept = await sweepActionCenter(orgId, now);
-  return { renewalUpcomingRaised: upcoming.raised.length, ...swept };
+  return { renewalUpcomingRaised: upcoming.raised.length, taskLateRaised: late.raised.length, ...swept };
 }

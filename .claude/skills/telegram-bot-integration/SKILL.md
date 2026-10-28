@@ -80,7 +80,7 @@ Contoh update palsu untuk uji: kirim `POST` JSON ke endpoint dengan `update_id` 
 Pakai **`parse_mode: "HTML"`** dan escape selalu, karena data kita memuat teks dari pengguna dan model.
 
 - HTML: ganti `<` → `&lt;`, `>` → `&gt;`, `&` → `&amp;` pada semua teks yang bukan tag. Hanya tag yang didukung (`b strong i em u ins s strike del tg-spoiler code pre a blockquote`); tag lain gagal.
-- MarkdownV2 (bila terpaksa): karakter `_ * [ ] ( ) ~ ` > # + - = | { } . !` harus di-escape dengan `\` di luar entitas; di dalam `code`/`pre` hanya `` ` `` dan `\`. Salah satu karakter lupa di-escape → seluruh pesan ditolak (400).
+- MarkdownV2 (bila terpaksa): karakter ``_ * [ ] ( ) ~ ` > # + - = | { } . !`` harus di-escape dengan `\` di luar entitas; di dalam `code`/`pre` hanya `` ` `` dan `\`. Salah satu karakter lupa di-escape → seluruh pesan ditolak (400).
 - Telegram menampilkan peringatan sebelum membuka tautan inline.
 - Jangan menaruh `tg://user?id=…` di teks biasa (hanya jalan di tautan inline atau tombol).
 - Teks buatan model **tidak boleh** dikirim mentah dengan `parse_mode`: escape dulu atau kirim sebagai teks polos tanpa `parse_mode`.

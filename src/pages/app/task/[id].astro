@@ -1,0 +1,11 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { TaskDetail } from '../../../components/tasks/TaskDetail';
+
+export const prerender = false;
+const { id } = Astro.params;
+---
+
+<AppShell title="Tugas" current="tasks">
+  <TaskDetail client:load id={id!} timezone={Astro.locals.timezone} />
+</AppShell>

@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { clients, findings, invoices, packages, payments, products, subscriptions } from '../../db/schema';
+import { clients, findings, invoices, packages, payments, products, subscriptions, tasks, users } from '../../db/schema';
 import { recordAudit, type AuditWho } from '../audit/service';
 import { daysBetween, todayIn } from '../billing/dates';
 import { deriveInvoice } from '../billing/derived';
@@ -9,6 +9,7 @@ import { loadOrgBilling } from '../billing/invoices';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
+import { daysLate, isLate } from '../tasks/rules';
 import { who } from '../portfolio/shared';
 import { FINANCIAL_RULES, priorityOf, stillApplies, type FindingFacts, type FindingRule, type FindingStatus, type PriorityLevel } from './facts';
 
@@ -52,6 +53,7 @@ function visibleRules(ctx: Ctx): FindingRule[] {
 export async function loadFacts(orgId: string, today: string, rows: Pick<FindingRow, 'entityType' | 'entityId'>[]): Promise<Map<string, FindingFacts>> {
   const invoiceIds = [...new Set(rows.filter((r) => r.entityType === 'invoice').map((r) => r.entityId))];
   const subscriptionIds = [...new Set(rows.filter((r) => r.entityType === 'subscription').map((r) => r.entityId))];
+  const taskIds = [...new Set(rows.filter((r) => r.entityType === 'task').map((r) => r.entityId))];
   const out = new Map<string, FindingFacts>();
 
   if (invoiceIds.length) {
@@ -101,14 +103,47 @@ export async function loadFacts(orgId: string, today: string, rows: Pick<Finding
       });
     }
   }
+
+  if (taskIds.length) {
+    const list = await db
+      .select({ task: tasks, assigneeName: users.name, clientName: clients.name })
+      .from(tasks)
+      .leftJoin(users, and(eq(users.orgId, tasks.orgId), eq(users.id, tasks.assigneeId)))
+      .leftJoin(clients, and(eq(clients.orgId, tasks.orgId), eq(clients.id, tasks.clientId)))
+      .where(and(eq(tasks.orgId, orgId), inArray(tasks.id, taskIds)));
+    for (const { task: t, assigneeName, clientName } of list) {
+      out.set(`task:${t.id}`, {
+        kind: 'task',
+        taskId: t.id,
+        title: t.title,
+        taskKind: t.kind,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        late: isLate(t, today),
+        daysLate: daysLate(t, today),
+        isDraft: t.isDraft,
+        assigneeName,
+        clientId: t.clientId,
+        clientName,
+      });
+    }
+  }
   return out;
 }
+
+/**
+ * Entity kinds this code can read facts for. The sweep never closes a finding of any other kind: a server still running an
+ * older build must not mistake a newer rule's finding for one whose record is gone (seen with `task_late`, D-046).
+ */
+const KNOWN_ENTITIES: ReadonlySet<string> = new Set(['invoice', 'subscription', 'task']);
 
 const factsOf = (facts: Map<string, FindingFacts>, row: Pick<FindingRow, 'entityType' | 'entityId'>): FindingFacts => facts.get(`${row.entityType}:${row.entityId}`) ?? { kind: 'missing' };
 
 function hrefOf(facts: FindingFacts): string | null {
   if (facts.kind === 'invoice') return `/app/invoice/${facts.invoiceId}`;
   if (facts.kind === 'subscription') return `/app/langganan/${facts.subscriptionId}`;
+  if (facts.kind === 'task') return `/app/task/${facts.taskId}`;
   return null;
 }
 
@@ -250,6 +285,7 @@ export async function sweepFindings(orgId: string, now: Date): Promise<{ resolve
   let resolved = 0;
 
   for (const row of open) {
+    if (!KNOWN_ENTITIES.has(row.entityType)) continue;
     if (stillApplies(row.rule, row.periodKey, factsOf(facts, row))) continue;
     await db.transaction(async (tx) => {
       const moved = await tx

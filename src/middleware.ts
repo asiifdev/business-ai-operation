@@ -2,6 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { resolveSession } from './auth/session';
 import { LOCALE_COOKIE } from './lib/i18n';
 import { ensureTicker } from './server/ticker';
+import { startJobs } from './server/jobs';
 import { pickLocale, runWithLocale } from './lib/locale-server';
 
 /** Paths that never need a session. Everything else under /app and /api requires one. */
@@ -19,6 +20,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (context.isPrerendered || isAsset(pathname)) return next();
   // The scheduler starts with the first real request, never during the build (which renders the public pages).
   ensureTicker();
+  startJobs();
 
   const resolved = await resolveSession(context.request.headers);
   if (resolved) {

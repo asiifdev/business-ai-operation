@@ -1,0 +1,11 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { MeetingDetail } from '../../../components/meetings/MeetingDetail';
+
+export const prerender = false;
+const { id } = Astro.params;
+---
+
+<AppShell title="Rapat" current="meetings">
+  <MeetingDetail client:load id={id!} timezone={Astro.locals.timezone} />
+</AppShell>

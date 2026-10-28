@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { TasksPage } from '../../../components/tasks/TasksPage';
+
+export const prerender = false;
+---
+
+<AppShell title="Tugas" current="tasks">
+  <TasksPage client:load />
+</AppShell>

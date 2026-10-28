@@ -93,3 +93,38 @@ describe('parseExplanation', () => {
     expect(parseExplanation('Invoice ini terlambat delapan hari.')).toEqual({ explanation: 'Invoice ini terlambat delapan hari.', draftMessage: null });
   });
 });
+
+const task = (over: Partial<Extract<FindingFacts, { kind: 'task' }>> = {}): FindingFacts => ({
+  kind: 'task',
+  taskId: 't1',
+  title: 'Pengingat jadwal tidak terkirim',
+  taskKind: 'bug',
+  status: 'open',
+  priority: 'medium',
+  dueDate: '2026-10-25',
+  late: true,
+  daysLate: 3,
+  isDraft: false,
+  assigneeName: null,
+  clientId: 'c1',
+  clientName: 'Klinik Sehat Sentosa',
+  ...over,
+});
+
+describe('task_late (BR-M05-03 through the Action Center)', () => {
+  it('stays open while the task is late for the same due date, and closes when done or rescheduled', () => {
+    expect(stillApplies('task_late', '2026-10-25', task())).toBe(true);
+    expect(stillApplies('task_late', '2026-10-25', task({ status: 'done', late: false, daysLate: 0 }))).toBe(false);
+    expect(stillApplies('task_late', '2026-10-25', task({ dueDate: '2026-11-05', late: false, daysLate: 0 }))).toBe(false);
+    expect(stillApplies('task_late', '2026-10-25', { kind: 'missing' })).toBe(false);
+  });
+
+  it('ranks an urgent late task high and a low one a day late low', () => {
+    expect(priorityOf('task_late', task({ priority: 'urgent', daysLate: 1 }), '2026-10-26').level).toBe('high');
+    expect(priorityOf('task_late', task({ priority: 'low', daysLate: 1 }), '2026-10-26').level).toBe('low');
+    const aWeek = priorityOf('task_late', task({ daysLate: 7 }), '2026-11-01').score;
+    const aMonth = priorityOf('task_late', task({ daysLate: 30 }), '2026-11-24').score;
+    expect(aMonth).toBeGreaterThan(aWeek);
+    expect(priorityOf('task_late', task({ daysLate: 300 }), '2027-08-21').score).toBe(aMonth); // capped at 30 days
+  });
+});

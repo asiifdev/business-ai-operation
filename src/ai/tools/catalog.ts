@@ -9,6 +9,8 @@ import { getFinanceSummary } from '../../domain/billing/summary';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
 import { listDeployments } from '../../domain/portfolio/deployments';
 import { getProduct, listProducts } from '../../domain/portfolio/products';
+import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
+import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../domain/tasks/service';
 import { formatRupiah } from '../../lib/format';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
@@ -22,8 +24,8 @@ const FINANCIAL_ENTITIES = ['invoice', 'payment', 'subscription'];
 const who = (actor: string) => (actor.startsWith('ai:') ? 'AI' : actor.startsWith('system:') ? 'sistem' : 'pengguna');
 
 /**
- * Tools the assistant has today, each over a real table of the organization. Business data (leads, tasks) joins this list
- * as M04 and M05 are built; every tool takes the organization and the person from the session, never from
+ * Tools the assistant has today, each over a real table of the organization. Lead tools join this list with the rest of
+ * M04; every tool takes the organization and the person from the session, never from
  * the model (BR-M01-01). The assistant may only answer from what these return.
  */
 export function buildAssistantRegistry(): ToolRegistry {
@@ -326,6 +328,87 @@ export function buildAssistantRegistry(): ToolRegistry {
     }),
   );
 
+  // Tasks (M05): reading is open to everyone; the assistant can only DRAFT a task, which a person accepts or discards.
+  const taskKind = { task: 'tugas', bug: 'bug', feature: 'fitur', maintenance: 'maintenance' } as const;
+  const taskStatus = { open: 'terbuka', in_progress: 'dikerjakan', done: 'selesai' } as const;
+  const taskPriority = { low: 'rendah', medium: 'sedang', high: 'tinggi', urgent: 'mendesak' } as const;
+
+  registry.register(
+    defineTool({
+      name: 'list_tasks',
+      description: 'Lists tasks (work items, bugs, features, maintenance) with status, priority, due date, days late, assignee and the client they are for, plus the counts of open, late, in-progress and draft tasks. Can filter by status, kind, client id, late only, or only tasks assigned to the person asking. Done tasks are left out unless status is "done".',
+      tier: 'read',
+      permission: 'task.read',
+      args: z.object({
+        status: z.enum(TASK_STATUSES).optional(),
+        kind: z.enum(TASK_KINDS).optional(),
+        clientId: z.string().min(1).max(40).optional(),
+        lateOnly: z.boolean().default(false),
+        mine: z.boolean().default(false),
+      }),
+      run: async (ctx, args) => {
+        const [rows, summary] = await Promise.all([
+          listTasks(ctx, { status: args.status, kind: args.kind, clientId: args.clientId, late: args.lateOnly || undefined, assignee: args.mine ? 'me' : undefined }),
+          getTaskSummary(ctx),
+        ]);
+        return {
+          ringkasan: { terbuka: summary.open, dikerjakan: summary.inProgress, terlambat: summary.late, milikSaya: summary.mine, drafAI: summary.drafts },
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          tugas: rows.slice(0, LIMIT).map((t) => ({
+            id: t.id,
+            judul: t.title,
+            jenis: taskKind[t.kind],
+            status: taskStatus[t.status],
+            prioritas: taskPriority[t.priority],
+            tenggat: t.dueDate,
+            terlambat: t.late,
+            terlambatHari: t.daysLate,
+            penanggungJawab: t.assigneeName ?? 'belum ditetapkan',
+            klien: t.clientName,
+            produk: t.productName,
+            drafAI: t.isDraft,
+          })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'find_similar_tasks',
+      description: 'Finds existing tasks whose wording is similar to a title and description, by word overlap. Use it before draft_task to avoid a duplicate, or to suggest which tasks may be related. It only suggests: linking is done by a person.',
+      tier: 'read',
+      permission: 'task.read',
+      args: z.object({ title: z.string().trim().min(2).max(200), description: z.string().trim().max(2000).optional() }),
+      run: async (ctx, args) => {
+        const similar = await findSimilarTasks(ctx, { title: args.title, description: args.description });
+        return { jumlah: similar.length, kandidat: similar.map((s) => ({ id: s.id, judul: s.title, jenis: taskKind[s.kind], status: taskStatus[s.status], klien: s.clientName, kemiripanPersen: Math.round(s.score * 100) })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'draft_task',
+      description: 'Prepares a DRAFT task (a bug, feature, maintenance job or other work) from what the person asked. It stays a draft: it is not counted as open work until a person accepts it on the Tasks page. Bug and maintenance drafts without a due date get one from their priority. Client id from list_clients when the task is for a client.',
+      tier: 'draft',
+      permission: 'task.create',
+      args: z.object({
+        title: z.string().trim().min(2).max(200),
+        description: z.string().trim().max(2000).optional(),
+        kind: z.enum(TASK_KINDS).default('task'),
+        priority: z.enum(TASK_PRIORITIES).default('medium'),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        clientId: z.string().min(1).max(40).optional(),
+      }),
+      run: async (ctx, args) => {
+        const created = await createTask(ctx, { ...args, dueDate: args.dueDate ?? null, clientId: args.clientId ?? null }, { source: 'assistant' });
+        return { id: created.id, status: 'draf', tenggat: created.dueDate, catatan: 'Draf tugas dibuat. Belum dihitung sebagai tugas terbuka sampai diterima orang di halaman Tugas.' };
+      },
+    }),
+  );
+
   registry.register(
     defineTool({
       name: 'describe_capabilities',
@@ -338,7 +421,7 @@ export function buildAssistantRegistry(): ToolRegistry {
           .list()
           .filter((t) => can(ctx.role, t.permission) && t.name !== 'report_out_of_scope')
           .map((t) => ({ nama: t.name, jenis: t.tier, fungsi: t.description })),
-        catatan: 'Asisten hanya menjawab dari hasil alat di atas. Data lead dan tugas tersedia setelah modulnya dibangun.',
+        catatan: 'Asisten hanya menjawab dari hasil alat di atas. Data lead tersedia setelah alatnya dibangun.',
       }),
     }),
   );

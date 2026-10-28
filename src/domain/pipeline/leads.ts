@@ -52,7 +52,7 @@ const isAi = (ctx: Ctx) => ctx.actor.startsWith('ai:');
  * Creates a lead. A lead made by an AI run (a recording, a Telegram message) is a DRAFT: it stays out of the pipeline value
  * and cannot be moved until a person accepts it (BR-M04-06).
  */
-export async function createLead(ctx: Ctx, raw: z.input<typeof leadSchema>) {
+export async function createLead(ctx: Ctx, raw: z.input<typeof leadSchema>, opts: { meetingId?: string } = {}) {
   assertCan(ctx, 'lead.write');
   const input = leadSchema.parse(raw);
   return db.transaction(async (tx) => {
@@ -69,6 +69,7 @@ export async function createLead(ctx: Ctx, raw: z.input<typeof leadSchema>) {
         estimatedValue: input.estimatedValue ?? null,
         assignedTo: input.assignedTo ?? null,
         isDraft: isAi(ctx),
+        meetingId: opts.meetingId ?? null,
         stageChangedAt: ctx.clock.now(),
       })
       .returning({ id: leads.id });

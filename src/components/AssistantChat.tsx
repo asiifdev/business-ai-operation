@@ -26,11 +26,14 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   list_products: 'srcListProducts',
   get_product_packages: 'srcGetProductPackages',
   list_deployments: 'srcListDeployments',
+  list_tasks: 'srcListTasks',
+  find_similar_tasks: 'srcFindSimilarTasks',
+  draft_task: 'srcDraftTask',
 };
 
 const STARTERS: Record<'manager' | 'staff', MessageKey[]> = {
-  manager: ['starterBehind', 'starterPackages', 'starterClients', 'starterUsage', 'starterTeam', 'starterApprovals', 'starterCapabilities'],
-  staff: ['starterBehind', 'starterPackages', 'starterClients', 'starterApprovals', 'starterCapabilities'],
+  manager: ['starterBehind', 'starterLateTasks', 'starterPackages', 'starterClients', 'starterUsage', 'starterTeam', 'starterApprovals', 'starterCapabilities'],
+  staff: ['starterBehind', 'starterLateTasks', 'starterPackages', 'starterClients', 'starterApprovals', 'starterCapabilities'],
 };
 
 const MAX_LENGTH = 2000;

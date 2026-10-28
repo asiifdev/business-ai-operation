@@ -60,7 +60,7 @@ describe('app shell', () => {
   });
 
   it('gives each role only the destinations it may see', () => {
-    expect(itemsFor('staff').map((i) => i.id)).toEqual(['dashboard', 'actions', 'clients', 'assistant', 'products', 'pipeline', 'ai']);
+    expect(itemsFor('staff').map((i) => i.id)).toEqual(['dashboard', 'actions', 'clients', 'assistant', 'products', 'pipeline', 'tasks', 'meetings', 'ai', 'telegram']);
   });
 
   it('has a translated label for every destination in both languages', () => {

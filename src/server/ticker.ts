@@ -6,7 +6,9 @@ import { explainPendingFindings } from '../domain/action-center/explain';
 import { runActionCenterRules, sweepActionCenter } from '../domain/action-center/rules';
 import { runBillingRules } from '../domain/billing/rules';
 import { todayIn } from '../domain/billing/dates';
+import { notifyLinkedUsers } from '../domain/telegram/notify';
 import { type Clock, systemClock } from '../lib/clock';
+import { appUrl, telegramClient, telegramEnabled } from './telegram';
 
 /** Arbitrary but fixed: every server process asks for the same advisory lock, so only one runs a tick at a time. */
 export const TICKER_LOCK_KEY = 7_003_001;
@@ -36,6 +38,8 @@ export interface TickHooks {
   sweep?: (orgId: string, now: Date) => Promise<unknown>;
   afterDaily?: (orgId: string, clock: Clock) => Promise<unknown>;
   briefing?: (orgId: string, clock: Clock) => Promise<unknown>;
+  /** Every tick, per organization, after the lock is released: sends Telegram cards (network calls stay out of the lock). */
+  notify?: (orgId: string, clock: Clock) => Promise<unknown>;
 }
 
 /**
@@ -45,6 +49,7 @@ export interface TickHooks {
  */
 export async function runTick(state: TickState, clock: Clock = systemClock, runRules: (orgId: string, now: Date) => Promise<unknown> = runDailyRules, hooks: TickHooks = {}): Promise<string[]> {
   const ran: string[] = [];
+  const seen: string[] = [];
   const briefingDue: Array<{ orgId: string; key: string; today: string }> = [];
   await db.transaction(async (tx) => {
     const [{ locked }] = await tx.execute<{ locked: boolean }>(sql`select pg_try_advisory_xact_lock(${TICKER_LOCK_KEY}) as locked`);
@@ -52,6 +57,7 @@ export async function runTick(state: TickState, clock: Clock = systemClock, runR
     const orgs = await tx.select({ id: organizations.id, timezone: organizations.timezone, hour: organizations.schedulerHour, briefingHour: organizations.briefingHour }).from(organizations);
     const now = clock.now();
     for (const org of orgs) {
+      seen.push(org.id);
       const today = todayIn(org.timezone, now);
       if (hooks.sweep) {
         try {
@@ -85,6 +91,10 @@ export async function runTick(state: TickState, clock: Clock = systemClock, runR
       console.error(`ticker: briefing failed for ${due.orgId}; will retry on the next tick`, err instanceof Error ? err.message : err);
     }
   }
+  for (const orgId of seen) {
+    if (!hooks.notify) break;
+    await hooks.notify(orgId, clock).catch((err) => console.error(`ticker: notify failed for ${orgId}`, err instanceof Error ? err.message : err));
+  }
   return ran;
 }
 
@@ -101,6 +111,7 @@ export function ensureTicker(): void {
     sweep: sweepActionCenter,
     afterDaily: (orgId, clock) => explainPendingFindings(orgId, clock, AUTO_EXPLAIN_PER_DAY),
     briefing: (orgId, clock) => generateDailyBriefing(orgId, clock),
+    ...(telegramEnabled() ? { notify: (orgId: string, clock: Clock) => notifyLinkedUsers(orgId, { client: telegramClient(), clock, appUrl: appUrl() }) } : {}),
   };
   const tick = () => void runTick(state, systemClock, runDailyRules, hooks).catch((err) => console.error('ticker failed', err instanceof Error ? err.message : err));
   globalForTicker.__ticker = setInterval(tick, INTERVAL_MS);

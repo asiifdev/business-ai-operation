@@ -64,6 +64,27 @@
       "when": 1793182249720,
       "tag": "0008_pipeline_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793208566685,
+      "tag": "0009_files_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793208591097,
+      "tag": "0010_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793208592042,
+      "tag": "0011_documents_guards",
+      "breakpoints": true
     }
   ]
 }

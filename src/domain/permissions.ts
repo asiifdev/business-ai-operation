@@ -33,6 +33,7 @@ export const PERMISSIONS = {
   'lead.update_assigned': ALL,
   'lead.write': MANAGERS,
   'lead.convert': MANAGERS,
+  'task.read': ALL,
   'task.create': ALL,
   'task.update_own': ALL,
   'task.update_any': MANAGERS,

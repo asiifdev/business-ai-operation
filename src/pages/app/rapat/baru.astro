@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { MeetingUpload } from '../../../components/meetings/MeetingUpload';
+
+export const prerender = false;
+---
+
+<AppShell title="Rapat" current="meetings">
+  <MeetingUpload client:load />
+</AppShell>

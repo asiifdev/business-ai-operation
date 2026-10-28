@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { MeetingsPage } from '../../../components/meetings/MeetingsPage';
+
+export const prerender = false;
+---
+
+<AppShell title="Rapat" current="meetings">
+  <MeetingsPage client:load timezone={Astro.locals.timezone} />
+</AppShell>

@@ -42,6 +42,10 @@ Skema database dan migrasi hanya berasal dari `docs/ERD.md` (lihat `CLAUDE.md`).
 
 Masuk dengan data demo (palsu) setelah `pnpm db:seed`: `owner@orbit-studio.test`, `admin@orbit-studio.test`, atau `staf@orbit-studio.test`, kata sandi `demo-password-123`. Uji asisten dengan `pnpm ai:smoke` (butuh `MODEL_API_KEY`).
 
+Rapat (`/app/rapat`): rekaman disimpan di `STORAGE_DIR` (driver `disk`) dan diproses worker di proses server; konversi audio memakai `ffmpeg` dari PATH atau `FFMPEG_PATH` (tanpa ffmpeg hanya WAV mono 16/24 kHz ≤ 9 menit yang bisa diproses).
+
+Bot Telegram (butuh `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_WEBHOOK_SECRET`): tautkan akun di `/app/settings/telegram`. Tanpa alamat HTTPS publik, jalankan `pnpm bot:dev` (long polling). **Perhatian:** perintah itu menghapus webhook, jadi server live berhenti menerima update sampai `pnpm bot:webhook` dijalankan lagi di sana.
+
 ## Deploy ke server
 
 Server publik **harus menjalankan build produksi**, bukan `pnpm dev` (mode dev membuka galeri dan alat pengembangan, lebih lambat, dan menolak host selain localhost).
@@ -51,9 +55,10 @@ pnpm install --frozen-lockfile
 pnpm db:migrate          # tinjau migrasi baru di drizzle/ sebelum menerapkan
 pnpm build
 pnpm start               # mendengarkan di HOST:PORT dari .env
+pnpm bot:webhook         # sekali per deploy: daftarkan webhook Telegram dan menu perintah
 ```
 
-Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Penjadwal tagihan berjalan di proses yang sama (setiap 60 detik, sekali sehari per organisasi pada jam penjadwalnya); atur `SCHEDULER=off` pada proses yang tidak boleh menjalankan job. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
+Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Penjadwal tagihan berjalan di proses yang sama (setiap 60 detik, sekali sehari per organisasi pada jam penjadwalnya; kartu Telegram dikirim tiap menit bila `TELEGRAM_BOT_TOKEN` diisi); atur `SCHEDULER=off` pada proses yang tidak boleh menjalankan job. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
 
 ## Kontribusi dan asal-usul
 

@@ -7,6 +7,9 @@ import { ToolRegistry, defineTool } from './registry';
 
 const money = (n: number) => ({ teks: formatRupiah(n), angka: n });
 const invoiceStatus = { draft: 'draf', sent: 'terkirim', paid: 'lunas', void: 'batal' } as const;
+const taskKindLabel = { task: 'tugas', bug: 'bug', feature: 'fitur', maintenance: 'maintenance' } as const;
+const taskStatusLabel = { open: 'terbuka', in_progress: 'dikerjakan', done: 'selesai' } as const;
+const taskPriorityLabel = { low: 'rendah', medium: 'sedang', high: 'tinggi', urgent: 'mendesak' } as const;
 const ruleLabel: Record<FindingRule, string> = {
   invoice_overdue: 'invoice lewat jatuh tempo',
   invoice_draft_ready: 'draf invoice siap ditinjau',
@@ -35,7 +38,7 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
     registry.register(
       defineTool({
         name: 'get_finding_facts',
-        description: 'Returns the facts of the finding being explained, read live from the source record: kind, client, invoice or subscription, amounts, dates and days late. Call it first; every number you write must come from it.',
+        description: 'Returns the facts of the finding being explained, read live from the source record: kind, client, invoice, subscription or task, amounts, dates and days late. Call it first; every number you write must come from it.',
         tier: 'read',
         permission: 'finding.read_nonfinancial',
         args: z.object({}),
@@ -56,6 +59,19 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
               lewatJatuhTempo: f.overdue,
               terlambatHari: f.daysOverdue,
               drafOtomatis: f.isAiDraft,
+            };
+          }
+          if (f.kind === 'task') {
+            return {
+              ...base,
+              tugas: f.title,
+              jenis: taskKindLabel[f.taskKind],
+              status: taskStatusLabel[f.status],
+              prioritasTugas: taskPriorityLabel[f.priority],
+              tenggat: f.dueDate,
+              terlambatHari: f.daysLate,
+              penanggungJawab: f.assigneeName ?? 'belum ditetapkan',
+              klien: f.clientName ?? 'tidak terkait klien',
             };
           }
           if (f.kind === 'subscription') {

@@ -8,6 +8,7 @@ import { getLocale, type MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useT } from '../../lib/use-t';
 import { InvoiceStatusBadge } from '../billing/status';
+import { KIND_LABEL, TaskBadges } from '../tasks/labels';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
@@ -32,6 +33,7 @@ const PRIORITY: Record<PriorityLevel, { label: MessageKey; tone: 'danger' | 'war
 };
 const CLOSED_LABEL = { handled: 'findStatusHandled', ignored: 'findStatusIgnored', auto_resolved: 'findStatusAuto' } as const;
 const SNOOZE_DAYS = ['1', '3', '7'] as const;
+const OPEN_LABEL = { invoice: 'openInvoice', subscription: 'openSubscription', task: 'openTask', missing: 'openInvoice' } as const satisfies Record<Card['facts']['kind'], MessageKey>;
 
 /**
  * One finding (BRD-M08 section 4): the facts read live from the record, the AI explanation saved once and labelled, the
@@ -165,12 +167,12 @@ export function FindingCard({ finding, timezone, onChanged }: { finding: Card; t
             <Button size="sm" loading={busy === 'snooze'} disabled={busy !== null} onClick={() => move({ action: 'snooze', days: Number(days) })}>{t('snooze')}</Button>
           </div>
           <ConfirmButton busy={busy === 'ignore'} disabled={busy !== null} onConfirm={() => move({ action: 'ignore' })}>{t('ignore')}</ConfirmButton>
-          {card.href && <a href={card.href} className="ml-auto text-sm text-accent no-underline hover:underline">{card.facts.kind === 'subscription' ? t('openSubscription') : t('openInvoice')}</a>}
+          {card.href && <a href={card.href} className="ml-auto text-sm text-accent no-underline hover:underline">{t(OPEN_LABEL[card.facts.kind])}</a>}
         </footer>
       ) : (
         <footer className="flex flex-wrap items-center gap-3 border-t border-rule pt-3 text-sm text-muted">
           {card.resolvedAt && <span>{t('findClosedOn', { when: formatDateTime(card.resolvedAt, timezone) })}</span>}
-          {card.href && <a href={card.href} className="ml-auto text-accent no-underline hover:underline">{card.facts.kind === 'subscription' ? t('openSubscription') : t('openInvoice')}</a>}
+          {card.href && <a href={card.href} className="ml-auto text-accent no-underline hover:underline">{t(OPEN_LABEL[card.facts.kind])}</a>}
         </footer>
       )}
       {error ? <p role="alert" className="m-0 text-sm text-danger">{t(errorKey(error))}</p> : null}
@@ -183,6 +185,22 @@ function Facts({ card }: { card: Card }) {
   const t = useT();
   const f = card.facts;
   if (f.kind === 'missing') return <p className="m-0 text-sm text-muted">{t('factMissing')}</p>;
+  if (f.kind === 'task') {
+    return (
+      <div className="flex flex-col gap-1 text-sm">
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a href={`/app/task/${f.taskId}`} className="font-medium text-ink no-underline hover:text-accent [overflow-wrap:anywhere]">{f.title}</a>
+          {f.clientId && f.clientName && <a href={`/app/klien/${f.clientId}`} className="text-ink-2 no-underline hover:text-accent">{f.clientName}</a>}
+          <TaskBadges task={{ status: f.status, priority: f.priority, isDraft: f.isDraft, late: f.late, daysLate: f.daysLate }} />
+        </p>
+        <dl className="m-0 flex flex-wrap gap-x-5 gap-y-1">
+          <Fact label={t('fKind')} value={t(KIND_LABEL[f.taskKind])} mono={false} />
+          {f.dueDate && <Fact label={t('fDueDate')} value={formatDate(f.dueDate)} />}
+          <Fact label={t('factAssignee')} value={f.assigneeName ?? t('factNoAssignee')} mono={false} />
+        </dl>
+      </div>
+    );
+  }
   if (f.kind === 'invoice') {
     return (
       <div className="flex flex-col gap-1 text-sm">

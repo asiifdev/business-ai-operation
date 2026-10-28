@@ -6,7 +6,8 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, pg } from '../src/db/client';
-import { clients, packages, subscriptions, users } from '../src/db/schema';
+import { clients, deployments, packages, subscriptions, tasks, users } from '../src/db/schema';
+import { emitTaskLate } from '../src/domain/action-center/rules';
 import { addDays, addMonths, todayIn } from '../src/domain/billing/dates';
 import { createInvoiceDraft, markInvoiceSent } from '../src/domain/billing/invoices';
 import { recordPayment } from '../src/domain/billing/payments';
@@ -17,6 +18,7 @@ import { registerOrganization } from '../src/domain/org/service';
 import { createClient } from '../src/domain/portfolio/clients';
 import { createDeployment } from '../src/domain/portfolio/deployments';
 import { createPackage, createProduct } from '../src/domain/portfolio/products';
+import { createTask, setTaskStatus } from '../src/domain/tasks/service';
 import { createUser } from '../src/domain/users/service';
 
 if (process.env.NODE_ENV === 'production') {
@@ -48,7 +50,10 @@ async function topUpBilling(email: string) {
 
 async function orbitStudio() {
   const email = 'owner@orbit-studio.test';
-  if (await exists(email)) return topUpBilling(email);
+  if (await exists(email)) {
+    await topUpBilling(email);
+    return demoTasks(email);
+  }
   const owner = await registerOrganization({ organizationName: 'Orbit Studio', name: 'Rina Wijaya', email, password: PASSWORD, locale: 'id' });
   const ctx = userCtx({ orgId: owner.orgId, userId: owner.userId, role: 'owner' });
   await createUser(ctx, { name: 'Dimas Pratama', email: 'admin@orbit-studio.test', role: 'admin', password: PASSWORD, locale: 'id' });
@@ -87,6 +92,68 @@ async function orbitStudio() {
   void depTini;
   await billingHistory(ctx, { aksara, kopi, klinik, maju, bimbel, tini }, { crmStarter, crmBisnis, posKedai, posToko, bookStudio, bookKlinik });
   console.log('Orbit Studio: 3 users, 3 products, 6 packages, 6 clients, 9 deployments (3 behind).');
+  await demoTasks(email);
+}
+
+/**
+ * Invented work for Orbit Studio (BRD-M05): bugs and maintenance for clients, two of them late, two that read alike so the
+ * "similar tasks" suggestion has something to find, finished work, and two AI drafts waiting for a decision. Dates are
+ * relative to today. Added once: skipped when the organization already has tasks.
+ */
+async function demoTasks(email: string) {
+  const [owner] = await db.select({ id: users.id, orgId: users.orgId }).from(users).where(eq(sql`lower(${users.email})`, email));
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(tasks).where(eq(tasks.orgId, owner.orgId));
+  if (n > 0) return console.log('Orbit Studio tasks already exist, skipped.');
+  const ctx = userCtx({ orgId: owner.orgId, userId: owner.id, role: 'owner' });
+  const ai = { ...ctx, actor: 'ai:seed' as const };
+  const person = async (mail: string) => (await db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, mail)))[0].id;
+  const clientId = async (name: string) => (await db.select({ id: clients.id }).from(clients).where(sql`${clients.orgId} = ${owner.orgId} and ${clients.name} = ${name}`))[0].id;
+  const deploymentId = async (domain: string) => (await db.select({ id: deployments.id }).from(deployments).where(sql`${deployments.orgId} = ${owner.orgId} and ${deployments.domain} = ${domain}`))[0].id;
+  const admin = await person('admin@orbit-studio.test');
+  const staff = await person('staf@orbit-studio.test');
+  const today = todayIn('Asia/Jakarta', new Date());
+
+  const reminders = await createTask(ctx, {
+    title: 'Pengingat jadwal tidak terkirim untuk janji temu pagi',
+    description: 'Pasien dengan janji temu sebelum jam 09.00 tidak menerima pengingat. Diduga job pengingat berjalan setelah jam buka klinik.',
+    kind: 'bug',
+    priority: 'urgent',
+    dueDate: addDays(today, -2),
+    assigneeId: staff,
+    deploymentId: await deploymentId('booking.kliniksehat.example.test'),
+  });
+  await setTaskStatus(ctx, reminders.id, 'in_progress');
+  await createTask(ctx, {
+    title: 'Pengingat WhatsApp terlambat dikirim ke pasien klinik',
+    description: 'Admin klinik melaporkan pengingat janji temu datang setelah pasien tiba.',
+    kind: 'bug',
+    priority: 'high',
+    assigneeId: admin,
+    clientId: await clientId('Klinik Sehat Sentosa'),
+  });
+  await createTask(ctx, {
+    title: 'Struk cabang Solo mencetak alamat cabang Klaten',
+    kind: 'bug',
+    priority: 'medium',
+    dueDate: addDays(today, -5),
+    assigneeId: staff,
+    deploymentId: await deploymentId('kasir-solo.kopisenja.example.test'),
+  });
+  await createTask(ctx, { title: 'Upgrade Orbit POS ke versi 1.4.2', kind: 'maintenance', priority: 'high', assigneeId: admin, deploymentId: await deploymentId('kasir.majujaya.example.test') });
+  await createTask(ctx, { title: 'Ekspor laporan pipeline ke CSV', description: 'Permintaan Aksara Studio untuk laporan bulanan ke investor.', kind: 'feature', priority: 'medium', dueDate: addDays(today, 10), deploymentId: await deploymentId('crm.aksara.example.test') });
+  await createTask(ctx, { title: 'Perbarui template proposal agensi', kind: 'task', priority: 'low', dueDate: addDays(today, 14), assigneeId: owner.id });
+  const backup = await createTask(ctx, { title: 'Backup database bulanan Bimbel Cerdas', kind: 'maintenance', priority: 'medium', assigneeId: staff, deploymentId: await deploymentId('jadwal.bimbelcerdas.example.test') });
+  await setTaskStatus(ctx, backup.id, 'done');
+  const handover = await createTask(ctx, { title: 'Serah terima akun admin ke Warung Nasi Bu Tini', kind: 'task', priority: 'medium', assigneeId: admin, clientId: await clientId('Warung Nasi Bu Tini') });
+  await setTaskStatus(ctx, handover.id, 'done');
+  await createTask(
+    ai,
+    { title: 'Tambahkan laporan stok harian untuk Kopi Senja', kind: 'feature', priority: 'medium', clientId: await clientId('Kopi Senja') },
+    { source: 'meeting', sourceQuote: 'Pak Budi minta laporan stok harian bisa dikirim tiap malam setelah toko tutup.' },
+  );
+  await createTask(ai, { title: 'Login kasir kadang gagal setelah update', kind: 'bug', priority: 'high', clientId: await clientId('Toko Bangunan Maju Jaya') }, { source: 'assistant' });
+  const late = await emitTaskLate(owner.orgId, new Date());
+  console.log(`Tasks: 10 (2 late, 2 done, 2 AI drafts); ${late.raised.length} late-task findings raised.`);
 }
 
 /**

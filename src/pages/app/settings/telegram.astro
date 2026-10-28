@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { TelegramSettings } from '../../../components/telegram/TelegramSettings';
+
+export const prerender = false;
+---
+
+<AppShell title="Telegram" current="telegram">
+  <TelegramSettings client:load timezone={Astro.locals.timezone} />
+</AppShell>

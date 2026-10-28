@@ -25,6 +25,14 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   return parsed.data as T;
 }
 
+/** Sends a form with a file (multipart) to our API. Same answer shape and errors as `api`. */
+export async function upload<T>(url: string, form: FormData): Promise<T> {
+  const res = await fetch(url, { method: 'POST', credentials: 'same-origin', body: form });
+  const parsed = await res.json().catch(() => null);
+  if (!res.ok || !parsed?.ok) throw new ApiError(res.status, parsed?.error?.code ?? 'internal', parsed?.error?.fields ?? []);
+  return parsed.data as T;
+}
+
 const CODE_TEXT: Record<string, MessageKey> = {
   forbidden: 'errForbidden',
   not_found: 'errNotFound',

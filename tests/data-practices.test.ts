@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { competitors } from '../src/content/pricing';
 import { processors, storageItems } from '../src/content/data-practices';
@@ -11,7 +11,7 @@ import { CONSENT_KEY } from '../src/lib/consent';
  */
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => {
-    const p = join(dir, n);
+    const p = posix.join(dir, n);
     return statSync(p).isDirectory() ? (n === '__tests__' ? [] : walk(p)) : [p];
   });
 const sources = walk('src').filter((f) => /\.(ts|tsx|astro)$/.test(f));

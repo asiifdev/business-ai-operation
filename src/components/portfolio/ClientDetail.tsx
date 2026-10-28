@@ -10,6 +10,7 @@ import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { ClientBilling } from '../billing/ClientBilling';
+import { ClientTasks } from '../tasks/ClientTasks';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
@@ -34,7 +35,7 @@ const ACTION_LABEL: Record<string, MessageKey> = {
 };
 const ACTOR_LABEL = { user: 'byPerson', ai: 'byAi', system: 'bySystem' } as const;
 
-/** The 360 degree view of one client: details, deployments with their version state, and the change history. */
+/** The 360 degree view of one client: details, deployments with their version state, open tasks, billing and the change history. */
 export function ClientDetail({ id, role }: { id: string; role: Role }) {
   const t = useT();
   const isManager = role !== 'staff';
@@ -90,6 +91,8 @@ export function ClientDetail({ id, role }: { id: string; role: Role }) {
       )}
 
       <Deployments clientId={id} deployments={deployments} canAdd={!archived} isManager={isManager} onChanged={() => void load.reload()} />
+
+      <ClientTasks clientId={id} />
 
       {billing && <ClientBilling clientId={id} subscriptions={billing.subscriptions} invoices={billing.invoices} />}
 

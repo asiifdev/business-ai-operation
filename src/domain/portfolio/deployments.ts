@@ -109,7 +109,7 @@ export async function deleteDeployment(ctx: Ctx, id: string) {
   await db.transaction(async (tx) => {
     const [row] = await tx.select().from(deployments).where(and(eq(deployments.orgId, ctx.orgId), eq(deployments.id, id)));
     if (!row) throw new DomainError('not_found', 'deployment');
-    if (await deploymentIsBilled(tx, ctx.orgId, id)) throw new DomainError('invalid_state', 'a subscription uses this deployment');
+    if (await deploymentIsBilled(tx, ctx.orgId, id)) throw new DomainError('invalid_state', 'a subscription or a task uses this deployment');
     await tx.delete(deployments).where(and(eq(deployments.orgId, ctx.orgId), eq(deployments.id, id)));
     await recordAudit(tx, who(ctx), { action: 'deployment.deleted', entityType: 'deployment', entityId: id, summary: { clientId: row.clientId, productId: row.productId, environment: row.environment } });
   });

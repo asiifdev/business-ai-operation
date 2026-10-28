@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // BR-M14-03: pages and non-form components must use the shared form components, never raw controls.
@@ -10,7 +10,7 @@ const RAW = /<select[\s>]|<textarea[\s>]|<input[^>]*type=["'{]*(checkbox|radio|n
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
+    const path = posix.join(dir, name);
     return statSync(path).isDirectory() ? walk(path) : [path];
   });
 }

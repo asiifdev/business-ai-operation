@@ -26,14 +26,16 @@ describe('dashboard overview', () => {
   });
 
   it('gives managers activity, approvals and AI figures, and staff none of them', async () => {
-    const o = await makeOrg('2026-10-28T03:00:00Z'); // 10:00 in Jakarta
+    // 10:00 in Jakarta, tomorrow: audit rows are stamped by the database clock (now), so the window must reach past today.
+    const day = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const o = await makeOrg(`${day}T03:00:00Z`);
     await createClient(o.ownerCtx, { name: 'Aksara Studio' });
     const owner = await getDashboardOverview(o.ownerCtx);
     expect(owner.localHour).toBe(10);
     expect(owner.pendingApprovals).toBe(0);
     expect(owner.ai).toMatchObject({ spentMicroUsd: 0, runsToday: 0 });
     expect(owner.activity?.days).toHaveLength(14);
-    expect(owner.activity?.days.at(-1)?.date).toBe('2026-10-28');
+    expect(owner.activity?.days.at(-1)?.date).toBe(day);
     expect(owner.activity?.days.reduce((s, d) => s + d.count, 0)).toBeGreaterThan(0);
     expect(owner.activity?.recent.some((r) => r.action === 'client.created')).toBe(true);
 

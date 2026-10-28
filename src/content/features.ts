@@ -64,7 +64,7 @@ export const features: Feature[] = [
   {
     id: 'meetings',
     planRow: 'M09 Rapat',
-    status: 'planned',
+    status: 'in_development',
     page: 'product/meetings',
     name: { en: 'Meeting recordings to minutes', id: 'Rekaman rapat menjadi notulen' },
     summary: {
