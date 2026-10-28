@@ -47,6 +47,11 @@ export const PERMISSIONS = {
   'dashboard.read_financial': MANAGERS,
   'audit.read': MANAGERS,
   'audit.read_financial': OWNER,
+  // AI assistant (M07): everyone may ask; usage, budgets and the full run log are for managers (BRD-M07 §2)
+  'assistant.use': ALL,
+  'ai.usage.read': MANAGERS,
+  'ai.run.read_own': ALL,
+  'ai.run.read_any': MANAGERS,
   // Telegram
   'telegram.link_self': ALL,
 } as const satisfies Record<string, readonly Role[]>;

@@ -29,7 +29,7 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 | M04 Pipeline | ⬜ | lead sampai klien |
 | M05 Tasks dan maintenance | ⬜ | |
 | M06 Dokumen | ⬜ | proposal, quotation, notulen |
-| M07 AI Core | ✅ | `AiProvider` (`MetaProvider`, `FakeProvider`), registri tool dengan daftar terlarang, loop agen (batas putaran dan token, `act` menjadi persetujuan), anggaran harian per fitur, `ai_runs`, pembungkus data tak tepercaya, pemeriksa angka, pesan ramah dan label; diuji tanpa jaringan (tes penerimaan BRD-M07 §10) dan **lewat API Meta sungguhan** (`pnpm ai:smoke`). Sisa tampilan: label "dibantu AI" dipasang tiap fitur yang memakainya (M08 dan seterusnya), halaman pengaturan anggaran Owner (M01) |
+| M07 AI Core | ✅ | DB (`ai_runs`, `ai_budgets`, `approvals`), service dan endpoint (`/api/ai/*`), UI (`/app/asisten`, `/app/ai`), AI dengan grounding ketat, dan asisten web; diuji dengan tes, API Meta sungguhan, dan di browser (chat, tolak pertanyaan umum, ubah anggaran, blokir saat habis, riwayat). **Batas jujur:** tool data bisnis (klien, invoice, lead) menyusul bersama M02 sampai M05, RAG menyusul bersama dokumen M06 dan notulen M09 (D-038), chatbot Telegram ada di M11 |
 | M08 Action Center | ⬜ | temuan, persetujuan, briefing |
 | M09 Rapat | ⬜ | STT, notulen, draf lead/task |
 | M10 Marketing Studio | ⬜ | gambar dan caption |

@@ -168,7 +168,12 @@ Sebagian sudah dibangun (token terang/gelap, form components, `Button`, `ThemeTo
 
 ### M07 AI Core (BRD-M07)
 
-Lihat kontrak lengkap di §5.
+Kontrak lengkap di §5. Permukaan pengguna:
+
+- **`/app/asisten`**: asisten web. **Bukan chatbot umum**: menjawab hanya dari hasil tool atas data organisasi (grounding ketat, D-038). Tanpa hasil tool tidak ada jawaban; pertanyaan di luar cakupan ditolak dengan teks baku; angka yang tidak ada di hasil tool tidak lolos; sumber (nama tool) ditampilkan di bawah jawaban. Endpoint `POST /api/ai/chat`, 20 pertanyaan per menit per pengguna.
+- **`/app/ai`**: tab **Anggaran** (Pemilik dan Admin melihat pemakaian hari ini per fitur; hanya Pemilik mengubah batas) dan tab **Riwayat run** (manajer melihat semua, Staf hanya miliknya; `?tab=` di URL). Endpoint `GET /api/ai/overview`, `PUT /api/ai/budgets`, `GET /api/ai/runs`.
+- **Tool nyata saat ini:** penggunaan AI, anggota tim, aktivitas audit, persetujuan menunggu, dan penjelasan kemampuan asisten. Tool data bisnis (klien, invoice, lead, tugas) ditambahkan bersama M02 sampai M05.
+- **Keadaan:** setiap region yang memuat data punya keadaan memuat, kosong, galat, dan penuh.
 
 ### M08 Action Center (BRD-M08)
 

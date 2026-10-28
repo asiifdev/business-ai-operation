@@ -1,0 +1,11 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { AiUsage } from '../../components/AiUsage';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+---
+
+<AppShell title="Penggunaan AI" current="ai">
+  <AiUsage client:load role={user.role} />
+</AppShell>

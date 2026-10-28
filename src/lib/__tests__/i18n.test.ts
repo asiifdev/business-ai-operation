@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { messages, setLocale, t } from '../i18n';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getServerLocale, messages, setLocale, t } from '../i18n';
 import { monthName, weekdayInitials } from '../format';
 
 afterEach(() => setLocale('id'));
@@ -32,5 +32,22 @@ describe('i18n', () => {
   it('fills placeholders', () => {
     setLocale('id');
     expect(t('moneyMin', { min: 'Rp 10.000' })).toBe('Nominal minimal Rp 10.000.');
+  });
+});
+
+describe('server locale', () => {
+  it('on the server follows the active language, so server rendering can be tested in either language', () => {
+    setLocale('en');
+    expect(getServerLocale()).toBe('en');
+  });
+
+  it('in the browser is always the default, so hydration matches what the server rendered', () => {
+    setLocale('en');
+    vi.stubGlobal('window', {});
+    try {
+      expect(getServerLocale()).toBe('id');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { fixedClock } from '../../../lib/clock';
 import { registerOrganization } from '../../org/service';
 import { userCtx, type Ctx } from '../../ctx';
 import { createUser } from '../../users/service';
 
-let counter = 0;
-const unique = () => `${Date.now()}-${++counter}`;
+// Test files run in parallel workers, so a clock plus a per-process counter can collide. A random id cannot.
+const unique = () => randomUUID().slice(0, 12);
 
 /** A fresh organization with its Owner, plus an Admin and a Staff user, and a clock the test can move. */
 export async function makeOrg(startAt = '2026-10-28T03:00:00Z') {

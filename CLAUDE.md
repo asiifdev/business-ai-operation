@@ -70,6 +70,7 @@ Checklist (tempel di setiap PR):
 
 - **Uang, tanggal, status ditentukan kode, bukan AI.** Nominal, pajak, jatuh tempo, dan status pembayaran hanya berubah lewat service/scheduler/verifikasi manual. Uang = **integer Rupiah**, tidak pernah float.
 - **Saldo/penerimaan berbasis baris mutasi (ledger)**, bukan satu kolom yang di-`UPDATE`. Selalu `INSERT` catatan baru.
+- **Asisten tidak boleh menjadi AI generik** (syarat kompetisi): jawabannya hanya dari hasil tool atas data organisasi. Tanpa hasil tool tidak ada jawaban; angka harus ada di hasil tool; di luar cakupan = penolakan baku (`runAgent` dengan `grounding: 'strict'`, D-038).
 - **Tiga tingkat tool AI:** `read` (bebas), `draft` (membuat draft), `act` (**wajib approval manusia**, tercatat di `approvals`). Dokumen dan pesan keluar adalah **draft** sampai disetujui. Tidak ada kirim otomatis.
 - **Setiap panggilan model dicatat** di `ai_runs` (tool, ringkasan input/output, token, biaya). Pasang **anggaran harian per fitur**.
 - **Isolasi tenant di kode, bukan di prompt.** RAG dan tool memfilter `org_id` di query.

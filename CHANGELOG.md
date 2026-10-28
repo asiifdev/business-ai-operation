@@ -5,6 +5,7 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 ## [Unreleased]
 
 ### Added
+- M07 (permukaan pengguna): asisten web `/app/asisten` yang hanya menjawab dari tool atas data organisasi (grounding ketat, sumber ditampilkan, pertanyaan umum ditolak), halaman `/app/ai` (anggaran per fitur yang dapat diubah Pemilik, riwayat run), navigasi aplikasi, endpoint `POST /api/ai/chat`, `GET /api/ai/overview`, `PUT /api/ai/budgets`, `GET /api/ai/runs`, tool nyata (penggunaan AI, tim, aktivitas audit, persetujuan menunggu, kemampuan asisten), izin `assistant.use` dan `ai.*`, pembantu API bersama. Keputusan D-038.
 - M11 (sebagian): `src/integrations/telegram`: klien Bot API (kirim dan sunting pesan, jawab callback, unduh berkas ≤ 20 MB, webhook, polling), verifikasi `X-Telegram-Bot-Api-Secret-Token` dengan pembanding waktu-konstan, `callback_data` `ap:<id>:<y|n|d>`, kode pairing 128 bit (hanya hash disimpan), pembantu escape dan pemecah teks, parser update; 40 tes tanpa jaringan.
 - M07 AI Core: `src/ai` dan `src/domain/ai`. `AiProvider` dengan `MetaProvider` (chat, tool calling, structured output, STT, gambar; pencarian bawaan Muse Image dimatikan) dan `FakeProvider`; klien HTTP dengan retry yang menghormati `Retry-After`; harga micro-USD; pemeriksa WAV; penjaga model `-contributor`; registri tool (daftar terlarang, izin per peran, argumen ketat tanpa id organisasi); loop agen dengan batas putaran dan token, `act` menjadi persetujuan `Menunggu`; anggaran harian per fitur di zona waktu organisasi dan `setAiBudget` (Owner); pencatatan `ai_runs`; pembungkus data tak tepercaya; pemeriksa angka; pesan ramah dan label. Migrasi `0004_action_center` (`findings`, `approvals`, `briefings`) dan layanan `requestApproval`. Skrip `pnpm ai:smoke` untuk uji nyata. Keputusan D-036 dan D-037.
 - Skill `meta-model-api-integration` (`.claude/skills/`): panduan integrasi Meta Model API dari dokumentasi resmi (protokol, reasoning dan batas token, tool calling, structured output, gambar masuk dan keluar, STT, file, retry, caching) beserta daftar butir yang belum diuji.
@@ -20,3 +21,9 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 - M14 (sebagian): token desain terang/gelap (arah Cobalt, provisional), Tailwind v4, util `format`/`money`/`files`/`i18n`, komponen form (`FormField`, `TextInput`, `NumberInput`, `MoneyInput`, `DateInput`, `SelectMenu`, `Textarea`, `Checkbox`/`CheckboxGroup`, `RadioGroup`, `Toggle`, `FileInput`, `InputError`), `Button`, `ThemeToggle`, pengalih bahasa ID/EN (`LocaleSwitch`, `useT`), galeri dev `/dev/komponen` (404 di produksi), 25 tes dasar termasuk larangan kontrol mentah.
 - Scaffold Astro 7 (SSR, adapter Node) + React dan koneksi PostgreSQL lokal (tanpa skema; lihat DECISIONS D-006).
 - Skill `hallmark` dan `tailwind-4-docs` di `.claude/skills`; MCP `astro-docs` di `.mcp.json`.
+
+### Fixed
+- Galat hidrasi saat bahasa peramban Inggris: render pertama di peramban kini selalu memakai bahasa bawaan server, lalu beralih.
+- Validasi percakapan asisten melempar `TypeError` (500) untuk `messages` kosong; kini 400.
+- Tes paralel dapat menghasilkan email kembar (`email_taken`); email tes kini acak.
+

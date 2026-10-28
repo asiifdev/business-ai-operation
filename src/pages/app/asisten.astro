@@ -1,0 +1,11 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { AssistantChat } from '../../components/AssistantChat';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+---
+
+<AppShell title="Asisten" current="assistant">
+  <AssistantChat client:load role={user.role} />
+</AppShell>

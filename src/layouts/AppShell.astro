@@ -4,14 +4,15 @@ import { AppHeader } from '../components/AppHeader';
 
 interface Props {
   title: string;
+  current?: 'dashboard' | 'assistant' | 'ai';
 }
-const { title } = Astro.props;
+const { title, current } = Astro.props;
 const user = Astro.locals.user!;
 const organizationName = Astro.locals.organizationName ?? '';
 ---
 
 <Base title={title}>
-  <AppHeader client:load organizationName={organizationName} userName={user.name} role={user.role} />
+  <AppHeader client:load organizationName={organizationName} userName={user.name} role={user.role} current={current} />
   <main class="wrap py-8">
     <slot />
   </main>

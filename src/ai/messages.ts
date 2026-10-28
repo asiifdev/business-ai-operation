@@ -22,6 +22,16 @@ const FRIENDLY: Record<AiErrorKind, Record<Locale, string>> = {
   too_large: { id: 'Permintaan terlalu besar untuk AI.', en: 'The request is too large for the AI.' },
 };
 
+/** Fixed texts, never written by the model: what the assistant says when it has no data to answer from. */
+export const NO_DATA_REFUSAL: Record<Locale, string> = {
+  id: 'Saya hanya menjawab dari data dan fungsi yang ada di Orbyte, dan tidak menemukan datanya untuk pertanyaan ini. Tanyakan hal yang ada di data Anda, atau tanyakan "apa yang bisa kamu lakukan?".',
+  en: 'I only answer from the data and functions in Orbyte, and I found no data for this question. Ask about something in your data, or ask "what can you do?".',
+};
+export const OUT_OF_SCOPE_REFUSAL: Record<Locale, string> = {
+  id: 'Pertanyaan itu di luar data dan fungsi yang saya punya, jadi saya tidak menjawabnya. Tanyakan "apa yang bisa kamu lakukan?" untuk melihat apa yang bisa saya bantu.',
+  en: 'That is outside the data and functions I have, so I will not answer it. Ask "what can you do?" to see what I can help with.',
+};
+
 export function friendlyAiError(kind: AiErrorKind, locale: Locale = 'id'): string {
   return FRIENDLY[kind][locale];
 }

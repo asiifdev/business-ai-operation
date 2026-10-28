@@ -6,6 +6,6 @@ export const prerender = false;
 const user = Astro.locals.user!;
 ---
 
-<AppShell title="Dashboard">
+<AppShell title="Dashboard" current="dashboard">
   <DashboardHome client:load name={user.name} />
 </AppShell>

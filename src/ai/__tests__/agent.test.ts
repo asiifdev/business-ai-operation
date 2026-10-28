@@ -336,3 +336,75 @@ describe('acceptance: budget and limits (BR-M07-06, BR-M07-07, BR-M07-11)', () =
     expect(result.message).toMatch(/budget/i);
   });
 });
+
+describe('strict grounding: no tool result, no answer', () => {
+  const strict = (o: Org, provider: FakeProvider, over: Partial<AgentInput> = {}) => agent(o, provider, { grounding: 'strict', ...over });
+  const scope = defineTool({ name: 'report_out_of_scope', description: 'Call this when no tool fits the question.', tier: 'read', permission: 'assistant.use', args: z.object({ reason: z.string().max(200) }), run: async () => ({ outOfScope: true }) });
+
+  it('accepts an answer that follows a tool result and lists its sources', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Aksara Studio berutang Rp 12.500.000, telat 6 hari.')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ ok: true, grounded: true, refused: false, sources: ['list_overdue_invoices'], label: 'dibantu AI' });
+  });
+
+  it('sends a model that answers from its own knowledge back to the tools once', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: [say('Ibu kota Prancis adalah Paris.'), callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Ada satu invoice, Rp 12.500.000.')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ ok: true, grounded: true, refused: false });
+    expect(result.text).not.toContain('Paris');
+    const correction = fake.chatCalls[1].messages.at(-1) as { role: string; content: string };
+    expect(correction).toMatchObject({ role: 'developer' });
+    expect(correction.content).toMatch(/belum memanggil tool/);
+  });
+
+  it('replaces the model words with the fixed refusal when it still answers without any data', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: [say('Paris.'), say('Paris, tentu saja.')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ ok: true, refused: true, refusalReason: 'no_data', grounded: false, label: 'ini bukan hasil AI', sources: [] });
+    expect(result.text).toMatch(/hanya menjawab dari data dan fungsi/);
+    expect(result.text).not.toContain('Paris');
+    expect(fake.chatCalls).toHaveLength(2);
+    expect((await runRow(result.runId)).outputSummary).toBe('refused: no_data');
+  });
+
+  it('does not let numbers through that no tool returned, after one correction', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Totalnya Rp 99.000.000.'), say('Totalnya tetap Rp 99.000.000.')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ refused: true, refusalReason: 'unverified_numbers', grounded: true });
+    expect(result.text).not.toContain('99.000.000');
+    expect((fake.chatCalls[2].messages.at(-1) as { content: string }).content).toMatch(/99\.000\.000/);
+  });
+
+  it('corrects a wrong number once and then accepts the fixed answer', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Totalnya Rp 99.000.000.'), say('Totalnya Rp 12.500.000.')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ refused: false, grounded: true, unverifiedNumbers: [] });
+    expect(result.text).toBe('Totalnya Rp 12.500.000.');
+  });
+
+  it('ends at once with the out-of-scope refusal when the model says no tool fits, without another model call', async () => {
+    const o = await makeOrg();
+    const registry = new ToolRegistry().register(scope);
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'report_out_of_scope', args: { reason: 'pertanyaan umum' } }]), say('tidak dipanggil')] });
+    const result = await strict(o, fake, { registry });
+    expect(result).toMatchObject({ ok: true, refused: true, refusalReason: 'out_of_scope', grounded: false, sources: [], label: 'ini bukan hasil AI' });
+    expect(result.text).toMatch(/di luar data dan fungsi/);
+    expect(fake.chatCalls).toHaveLength(1);
+  });
+
+  it('leaves non-strict runs (extraction from provided text) as they were', async () => {
+    const o = await makeOrg();
+    const result = await agent(o, new FakeProvider({ chat: [say('Ringkasan rapat.')] }));
+    expect(result).toMatchObject({ ok: true, refused: false, grounded: false, text: 'Ringkasan rapat.' });
+  });
+});
