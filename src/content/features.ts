@@ -75,7 +75,7 @@ export const features: Feature[] = [
   {
     id: 'telegram',
     planRow: 'M11 Telegram',
-    status: 'planned',
+    status: 'in_development',
     page: 'product/telegram',
     name: { en: 'Assistant in Telegram', id: 'Asisten lewat Telegram' },
     summary: {

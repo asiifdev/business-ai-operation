@@ -91,7 +91,8 @@ export const processors: Processor[] = [
   },
   {
     name: 'Telegram',
-    hosts: ['api.telegram.org'],
+    // t.me only appears in the link the user opens to pair their account; the server never calls it.
+    hosts: ['api.telegram.org', 't.me'],
     inDevelopment: true,
     purpose: { en: 'Delivers findings and approval buttons to the Telegram chat you link.', id: 'Mengirim temuan dan tombol persetujuan ke chat Telegram yang Anda tautkan.' },
     data: { en: 'Your Telegram chat id and the messages the assistant sends and receives.', id: 'ID chat Telegram Anda dan pesan yang dikirim dan diterima asisten.' },

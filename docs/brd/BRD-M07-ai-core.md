@@ -8,7 +8,7 @@
 | **Level usulan** | ✅ |
 | **BRD induk** | [`../BRD.md`](../BRD.md): CR-05, CR-06, CR-07, CR-11, CR-12, CR-13, CR-14, CR-16, CR-17 |
 | **Prasyarat** | BRD-M01, M15 |
-| **Sumber** | `docs/02` (terverifikasi), hasil uji nyata `docs/02` §0, `docs/03` §5; skill `meta-model-api-integration` (⬜ wajib ditulis sebelum coding) |
+| **Sumber** | `docs/02` (terverifikasi), hasil uji nyata `docs/02` §0, `docs/03` §5; skill `meta-model-api-integration` (✅ ditulis 2026-10-28) |
 
 ## 1. Tujuan & nilai bisnis
 
@@ -74,7 +74,7 @@ Bergantung pada M01 (izin, anggaran), M15 (log, persetujuan). Dipakai oleh M08, 
 
 ## 8. Integrasi eksternal & skill
 
-Meta Model API (`https://api.meta.ai/v1`). Skill `meta-model-api-integration` ⬜ **wajib ditulis lebih dulu** (halaman yang belum dibaca: tool calling, structured output, image generation, image/video understanding, Responses API, SDK).
+Meta Model API (`https://api.meta.ai/v1`). Skill `meta-model-api-integration` ✅ ditulis dari teks asli dokumentasi (2026-10-28).
 
 ## 9. Notifikasi & dokumen keluaran
 
@@ -94,7 +94,7 @@ Pesan galat ramah ("anggaran habis", "model tidak tersedia"). Tidak ada dokumen 
 
 ## 11. Risiko & pertanyaan terbuka
 
-1. ⚠️ Perilaku nyata Responses API vs Chat Completions; mana yang dipakai (diputuskan setelah skill ditulis).
+1. ✅ Diputuskan di D-036: Chat Completions dulu (terbukti live), Responses menyusul bila perlu.
 2. ⚠️ Kemampuan multimodal (gambar masuk) dan format audio STT belum diuji.
 3. ⚠️ Perhitungan biaya dari `usage` (tokens reasoning, cached) perlu diverifikasi dengan tagihan nyata.
 4. ⚠️ Anggaran default per fitur (usulan: USD 2/hari/fitur).

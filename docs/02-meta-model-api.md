@@ -1,6 +1,6 @@
 # 02 — Meta Model API (ringkasan terverifikasi)
 
-Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-limits`, `/docs/speech-to-text` (dibaca 2026-10-28). Halaman lain (tool calling, structured output, image generation, image/video understanding, Responses API, SDK, kompatibilitas) **belum dibaca penuh**: wajib dipelajari lewat skill `meta-model-api-integration` (⬜, lihat `CLAUDE.md`) sebelum coding lapisan AI.
+Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-limits`, `/docs/speech-to-text` (dibaca 2026-10-28). Halaman lain (tool calling, structured output, image generation, image understanding, Responses API, reasoning, files, error handling, SDK) sudah dibaca dan dirangkum di skill `meta-model-api-integration` (`.claude/skills/`, ✅ 2026-10-28). Search grounding juga sudah dibaca. Video/audio understanding, tool search, Messages API, SAM, dan halaman API reference per-endpoint belum dibaca.
 
 ## 0. Hasil uji nyata (2026-10-28, `muse-spark-1.3`/`muse-image-1.0`, key owner di `.env`)
 

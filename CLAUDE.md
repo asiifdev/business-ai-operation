@@ -10,7 +10,7 @@ Nama folder/kerja: `business-ai-operation`. Nama produk/merek: **Orbyte** (`docs
 
 - **Skema dan migrasi hanya dari `docs/ERD.md`.** Perubahan skema = ubah ERD dulu (catat di `docs/DECISIONS.md`), baru migrasi. Migrasi ditinjau sebelum diterapkan dan tidak diubah setelah diterapkan di server live (D-006).
 - Pustaka komponen UI/M14 sudah sebagian dibangun (D-021); sisanya mengikuti PRD §4 M14.
-- **Skill integrasi** `meta-model-api-integration` dan `telegram-bot-integration` **wajib ditulis sebelum** coding lapisan AI dan Telegram (tabel skill di bawah).
+- **Skill integrasi** `meta-model-api-integration` dan `telegram-bot-integration` sudah ditulis (baca sebelum coding lapisan AI dan modul Telegram; tabel skill di bawah).
 - Hanya data demo palsu (seed); jangan ada data klien nyata.
 
 ## Aturan hackathon yang mengikat kode (detail: `docs/01-aturan-hackathon.md`)
@@ -96,8 +96,8 @@ Skill dibaca **sebelum** menyentuh area terkait. Skill integrasi baru wajib ditu
 | `tailwind-4-docs` (`.claude/skills/tailwind-4-docs`) | Panduan Tailwind v4 | ✅ dipasang dari `Lombiq/Tailwind-Agent-Skills` @ `634ec18` (BSD-3). ✅ snapshot docs disinkronkan 2026-10-28 (commit `7f92c22`, lisensi diterima owner). Berkas docs **tidak di-commit** (`.gitignore`, lisensi *source-available*); jalankan ulang skripnya `.claude/skills/tailwind-4-docs/scripts/sync_tailwind_docs.py --accept-docs-license` di mesin baru |
 | `astro-docs` MCP (`.mcp.json`) | Dokumentasi Astro terkini | ✅ `https://mcp.docs.astro.build/mcp` |
 | `context7` MCP | Dokumentasi pustaka lain | ✅ (konfigurasi global pengguna) |
-| `meta-model-api-integration` | Responses/Chat API, tool calling, structured output, gambar, STT, limit | ⬜ **wajib ditulis sebelum coding lapisan AI** (jangan dari ingatan; `docs/02` baru ringkasan) |
-| `telegram-bot-integration` | Bot Telegram interaktif (webhook, inline keyboard, callback, voice/foto) | ⬜ **wajib ditulis dari dokumentasi resmi Telegram Bot API sebelum coding modul Telegram** |
+| `meta-model-api-integration` (`.claude/skills/meta-model-api-integration`) | Responses/Chat API, tool calling, structured output, gambar, STT, limit, retry | ✅ ditulis 2026-10-28 dari teks asli `dev.meta.ai/docs/*` (halaman yang dibaca dan yang tidak tercantum di skill); butir ⚠️ di §12 skill harus diuji sebelum diandalkan |
+| `telegram-bot-integration` (`.claude/skills/telegram-bot-integration`) | Bot Telegram interaktif (webhook, inline keyboard, callback, pairing, voice/foto, rate limit) | ✅ ditulis 2026-10-28 dari teks asli `core.telegram.org` (Bot API, FAQ, webhooks, features); butir ⚠️ di §13 skill harus diuji sebelum diandalkan |
 | ~~Skill Telegram pihak ketiga~~ | Kirim pesan/pengingat Telegram via Convex | ❌ **ditolak** (keputusan D-004): satu arah, tanpa tombol interaktif, butuh deploy key Convex production, 1 commit, lisensi tidak jelas |
 
 ## Jangan membuat dokumen markdown berserakan

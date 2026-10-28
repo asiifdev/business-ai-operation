@@ -29,15 +29,15 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 | M04 Pipeline | ⬜ | lead sampai klien |
 | M05 Tasks dan maintenance | ⬜ | |
 | M06 Dokumen | ⬜ | proposal, quotation, notulen |
-| M07 AI Core | ⬜ | provider, tool, anggaran, `ai_runs` |
+| M07 AI Core | 🚧 | selesai: `AiProvider` dengan `MetaProvider` (chat, STT, gambar) dan `FakeProvider`, klien HTTP dengan retry, tabel harga, pemeriksa WAV, 52 tes tanpa jaringan. Sisa: registri tool, loop agen, anggaran harian dan penulisan `ai_runs`, label "dibantu AI", uji langsung ke API Meta |
 | M08 Action Center | ⬜ | temuan, persetujuan, briefing |
 | M09 Rapat | ⬜ | STT, notulen, draf lead/task |
 | M10 Marketing Studio | ⬜ | gambar dan caption |
-| M11 Telegram | ⬜ | asisten interaktif |
+| M11 Telegram | 🚧 | selesai: klien Bot API (`src/integrations/telegram`) dengan retry flood control, verifikasi secret webhook, `callback_data` persetujuan, kode pairing (hanya hash disimpan), pembantu teks HTML, parser update; 40 tes tanpa jaringan. Sisa: endpoint webhook, layanan pairing dan tautan (DB), kartu temuan, keputusan persetujuan, voice note dan foto, skrip `bot:webhook` dan `bot:dev` |
 | M12 Dashboard | ⬜ | |
 | Deploy live | 🚧 | `https://ai-business.asiifdev.com` aktif tetapi **masih menjalankan dev server**; perlu `pnpm build` + `pnpm start` di belakang proxy HTTPS (README, bagian Deploy) dan migrasi pada DB server |
 | M16 Landing dan situs pemasaran | 🚧 | selesai: fondasi SEO/GEO/AEO dan tes build, 17 halaman EN dan ID, GA4 dengan persetujuan, beranda modern (hero beranimasi, cara kerja interaktif, bento, kalkulator harga, pita penutup). Sisa: berkas logo resmi, ID GA4 dan kunci Turnstile dari owner, kunci klaim fitur di hari terakhir, audit `hallmark`, uji Lighthouse |
-| Skill `meta-model-api-integration`, `telegram-bot-integration` | ⬜ | ditulis sebelum coding lapisan AI / Telegram |
+| Skill `meta-model-api-integration`, `telegram-bot-integration` | ✅ | ditulis 2026-10-28 dari teks asli dokumentasi resmi; butir ⚠️ di akhir tiap skill belum diuji |
 
 ## 2. Jadwal (WIB)
 
