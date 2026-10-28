@@ -3,6 +3,7 @@ import type { ApprovalCard as Approval } from '../../domain/action-center/approv
 import type { FindingCard as Finding, FindingView } from '../../domain/action-center/findings';
 import type { Role } from '../../domain/permissions';
 import { api, errorKey } from '../../lib/api-client';
+import { refreshAttention } from '../../lib/attention';
 import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useLoad } from '../../lib/use-load';
@@ -38,6 +39,11 @@ export function ActionCenterPage({ role, timezone }: { role: Role; timezone: str
   useEffect(() => setView(readView()), []);
   const load = useLoad(() => api<Data>('GET', `/api/action-center?view=${view}`), [view]);
 
+  function changed() {
+    void load.reload();
+    refreshAttention();
+  }
+
   function choose(next: FindingView) {
     setView(next);
     const url = new URL(window.location.href);
@@ -63,7 +69,7 @@ export function ActionCenterPage({ role, timezone }: { role: Role; timezone: str
           </div>
           <div className="grid gap-3 xl:grid-cols-2">
             {load.value.data.approvals.map((a) => (
-              <ApprovalCard key={a.id} approval={a} timezone={timezone} onDecided={() => void load.reload()} />
+              <ApprovalCard key={a.id} approval={a} timezone={timezone} onDecided={changed} />
             ))}
           </div>
         </Panel>
@@ -99,7 +105,7 @@ export function ActionCenterPage({ role, timezone }: { role: Role; timezone: str
           ) : (
             <div className="flex flex-col gap-4">
               {load.value.data.findings.map((f) => (
-                <FindingCard key={`${f.id}:${f.status}`} finding={f} timezone={timezone} onChanged={() => void load.reload()} />
+                <FindingCard key={`${f.id}:${f.status}`} finding={f} timezone={timezone} onChanged={changed} />
               ))}
             </div>
           ))}

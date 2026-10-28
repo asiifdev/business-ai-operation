@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AttentionCounts } from '../../domain/dashboard/overview';
 import type { Role } from '../../domain/permissions';
+import { api } from '../../lib/api-client';
+import { ATTENTION_REFRESH } from '../../lib/attention';
 import { formatFullDate } from '../../lib/format';
 import { BILLING_PAGES_READY } from '../../lib/nav';
 import { cx } from '../../lib/cx';
@@ -33,8 +35,15 @@ const roleKey = { owner: 'roleOwner', admin: 'roleAdmin', staff: 'roleStaff' } a
  * The frame of every signed-in page. On a wide screen it is a sidebar plus a slim top bar with the ⌘K search. Under 64rem
  * it becomes a phone app: a top bar, a tab bar at the bottom, and a sheet for the rest (language, theme, sign out).
  */
-export function AppChrome(props: ChromeProps) {
+export function AppChrome(chrome: ChromeProps) {
   const [palette, setPalette] = useState(false);
+  const [counts, setCounts] = useState(chrome.counts);
+  const props = { ...chrome, counts };
+  useEffect(() => {
+    const refresh = () => void api<AttentionCounts>('GET', '/api/attention').then(setCounts, () => undefined);
+    window.addEventListener(ATTENTION_REFRESH, refresh);
+    return () => window.removeEventListener(ATTENTION_REFRESH, refresh);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {

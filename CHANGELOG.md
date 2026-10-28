@@ -14,6 +14,7 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 - Ringkasan keuangan dan kalender untuk dashboard (`src/domain/billing/summary.ts`, `GET /api/dashboard/calendar`), jumlah perhatian untuk shell (`getAttentionCounts`), dengan tes.
 
 ### Fixed
+- Lencana sidebar dan lonceng tidak berubah setelah sebuah temuan ditangani, ditunda, atau diabaikan sampai halaman dimuat ulang: kerangka aplikasi kini mengambil ulang angkanya dari `GET /api/attention` saat halaman memicu `attention:refresh`.
 - Tes `rejects a short password` menghitung seluruh organisasi sehingga sesekali gagal saat berkas tes lain berjalan paralel; kini hanya menghitung organisasi miliknya.
 - Halaman berkedip dari Indonesia ke English saat bahasa diset English: bahasa kini disimpan di cookie `locale` dan dipilih di server per permintaan (cookie, lalu bahasa profil, lalu bahasa peramban), jadi HTML pertama sudah dalam bahasa yang benar dan hidrasi cocok. `localStorage` `locale` tidak dipakai lagi.
 
