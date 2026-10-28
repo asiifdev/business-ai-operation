@@ -30,6 +30,8 @@ Prasyarat: Node >= 22.23.4, pnpm, PostgreSQL, `ffmpeg`.
 ```bash
 cp .env.example .env     # isi nilai; jangan pernah di-commit
 pnpm install
+pnpm db:migrate          # buat tabel di database lokal
+pnpm db:seed             # data demo palsu: Orbit Studio dan Kopi Senja Digital
 pnpm dev                 # galeri komponen: /dev/komponen
 pnpm test                # unit, komponen, dan pemeriksaan sinkronisasi dokumen
 pnpm typecheck
@@ -37,6 +39,8 @@ pnpm build
 ```
 
 Skema database dan migrasi hanya berasal dari `docs/ERD.md` (lihat `CLAUDE.md`).
+
+Masuk dengan data demo (palsu) setelah `pnpm db:seed`: `owner@orbit-studio.test`, `admin@orbit-studio.test`, atau `staf@orbit-studio.test`, kata sandi `demo-password-123`. Uji asisten dengan `pnpm ai:smoke` (butuh `MODEL_API_KEY`).
 
 ## Deploy ke server
 

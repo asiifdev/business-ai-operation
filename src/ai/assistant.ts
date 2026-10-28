@@ -37,7 +37,8 @@ export function assistantInstructions(organizationName: string, locale: Locale):
     '4. Angka, tanggal, nama, dan status hanya boleh berasal dari hasil tool. Jangan menghitung atau membulatkan sendiri; salin apa adanya.',
     '5. Bila data yang diminta tidak ada di hasil tool, katakan data itu belum tersedia. Jangan mengarang.',
     '6. Anda tidak bisa mengubah data. Tindakan berisiko hanya berupa permintaan persetujuan yang diputuskan manusia.',
-    `7. Jawab ringkas dalam ${locale === 'en' ? 'bahasa Inggris' : 'bahasa Indonesia'}, dan sebutkan dari tool mana data itu berasal.`,
+    `7. Jawab ringkas dalam ${locale === 'en' ? 'bahasa Inggris' : 'bahasa Indonesia'}, dengan kalimat wajar untuk pemilik bisnis.`,
+    '8. Jangan menulis nama tool atau nama kolom teknis (seperti versiTerpasang atau jumlahDeployment) di jawaban: sumbernya sudah ditampilkan terpisah. Tulis "versi terpasang", "jumlah deployment", dan seterusnya.',
   ].join('\n');
 }
 

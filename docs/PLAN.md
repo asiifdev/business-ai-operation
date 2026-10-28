@@ -24,8 +24,8 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 | M01 Registrasi dan login | ✅ | registrasi atomik, login/keluar, middleware sesi, `AppShell` dasar; diuji (tes + browser) |
 | M01 Pengguna dan pengaturan | 🚧 | layanan pengguna dan matriks izin selesai; sisa: halaman Pengguna dan Pengaturan Organisasi, wajib ganti kata sandi awal, E2E Playwright |
 | M15 Audit dan guardrail | 🚧 | selesai: tabel, penjaga DB, `recordAudit` dalam transaksi. Sisa: `automation.once`, keputusan persetujuan atomik, halaman audit |
-| M02 Portfolio | ⬜ | produk, paket, klien, deployment |
-| M03 Billing | ⬜ | langganan, invoice, pembayaran, PDF, penjadwal |
+| M02 Portfolio | ✅ | DB (`products`, `packages`, `clients`, `deployments`, migrasi `0005`), service dengan audit dan izin per peran, endpoint `/api/products`, `/api/clients`, `/api/deployments`, `/api/packages`, UI (`/app/produk`, `/app/produk/:id`, `/app/klien`, `/app/klien/:id` dengan tampilan 360°), tool asisten (`list_clients`, `get_client_overview`, `list_products`, `get_product_packages`, `list_deployments`), data seed (`pnpm db:seed`), diuji dengan tes dan di browser. **Batas jujur:** tampilan 360° baru memuat deployment dan riwayat perubahan; langganan, invoice, tugas, dan lead bergabung saat M03 sampai M05 dibangun. M03 wajib memperluas `src/domain/portfolio/history.ts` (hapus klien/produk yang punya tagihan ditolak, BR-M02-08) |
+| M03 Billing | ⬜ | langganan, invoice, pembayaran, PDF, penjadwal. Catatan: perluas `portfolio/history.ts` dan tolak hapus deployment yang dipakai langganan |
 | M04 Pipeline | ⬜ | lead sampai klien |
 | M05 Tasks dan maintenance | ⬜ | |
 | M06 Dokumen | ⬜ | proposal, quotation, notulen |
