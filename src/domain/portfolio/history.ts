@@ -1,17 +1,33 @@
 import { and, count, eq } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client';
-import { deployments } from '../../db/schema';
+import { deployments, invoices, subscriptions } from '../../db/schema';
+
+const total = async (...queries: Promise<{ n: number }[]>[]) => (await Promise.all(queries)).reduce((sum, [row]) => sum + (row?.n ?? 0), 0);
 
 /**
- * Whether a client or product has history that forbids deleting it (BR-M02-08): it can only be archived. Today that is
- * its deployments. M03 (billing) MUST add subscriptions and invoices here, in this one place, when those tables exist.
+ * Whether a client or product has history that forbids deleting it (BR-M02-08): it can only be archived. History is its
+ * deployments, subscriptions and invoices. The one place to extend when another module starts pointing at clients.
  */
 export async function clientHasHistory(tx: Tx | Db, orgId: string, clientId: string): Promise<boolean> {
-  const [row] = await tx.select({ n: count() }).from(deployments).where(and(eq(deployments.orgId, orgId), eq(deployments.clientId, clientId)));
-  return (row?.n ?? 0) > 0;
+  return (
+    (await total(
+      tx.select({ n: count() }).from(deployments).where(and(eq(deployments.orgId, orgId), eq(deployments.clientId, clientId))),
+      tx.select({ n: count() }).from(subscriptions).where(and(eq(subscriptions.orgId, orgId), eq(subscriptions.clientId, clientId))),
+      tx.select({ n: count() }).from(invoices).where(and(eq(invoices.orgId, orgId), eq(invoices.clientId, clientId))),
+    )) > 0
+  );
 }
 
 export async function productHasHistory(tx: Tx | Db, orgId: string, productId: string): Promise<boolean> {
-  const [row] = await tx.select({ n: count() }).from(deployments).where(and(eq(deployments.orgId, orgId), eq(deployments.productId, productId)));
-  return (row?.n ?? 0) > 0;
+  return (
+    (await total(
+      tx.select({ n: count() }).from(deployments).where(and(eq(deployments.orgId, orgId), eq(deployments.productId, productId))),
+      tx.select({ n: count() }).from(subscriptions).where(and(eq(subscriptions.orgId, orgId), eq(subscriptions.productId, productId))),
+    )) > 0
+  );
+}
+
+/** A deployment that a subscription points at cannot be deleted (it would orphan the subscription). */
+export async function deploymentIsBilled(tx: Tx | Db, orgId: string, deploymentId: string): Promise<boolean> {
+  return (await total(tx.select({ n: count() }).from(subscriptions).where(and(eq(subscriptions.orgId, orgId), eq(subscriptions.deploymentId, deploymentId))))) > 0;
 }
