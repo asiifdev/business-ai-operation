@@ -70,9 +70,11 @@ describe('registerOrganization', () => {
   });
 
   it('rejects a short password before touching the database', async () => {
-    const [{ value: before }] = await db.select({ value: count() }).from(organizations);
+    // Count only this test's own organization name: other test files create organizations in parallel.
+    const named = () => db.select({ value: count() }).from(organizations).where(eq(organizations.name, 'X Org'));
+    const [{ value: before }] = await named();
     await expect(registerOrganization({ organizationName: 'X Org', name: 'Xx', email: `short-${unique()}@example.test`, password: 'short' })).rejects.toThrow();
-    const [{ value: after }] = await db.select({ value: count() }).from(organizations);
+    const [{ value: after }] = await named();
     expect(after).toBe(before);
   });
 });

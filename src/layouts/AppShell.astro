@@ -6,7 +6,7 @@ import { todayIn } from '../domain/billing/dates';
 
 interface Props {
   title: string;
-  current?: 'dashboard' | 'clients' | 'products' | 'assistant' | 'ai';
+  current?: import('../lib/nav').NavId;
   /** The page fills the screen between the bars and scrolls inside (the assistant chat), instead of the page scrolling. */
   fill?: boolean;
 }

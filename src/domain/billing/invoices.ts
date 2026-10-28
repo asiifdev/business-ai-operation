@@ -1,12 +1,12 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import type { Tx } from '../../db/client';
-import { clients, invoiceItems, invoices, numberCounters, organizations, payments } from '../../db/schema';
+import { auditLog, clients, invoiceItems, invoices, numberCounters, organizations, packages, payments, products } from '../../db/schema';
 import { recordAudit, type AuditWho } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
-import { assertCan } from '../permissions';
+import { assertCan, can } from '../permissions';
 import { MAX_PRICE, optionalText, who } from '../portfolio/shared';
 import { isValidDate, periodKey, todayIn } from './dates';
 import { deriveInvoice, netPaid } from './derived';
@@ -89,7 +89,8 @@ export async function createInvoiceDraft(ctx: Ctx, raw: z.input<typeof invoiceSc
   const input = invoiceSchema.parse(raw);
   return db.transaction(async (tx) => {
     const org = await loadOrgBilling(tx, ctx.orgId);
-    const draft = await insertDraft(tx, who(ctx), { ...input, createdBy: ctx.actor }, org);
+    // A draft an AI run made is flagged until a person has opened and saved it, like the scheduler's (BR-M03-04).
+    const draft = await insertDraft(tx, who(ctx), { ...input, createdBy: ctx.actor, isAiDraft: ctx.actor.startsWith('ai:') }, org);
     await recordAudit(tx, who(ctx), { action: 'invoice.draft_created', entityType: 'invoice', entityId: draft.id, summary: { clientId: input.clientId, total: draft.total } });
     return { id: draft.id };
   });
@@ -248,5 +249,42 @@ export async function getInvoice(ctx: Ctx, id: string) {
   const [client] = await db.select().from(clients).where(and(eq(clients.orgId, ctx.orgId), eq(clients.id, invoice.clientId)));
   const items = await db.select().from(invoiceItems).where(and(eq(invoiceItems.orgId, ctx.orgId), eq(invoiceItems.invoiceId, id))).orderBy(asc(invoiceItems.position));
   const paymentRows = await db.select().from(payments).where(and(eq(payments.orgId, ctx.orgId), eq(payments.invoiceId, id))).orderBy(asc(payments.createdAt));
-  return { invoice, client, items, payments: paymentRows, derived: deriveInvoice(invoice, netPaid(paymentRows), today), period: invoice.periodKey ?? periodKey(invoice.dueDate) };
+  // What happened to this invoice, newest first: the same trail the audit page reads, for those who may read it.
+  const timeline = can(ctx.role, 'audit.read')
+    ? (await db
+        .select({ id: auditLog.id, at: auditLog.createdAt, action: auditLog.action, actor: auditLog.actor })
+        .from(auditLog)
+        .where(and(eq(auditLog.orgId, ctx.orgId), eq(auditLog.entityType, 'invoice'), eq(auditLog.entityId, id)))
+        .orderBy(desc(auditLog.createdAt))
+        .limit(30)).map((e) => ({ id: e.id, at: e.at.toISOString(), action: e.action, actor: (e.actor.startsWith('ai:') ? 'ai' : e.actor.startsWith('system:') ? 'system' : 'user') as 'user' | 'ai' | 'system' }))
+    : null;
+  return { invoice, client, items, payments: paymentRows, derived: deriveInvoice(invoice, netPaid(paymentRows), today), period: invoice.periodKey ?? periodKey(invoice.dueDate), timeline, today };
+}
+
+export interface BillingFormOptions {
+  taxRateBps: number;
+  today: string;
+  clients: { id: string; name: string }[];
+  packages: { id: string; label: string; productName: string; monthlyPrice: number }[];
+}
+
+/** What the invoice and subscription forms offer to pick from: active clients, active packages with their official prices, the tax rate. */
+export async function getBillingFormOptions(ctx: Ctx): Promise<BillingFormOptions> {
+  assertCan(ctx, 'billing.write');
+  const org = await loadOrgBilling(db, ctx.orgId);
+  const [clientRows, packageRows] = await Promise.all([
+    db.select({ id: clients.id, name: clients.name }).from(clients).where(and(eq(clients.orgId, ctx.orgId), isNull(clients.archivedAt))).orderBy(asc(clients.nameKey)),
+    db
+      .select({ id: packages.id, name: packages.name, productName: products.name, monthlyPrice: packages.monthlyPrice })
+      .from(packages)
+      .innerJoin(products, and(eq(products.orgId, packages.orgId), eq(products.id, packages.productId)))
+      .where(and(eq(packages.orgId, ctx.orgId), isNull(packages.archivedAt), isNull(products.archivedAt)))
+      .orderBy(asc(products.name), asc(packages.name)),
+  ]);
+  return {
+    taxRateBps: org.taxRateBps,
+    today: todayIn(org.timezone, ctx.clock.now()),
+    clients: clientRows,
+    packages: packageRows.map((p) => ({ id: p.id, label: `${p.productName} · ${p.name}`, productName: p.productName, monthlyPrice: p.monthlyPrice })),
+  };
 }

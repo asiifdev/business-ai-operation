@@ -77,7 +77,7 @@ describe('tools read this organization data and nothing else', () => {
   it('describe_capabilities lists only the tools the role has, so the assistant can explain itself from facts', async () => {
     const o = await makeOrg();
     const owner = await run(o.ownerCtx, 'describe_capabilities');
-    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'get_ai_usage', 'get_client_overview', 'get_product_packages', 'list_clients', 'list_deployments', 'list_pending_approvals', 'list_products', 'list_recent_activity', 'list_team_members']);
+    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'draft_invoice', 'get_ai_usage', 'get_billing_summary', 'get_client_overview', 'get_invoice', 'get_product_packages', 'list_clients', 'list_deployments', 'list_invoices', 'list_pending_approvals', 'list_products', 'list_recent_activity', 'list_subscriptions', 'list_team_members']);
     const staff = await run(o.staffCtx, 'describe_capabilities');
     expect(staff.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'get_client_overview', 'get_product_packages', 'list_clients', 'list_deployments', 'list_pending_approvals', 'list_products']);
   });

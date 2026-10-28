@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, auditLog, users } from '../../db/schema';
 import { getAiOverview } from '../../domain/ai/service';
+import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
+import { listSubscriptions } from '../../domain/billing/subscriptions';
+import { getFinanceSummary } from '../../domain/billing/summary';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
 import { listDeployments } from '../../domain/portfolio/deployments';
 import { getProduct, listProducts } from '../../domain/portfolio/products';
@@ -19,8 +22,8 @@ const FINANCIAL_ENTITIES = ['invoice', 'payment', 'subscription'];
 const who = (actor: string) => (actor.startsWith('ai:') ? 'AI' : actor.startsWith('system:') ? 'sistem' : 'pengguna');
 
 /**
- * Tools the assistant has today, each over a real table of the organization. Business data (clients, invoices, leads)
- * joins this list as M02 to M05 are built; every tool takes the organization and the person from the session, never from
+ * Tools the assistant has today, each over a real table of the organization. Business data (leads, tasks) joins this list
+ * as M04 and M05 are built; every tool takes the organization and the person from the session, never from
  * the model (BR-M01-01). The assistant may only answer from what these return.
  */
 export function buildAssistantRegistry(): ToolRegistry {
@@ -206,6 +209,123 @@ export function buildAssistantRegistry(): ToolRegistry {
     }),
   );
 
+  // Billing (M03): the same services the pages use, read-only, plus one draft tool. The assistant never records a payment or
+  // changes a status, amount or due date (BR-M03-10): those names are refused at registration (forbidden.ts).
+  const money = (n: number) => ({ teks: formatRupiah(n), angka: n });
+  const invoiceStatus = { draft: 'draf', sent: 'terkirim', paid: 'lunas', void: 'batal' } as const;
+
+  registry.register(
+    defineTool({
+      name: 'get_billing_summary',
+      description: 'Shows the money figures of this month: received, monthly recurring revenue, unpaid and overdue totals (with the most overdue invoices), invoices due today, renewals in the next 7 days and auto-prepared drafts waiting for review.',
+      tier: 'read',
+      permission: 'billing.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const f = await getFinanceSummary(ctx);
+        return {
+          tanggal: f.today,
+          bulan: f.month,
+          diterimaBulanIni: money(f.receivedThisMonth),
+          pendapatanBerulangPerBulan: money(f.mrr),
+          langgananAktif: f.activeSubscriptions,
+          belumDibayar: { jumlahInvoice: f.outstanding.count, total: money(f.outstanding.amount) },
+          lewatJatuhTempo: { jumlahInvoice: f.overdue.count, total: money(f.overdue.amount), terlama: f.overdue.items.map((i) => ({ id: i.id, nomor: i.number, klien: i.clientName, sisa: money(i.balance), terlambatHari: i.daysOverdue })) },
+          jatuhTempoHariIni: f.dueToday.map((i) => ({ id: i.id, nomor: i.number, klien: i.clientName, sisa: money(i.balance) })),
+          perpanjangan7Hari: f.renewalsSoon.map((r) => ({ klien: r.clientName, produk: r.productName, jatuhTempo: r.nextDueDate, nominal: money(r.amount) })),
+          drafDiTinjau: f.draftsToReview,
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_invoices',
+      description: 'Lists invoices with number, client, due date, total, remaining balance, status and how many days overdue. Can filter by status (draft, sent, paid, void), only overdue ones, or one client. Overdue is derived from the due date, never stored.',
+      tier: 'read',
+      permission: 'billing.read',
+      args: z.object({ status: z.enum(['draft', 'sent', 'paid', 'void']).optional(), overdueOnly: z.boolean().default(false), clientId: z.string().min(1).max(40).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listInvoices(ctx, { status: args.status, overdue: args.overdueOnly, clientId: args.clientId });
+        return {
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          invoice: rows.slice(0, LIMIT).map((i) => ({ id: i.id, nomor: i.number, klien: i.clientName, jatuhTempo: i.dueDate, total: money(i.total), sisa: money(i.balance), status: invoiceStatus[i.status], lewatJatuhTempo: i.overdue, terlambatHari: i.daysOverdue, drafOtomatis: i.isAiDraft })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_invoice',
+      description: 'Shows one invoice in full: client, dates, every item, subtotal, tax, total, every payment and the remaining balance. Needs the invoice id from list_invoices.',
+      tier: 'read',
+      permission: 'billing.read',
+      args: z.object({ invoiceId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const d = await getInvoice(ctx, args.invoiceId);
+        return {
+          id: d.invoice.id,
+          nomor: d.invoice.number,
+          klien: d.client.name,
+          status: invoiceStatus[d.invoice.status],
+          tanggalTerbit: d.invoice.issueDate,
+          jatuhTempo: d.invoice.dueDate,
+          rincian: d.items.map((i) => ({ deskripsi: i.description, jumlah: i.quantity, hargaSatuan: money(i.unitPrice), total: money(i.lineTotal) })),
+          subtotal: money(d.invoice.subtotal),
+          pajak: money(d.invoice.taxAmount),
+          total: money(d.invoice.total),
+          pembayaran: d.payments.map((p) => ({ jenis: p.kind === 'payment' ? 'pembayaran' : 'koreksi', tanggal: p.paidOn, metode: p.method, jumlah: money(p.amount) })),
+          sudahDibayar: money(d.derived.paid),
+          sisa: money(d.derived.balance),
+          lewatJatuhTempo: d.derived.overdue,
+          terlambatHari: d.derived.daysOverdue,
+          catatan: d.invoice.notes,
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_subscriptions',
+      description: 'Lists subscriptions: client, product and package, amount per period, interval in months, next due date and status. Can filter by status or one client.',
+      tier: 'read',
+      permission: 'billing.read',
+      args: z.object({ status: z.enum(['active', 'stopped']).optional(), clientId: z.string().min(1).max(40).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listSubscriptions(ctx, args);
+        return {
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          langganan: rows.slice(0, LIMIT).map((s) => ({ id: s.id, klien: s.clientName, produk: s.productName, paket: s.packageName, nominal: money(s.amount), intervalBulan: s.intervalMonths, jatuhTempoBerikutnya: s.nextDueDate, status: s.status === 'active' ? 'aktif' : 'berhenti' })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'draft_invoice',
+      description: 'Prepares a DRAFT invoice for a client from the items given. It stays a draft: a person must review it, mark it sent and only then does it get a number. It never sends anything and never records a payment. Needs the client id from list_clients. Use only prices that came from a tool result.',
+      tier: 'draft',
+      permission: 'billing.write',
+      args: z.object({
+        clientId: z.string().min(1).max(40),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        notes: z.string().trim().max(500).optional(),
+        items: z.array(z.object({ description: z.string().trim().min(1).max(300), quantity: z.number().int().min(1).max(1000), unitPrice: z.number().int().min(0) })).min(1).max(20),
+      }),
+      run: async (ctx, args) => {
+        const created = await createInvoiceDraft(ctx, args);
+        const d = await getInvoice(ctx, created.id);
+        return { id: created.id, status: 'draf', total: money(d.invoice.total), catatan: 'Draf dibuat. Belum dikirim dan belum bernomor; harus ditinjau dan ditandai terkirim oleh orang.' };
+      },
+    }),
+  );
+
   registry.register(
     defineTool({
       name: 'describe_capabilities',
@@ -218,7 +338,7 @@ export function buildAssistantRegistry(): ToolRegistry {
           .list()
           .filter((t) => can(ctx.role, t.permission) && t.name !== 'report_out_of_scope')
           .map((t) => ({ nama: t.name, jenis: t.tier, fungsi: t.description })),
-        catatan: 'Asisten hanya menjawab dari hasil alat di atas. Data bisnis lain (klien, invoice, lead) tersedia setelah modulnya dibangun.',
+        catatan: 'Asisten hanya menjawab dari hasil alat di atas. Data lead dan tugas tersedia setelah modulnya dibangun.',
       }),
     }),
   );

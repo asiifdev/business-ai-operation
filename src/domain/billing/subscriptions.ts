@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import type { Tx } from '../../db/client';
 import { isUniqueViolation } from '../../db/errors';
-import { clients, deployments, invoices, packages, products, subscriptions } from '../../db/schema';
+import { clients, deployments, findings, invoices, packages, products, subscriptions } from '../../db/schema';
 import { recordAudit, type AuditWho } from '../audit/service';
+import { automationOnce } from '../automation/once';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan } from '../permissions';
@@ -188,23 +189,35 @@ export async function generateRenewalDrafts(orgId: string, now: Date): Promise<{
       continue;
     }
     try {
+      const period = periodKey(sub.nextDueDate);
       await db.transaction(async (tx) => {
-        const draft = await insertDraft(
-          tx,
-          audit,
-          {
-            clientId: sub.clientId,
-            dueDate: sub.nextDueDate,
-            subscriptionId: sub.id,
-            periodKey: periodKey(sub.nextDueDate),
-            isAiDraft: true,
-            createdBy: audit.actor,
-            items: [{ description: `${product} - ${pkg} (${periodKey(sub.nextDueDate)})`, quantity: 1, unitPrice: sub.amount }],
-          },
-          org,
-        );
-        await recordAudit(tx, audit, { action: 'invoice.draft_generated', entityType: 'invoice', entityId: draft.id, summary: { subscriptionId: sub.id, period: periodKey(sub.nextDueDate) } });
-        created.push(draft.id);
+        // One draft per subscription and period, claimed through `automation.once` (PRD section 7). The unique index on
+        // (subscription, period) stays underneath as the last line of defence.
+        const claimed = await automationOnce(tx, orgId, 'renewal_draft', `renewal:${sub.id}:${period}`, async () => {
+          const draft = await insertDraft(
+            tx,
+            audit,
+            {
+              clientId: sub.clientId,
+              dueDate: sub.nextDueDate,
+              subscriptionId: sub.id,
+              periodKey: period,
+              isAiDraft: true,
+              createdBy: audit.actor,
+              items: [{ description: `${product} - ${pkg} (${period})`, quantity: 1, unitPrice: sub.amount }],
+            },
+            org,
+          );
+          await recordAudit(tx, audit, { action: 'invoice.draft_generated', entityType: 'invoice', entityId: draft.id, summary: { subscriptionId: sub.id, period } });
+          // The event M08 turns into a card: "a renewal draft is ready to review" (BRD-M03 section 9).
+          await automationOnce(tx, orgId, 'invoice_draft_ready', `draftready:${draft.id}`, async () => {
+            await tx.insert(findings).values({ orgId, rule: 'invoice_draft_ready', entityType: 'invoice', entityId: draft.id, periodKey: period }).onConflictDoNothing();
+            return { invoiceId: draft.id };
+          });
+          return draft.id;
+        });
+        if (claimed.ran) created.push(claimed.result);
+        else skipped++;
       });
     } catch (err) {
       if (!isUniqueViolation(err, 'uq_invoices_period')) throw err;

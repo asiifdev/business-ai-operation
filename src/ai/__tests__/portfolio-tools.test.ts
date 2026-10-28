@@ -80,7 +80,8 @@ describe('portfolio tools read the real data of the organization', () => {
   it('has no tool that can change the portfolio', () => {
     const names = buildAssistantRegistry().list().map((t) => t.name);
     expect(names.filter((n) => /^(create|update|delete|archive|set|add|remove)_/.test(n))).toEqual([]);
-    expect(buildAssistantRegistry().list().every((t) => t.tier === 'read')).toBe(true);
+    // The only tool that is not read-only is the billing draft: it prepares an unsent invoice and touches no portfolio data.
+    expect(buildAssistantRegistry().list().filter((t) => t.tier !== 'read').map((t) => [t.name, t.tier])).toEqual([['draft_invoice', 'draft']]);
   });
 });
 

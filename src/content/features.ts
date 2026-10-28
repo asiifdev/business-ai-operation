@@ -42,7 +42,7 @@ export const features: Feature[] = [
   {
     id: 'billing',
     planRow: 'M03 Billing',
-    status: 'in_development',
+    status: 'available',
     page: 'product/billing',
     name: { en: 'Billing, invoices and PDF', id: 'Tagihan, invoice, dan PDF' },
     summary: {

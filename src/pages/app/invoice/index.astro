@@ -1,0 +1,11 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { InvoicesPage } from '../../../components/billing/InvoicesPage';
+
+export const prerender = false;
+if (Astro.locals.user!.role === 'staff') return Astro.redirect('/app'); // billing is for Owner and Admin
+---
+
+<AppShell title="Invoice" current="invoices">
+  <InvoicesPage client:load />
+</AppShell>

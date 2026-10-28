@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { resolveSession } from './auth/session';
 import { LOCALE_COOKIE } from './lib/i18n';
+import { ensureTicker } from './server/ticker';
 import { pickLocale, runWithLocale } from './lib/locale-server';
 
 /** Paths that never need a session. Everything else under /app and /api requires one. */
@@ -16,6 +17,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.locale = 'id';
   // Public marketing pages are rendered at build time: no session lookup, no database, no request headers.
   if (context.isPrerendered || isAsset(pathname)) return next();
+  // The scheduler starts with the first real request, never during the build (which renders the public pages).
+  ensureTicker();
 
   const resolved = await resolveSession(context.request.headers);
   if (resolved) {

@@ -5,7 +5,7 @@ import { Button } from './Button';
 interface Props {
   children: ReactNode;
   onConfirm: () => void | Promise<void>;
-  variant?: 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger';
   busy?: boolean;
   disabled?: boolean;
 }

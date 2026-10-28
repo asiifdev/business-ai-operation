@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { InvoiceForm } from '../../../components/billing/InvoiceForm';
+
+export const prerender = false;
+if (Astro.locals.user!.role === 'staff') return Astro.redirect('/app'); // billing is for Owner and Admin
+const presetClientId = Astro.url.searchParams.get('clientId') ?? undefined;
+---
+
+<AppShell title="Invoice baru" current="invoices">
+  <InvoiceForm client:load presetClientId={presetClientId} />
+</AppShell>

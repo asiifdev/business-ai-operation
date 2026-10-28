@@ -17,7 +17,7 @@
     "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
     "ai:smoke": "node --env-file=.env --import tsx scripts/ai-smoke.ts",
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
-    "start": "node --env-file-if-exists=.env dist/server/entry.mjs",
+    "start": "node --env-file-if-exists=.env --import ./scripts/warm.mjs dist/server/entry.mjs",
     "verify": "pnpm build && vitest run"
   },
   "dependencies": {
@@ -27,7 +27,9 @@
     "@fontsource-variable/familjen-grotesk": "^5.3.0",
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/krona-one": "^5.3.0",
+    "@react-pdf/renderer": "^4.9.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

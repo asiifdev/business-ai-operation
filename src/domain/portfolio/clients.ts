@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { isUniqueViolation } from '../../db/errors';
 import { auditLog, clients, deployments, products } from '../../db/schema';
+import { listInvoices, type InvoiceRow } from '../billing/invoices';
+import { listSubscriptions, type SubscriptionRow } from '../billing/subscriptions';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
@@ -179,7 +181,8 @@ export interface TimelineEntry {
 
 /**
  * The 360 degree view of one client (BRD-M02). Today it holds the client, its deployments and its change history.
- * Subscriptions, invoices, tasks and leads join it as M03 to M05 are built. The change history follows `audit.read`.
+ * Subscriptions and invoices (for those who may read billing) are in; tasks and leads join as M04 and M05 are built. The
+ * change history follows `audit.read`.
  */
 export async function getClient360(ctx: Ctx, id: string) {
   assertCan(ctx, 'catalog.read');
@@ -216,9 +219,13 @@ export async function getClient360(ctx: Ctx, id: string) {
       .limit(30);
     timeline = entries.map((e) => ({ id: e.id, at: e.at, action: e.action, actor: e.actor.startsWith('ai:') ? 'ai' : e.actor.startsWith('system:') ? 'system' : 'user' }));
   }
+  const billing: { subscriptions: SubscriptionRow[]; invoices: InvoiceRow[] } | null = can(ctx.role, 'billing.read')
+    ? { subscriptions: await listSubscriptions(ctx, { clientId: id }), invoices: (await listInvoices(ctx, { clientId: id })).slice(0, 10) }
+    : null;
   return {
     client,
     deployments: rows.map((d) => ({ ...d, versionState: versionState(d.installedVersion, d.productVersion) })) as ClientDeploymentRow[],
+    billing,
     timeline,
   };
 }

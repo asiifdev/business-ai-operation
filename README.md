@@ -53,7 +53,7 @@ pnpm build
 pnpm start               # mendengarkan di HOST:PORT dari .env
 ```
 
-Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
+Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Penjadwal tagihan berjalan di proses yang sama (setiap 60 detik, sekali sehari per organisasi pada jam penjadwalnya); atur `SCHEDULER=off` pada proses yang tidak boleh menjalankan job. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
 
 ## Kontribusi dan asal-usul
 

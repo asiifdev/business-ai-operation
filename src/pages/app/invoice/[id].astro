@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { InvoiceDetail } from '../../../components/billing/InvoiceDetail';
+
+export const prerender = false;
+if (Astro.locals.user!.role === 'staff') return Astro.redirect('/app'); // billing is for Owner and Admin
+const { id } = Astro.params;
+---
+
+<AppShell title="Invoice" current="invoices">
+  <InvoiceDetail client:load id={id!} timezone={Astro.locals.timezone} />
+</AppShell>

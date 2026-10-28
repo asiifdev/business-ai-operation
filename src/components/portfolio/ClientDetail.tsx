@@ -9,6 +9,7 @@ import { useLocale, useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
+import { ClientBilling } from '../billing/ClientBilling';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
@@ -58,7 +59,7 @@ export function ClientDetail({ id, role }: { id: string; role: Role }) {
   if (load.value.state === 'loading') return <Panel aria-busy="true"><Skeleton rows={6} /></Panel>;
   if (load.value.state === 'error') return <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>;
 
-  const { client, deployments, timeline } = load.value.data;
+  const { client, deployments, timeline, billing } = load.value.data;
   const archived = client.archivedAt !== null;
 
   return (
@@ -89,6 +90,8 @@ export function ClientDetail({ id, role }: { id: string; role: Role }) {
       )}
 
       <Deployments clientId={id} deployments={deployments} canAdd={!archived} isManager={isManager} onChanged={() => void load.reload()} />
+
+      {billing && <ClientBilling clientId={id} subscriptions={billing.subscriptions} invoices={billing.invoices} />}
 
       {timeline && <Timeline entries={timeline} />}
     </div>
