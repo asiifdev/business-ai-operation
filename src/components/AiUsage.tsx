@@ -7,6 +7,8 @@ import { NumberInput } from './forms/NumberInput';
 import { Button } from './ui/Button';
 import { Meter } from './ui/Meter';
 import { Panel } from './ui/Panel';
+import { ErrorBox, Skeleton } from './ui/states';
+import * as tbl from './ui/table';
 
 type Role = 'owner' | 'admin' | 'staff';
 type Tab = 'budget' | 'runs';
@@ -85,24 +87,6 @@ export function AiUsage({ role }: { role: Role }) {
   );
 }
 
-function Skeleton({ rows }: { rows: number }) {
-  return (
-    <div aria-hidden="true" className="flex flex-col gap-3">
-      {Array.from({ length: rows }, (_, i) => <div key={i} className="h-8 w-full rounded bg-paper-2" />)}
-    </div>
-  );
-}
-
-function ErrorBox({ onRetry }: { onRetry: () => void }) {
-  const t = useT();
-  return (
-    <div role="alert" className="flex flex-wrap items-center gap-3">
-      <p className="m-0 text-ink">{t('loadError')}</p>
-      <Button size="sm" onClick={onRetry}>{t('assistantRetry')}</Button>
-    </div>
-  );
-}
-
 function BudgetTable({ isOwner }: { isOwner: boolean }) {
   const t = useT();
   const [load, setLoad] = useState<Load<FeatureUsage[]>>({ state: 'loading' });
@@ -126,8 +110,8 @@ function BudgetTable({ isOwner }: { isOwner: boolean }) {
       {load.state === 'ready' && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] border-collapse text-sm">
-              <thead>
+            <table role="table" className={tbl.table + ' sm:min-w-[40rem]'}>
+              <thead className={tbl.thead}>
                 <tr className="text-left text-muted">
                   <th scope="col" className="py-2 pr-3 font-medium">{t('colFeature')}</th>
                   <th scope="col" className="w-48 py-2 pr-3 font-medium">{t('colSpent')}</th>
@@ -136,7 +120,7 @@ function BudgetTable({ isOwner }: { isOwner: boolean }) {
                   <th scope="col" className="py-2 text-right font-medium">{t('colRuns')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup" className={tbl.tbody}>
                 {load.data.map((row) => <BudgetRow key={row.feature} row={row} isOwner={isOwner} onSaved={refresh} />)}
               </tbody>
             </table>
@@ -174,16 +158,16 @@ function BudgetRow({ row, isOwner, onSaved }: { row: FeatureUsage; isOwner: bool
   }
 
   return (
-    <tr className="border-t border-rule align-middle">
-      <th scope="row" className="py-3 pr-3 text-left font-medium text-ink">{label}</th>
-      <td className="py-3 pr-3">
+    <tr role="row" className={tbl.row + ' align-middle'}>
+      <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium text-ink max-sm:p-0 ' + tbl.full}>{label}</th>
+      <td role="cell" data-label={t('colSpent')} className={'py-3 pr-3 max-sm:p-0 ' + tbl.full + ' ' + tbl.label}>
         <Meter value={row.spentMicroUsd} max={row.limitMicroUsd} label={label} danger={row.exhausted} />
         <p className="mt-1 mb-0 tabular-nums text-ink">
           {formatUsd(row.spentMicroUsd)}
           {row.exhausted && <span className="ml-2 text-danger">{t('budgetExhausted')}</span>}
         </p>
       </td>
-      <td className="py-3 pr-3">
+      <td role="cell" data-label={t('colLimit')} className={'py-3 pr-3 max-sm:p-0 ' + tbl.full + ' ' + tbl.label}>
         {isOwner ? (
           <div className="flex items-center gap-2">
             <div className="w-28">
@@ -196,8 +180,8 @@ function BudgetRow({ row, isOwner, onSaved }: { row: FeatureUsage; isOwner: bool
           <span className="tabular-nums text-ink">{formatUsd(row.limitMicroUsd)}</span>
         )}
       </td>
-      <td className="py-3 pr-3 text-right tabular-nums text-ink">{formatUsd(row.remainingMicroUsd)}</td>
-      <td className="py-3 text-right tabular-nums text-ink">{row.runsToday}</td>
+      <td role="cell" data-label={t('colRemaining')} className={'py-3 pr-3 text-right tabular-nums text-ink max-sm:p-0 max-sm:text-left ' + tbl.label}>{formatUsd(row.remainingMicroUsd)}</td>
+      <td role="cell" data-label={t('colRuns')} className={'py-3 text-right tabular-nums text-ink max-sm:p-0 max-sm:text-left ' + tbl.label}>{row.runsToday}</td>
     </tr>
   );
 }
@@ -256,8 +240,8 @@ function RunLog({ isManager }: { isManager: boolean }) {
       {load.state === 'ready' && load.data.length > 0 && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] border-collapse text-sm">
-              <thead>
+            <table role="table" className={tbl.table + ' sm:min-w-[44rem]'}>
+              <thead className={tbl.thead}>
                 <tr className="text-left text-muted">
                   <th scope="col" className="py-2 pr-3 font-medium">{t('colWhen')}</th>
                   {isManager && <th scope="col" className="py-2 pr-3 font-medium">{t('colUser')}</th>}
@@ -268,18 +252,18 @@ function RunLog({ isManager }: { isManager: boolean }) {
                   <th scope="col" className="py-2 font-medium">{t('colTools')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup" className={tbl.tbody}>
                 {load.data.map((run) => (
-                  <tr key={run.id} className="border-t border-rule align-top">
-                    <td className="py-3 pr-3 whitespace-nowrap text-ink tabular-nums">{when.format(new Date(run.startedAt))}</td>
-                    {isManager && <td className="py-3 pr-3 text-ink">{run.userName ?? ''}</td>}
-                    <td className="py-3 pr-3 text-ink">{t(FEATURE_LABEL[run.feature])}</td>
-                    <td className="py-3 pr-3">
+                  <tr key={run.id} role="row" className={tbl.row + ' align-top'}>
+                    <td role="cell" data-label={t('colWhen')} className={'py-3 pr-3 whitespace-nowrap text-ink tabular-nums max-sm:p-0 ' + tbl.full + ' ' + tbl.label}>{when.format(new Date(run.startedAt))}</td>
+                    {isManager && <td role="cell" data-label={t('colUser')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{run.userName ?? ''}</td>}
+                    <td role="cell" data-label={t('colFeature')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{t(FEATURE_LABEL[run.feature])}</td>
+                    <td role="cell" data-label={t('colStatus')} className={'py-3 pr-3 max-sm:p-0 ' + tbl.label}>
                       <span title={run.error ?? undefined} className={'inline-block rounded-full border px-2 py-0.5 text-xs ' + STATUS_STYLE[run.status]}>{t(STATUS_LABEL[run.status])}</span>
                     </td>
-                    <td className="py-3 pr-3 text-right text-ink tabular-nums">{(run.inputTokens + run.outputTokens).toLocaleString(locale)}</td>
-                    {isManager && <td className="py-3 pr-3 text-right text-ink tabular-nums">{formatUsd(Number(run.costMicroUsd))}</td>}
-                    <td className="py-3 text-ink">{[...new Set(run.tools.map((tool) => tool.name))].join(', ')}</td>
+                    <td role="cell" data-label={t('colTokens')} className={'py-3 pr-3 text-right text-ink tabular-nums max-sm:p-0 max-sm:text-left ' + tbl.label}>{(run.inputTokens + run.outputTokens).toLocaleString(locale)}</td>
+                    {isManager && <td role="cell" data-label={t('colCost')} className={'py-3 pr-3 text-right text-ink tabular-nums max-sm:p-0 max-sm:text-left ' + tbl.label}>{formatUsd(Number(run.costMicroUsd))}</td>}
+                    <td role="cell" data-label={t('colTools')} className={'py-3 text-ink max-sm:p-0 ' + tbl.full + ' ' + tbl.label}>{[...new Set(run.tools.map((tool) => tool.name))].join(', ') || '-'}</td>
                   </tr>
                 ))}
               </tbody>

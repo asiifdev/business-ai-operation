@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
+    "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
     "ai:smoke": "node --env-file=.env --import tsx scripts/ai-smoke.ts",
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "start": "node --env-file-if-exists=.env dist/server/entry.mjs",

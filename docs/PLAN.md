@@ -19,7 +19,7 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 
 | Area | Status | Catatan |
 |---|---|---|
-| M14 Design system | 🚧 | token, Tailwind v4, komponen form, `Button`, `ThemeToggle`, `LocaleSwitch`, galeri `/dev/komponen`; sisa: `Card`, `Modal`, `Table`, `Toast`, `AppShell`, dst. (PRD §4 M14) |
+| M14 Design system | 🚧 | token, Tailwind v4, komponen form, `Button`, `ThemeToggle`, `LocaleSwitch`, `Panel`, `Meter`, gaya tabel responsif, kerangka aplikasi (sidebar dan tampilan HP, D-039), galeri `/dev/komponen`; sisa: `Modal`, `Toast`, komponen `Table` penuh dengan urut dan filter, dst. (PRD §4 M14) |
 | Skema DB (ERD) | 🚧 | kelompok `auth_org` dan `ai_core` **diterapkan ke DB dev**; kelompok `action_center` (`findings`, `approvals`, `briefings`, migrasi `0004`) ditulis dan diterapkan di DB uji, **belum di DB dev**: jalankan `pnpm db:migrate` setelah meninjau berkasnya; 6 kelompok lain ⬜ |
 | M01 Registrasi dan login | ✅ | registrasi atomik, login/keluar, middleware sesi, `AppShell` dasar; diuji (tes + browser) |
 | M01 Pengguna dan pengaturan | 🚧 | layanan pengguna dan matriks izin selesai; sisa: halaman Pengguna dan Pengaturan Organisasi, wajib ganti kata sandi awal, E2E Playwright |

@@ -5,6 +5,7 @@ export type DomainErrorCode =
   | 'email_taken'
   | 'last_owner'
   | 'invalid_state'
+  | 'duplicate'
   | 'rate_limited';
 
 /** Business-rule failure. Endpoints map `code` to an HTTP status and an i18n message; `message` is for logs only. */
@@ -25,5 +26,6 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   email_taken: 409,
   last_owner: 409,
   invalid_state: 409,
+  duplicate: 409,
   rate_limited: 429,
 };

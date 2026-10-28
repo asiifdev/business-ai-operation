@@ -1,19 +1,31 @@
 ---
 import Base from './Base.astro';
-import { AppHeader } from '../components/AppHeader';
+import { AppChrome } from '../components/shell/AppChrome';
 
 interface Props {
   title: string;
-  current?: 'dashboard' | 'assistant' | 'ai';
+  current?: 'dashboard' | 'clients' | 'products' | 'assistant' | 'ai';
+  /** The page fills the screen between the bars and scrolls inside (the assistant chat), instead of the page scrolling. */
+  fill?: boolean;
 }
-const { title, current } = Astro.props;
+const { title, current, fill = false } = Astro.props;
 const user = Astro.locals.user!;
 const organizationName = Astro.locals.organizationName ?? '';
 ---
 
 <Base title={title}>
-  <AppHeader client:load organizationName={organizationName} userName={user.name} role={user.role} current={current} />
-  <main class="wrap py-8">
-    <slot />
+  <AppChrome client:load organizationName={organizationName} userName={user.name} role={user.role} current={current} />
+  <main
+    id="content"
+    class:list={[
+      'lg:pl-64',
+      fill
+        ? 'flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-3.5rem-env(safe-area-inset-bottom))] flex-col lg:h-dvh'
+        : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0',
+    ]}
+  >
+    <div class:list={['wrap min-h-0 py-5 lg:py-8', fill && 'flex w-full flex-1 flex-col']}>
+      <slot />
+    </div>
   </main>
 </Base>

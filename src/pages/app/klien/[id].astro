@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { ClientDetail } from '../../../components/portfolio/ClientDetail';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const { id } = Astro.params;
+---
+
+<AppShell title="Klien" current="clients">
+  <ClientDetail client:load id={id!} role={user.role} />
+</AppShell>

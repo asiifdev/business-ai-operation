@@ -21,11 +21,16 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   list_recent_activity: 'srcListRecentActivity',
   list_pending_approvals: 'srcListPendingApprovals',
   describe_capabilities: 'srcDescribeCapabilities',
+  list_clients: 'srcListClients',
+  get_client_overview: 'srcGetClientOverview',
+  list_products: 'srcListProducts',
+  get_product_packages: 'srcGetProductPackages',
+  list_deployments: 'srcListDeployments',
 };
 
 const STARTERS: Record<'manager' | 'staff', MessageKey[]> = {
-  manager: ['starterUsage', 'starterTeam', 'starterActivity', 'starterApprovals', 'starterCapabilities'],
-  staff: ['starterApprovals', 'starterCapabilities'],
+  manager: ['starterBehind', 'starterPackages', 'starterClients', 'starterUsage', 'starterTeam', 'starterApprovals', 'starterCapabilities'],
+  staff: ['starterBehind', 'starterPackages', 'starterClients', 'starterApprovals', 'starterCapabilities'],
 };
 
 const MAX_LENGTH = 2000;
@@ -113,18 +118,18 @@ export function AssistantChat({ role }: { role: Role }) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:gap-5">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="max-w-prose">
-          <h1 className="m-0 text-3xl font-semibold text-ink">{t('assistantTitle')}</h1>
-          <p className="mt-2 mb-0 text-muted">{t('assistantIntro')}</p>
+          <h1 className="m-0 text-2xl font-semibold text-ink lg:text-3xl">{t('assistantTitle')}</h1>
+          <p className="mt-2 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>
         </div>
         {turns.length > 0 && (
           <Button size="sm" onClick={() => setTurns([])} disabled={busy}>{t('assistantClear')}</Button>
         )}
       </header>
 
-      <Panel className="flex min-h-[28rem] flex-col gap-5" aria-label={t('assistantTitle')}>
+      <Panel className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto" aria-label={t('assistantTitle')}>
         {turns.length === 0 && !busy ? (
           <div className="m-auto flex max-w-xl flex-col items-start gap-3 py-8">
             <p className="m-0 text-sm font-medium text-ink">{t('assistantTryAsking')}</p>
@@ -173,7 +178,7 @@ export function AssistantChat({ role }: { role: Role }) {
           e.preventDefault();
           void ask(draft, turns);
         }}
-        className="flex flex-col gap-2"
+        className="flex shrink-0 flex-col gap-2"
       >
         <Textarea
           value={draft}

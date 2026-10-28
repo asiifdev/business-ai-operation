@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { ClientsPage } from '../../../components/portfolio/ClientsPage';
+
+export const prerender = false;
+---
+
+<AppShell title="Klien" current="clients">
+  <ClientsPage client:load />
+</AppShell>

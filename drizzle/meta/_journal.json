@@ -36,6 +36,13 @@
       "when": 1793146672206,
       "tag": "0004_action_center",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793149233921,
+      "tag": "0005_portfolio",
+      "breakpoints": true
     }
   ]
 }

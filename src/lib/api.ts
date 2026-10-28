@@ -23,6 +23,13 @@ export function rateLimit(ctx: Ctx, action: string, max: number, windowMs: numbe
   return limiter.allow(`${action}:${ctx.userId}`, max, windowMs) ? null : fail('rate_limited', 'Too many requests', HTTP_STATUS.rate_limited);
 }
 
+/** A required route parameter such as `[id]`, or a 404 when the route is called without one. */
+export function param(context: Pick<APIContext, 'params'>, name: string): string {
+  const value = context.params[name];
+  if (!value) throw new DomainError('not_found', name);
+  return value;
+}
+
 export async function readJson(request: Request): Promise<unknown> {
   if (!request.headers.get('content-type')?.includes('application/json')) throw new DomainError('validation', 'JSON required');
   try {

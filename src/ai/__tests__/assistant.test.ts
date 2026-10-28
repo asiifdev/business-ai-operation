@@ -77,9 +77,9 @@ describe('tools read this organization data and nothing else', () => {
   it('describe_capabilities lists only the tools the role has, so the assistant can explain itself from facts', async () => {
     const o = await makeOrg();
     const owner = await run(o.ownerCtx, 'describe_capabilities');
-    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'get_ai_usage', 'list_pending_approvals', 'list_recent_activity', 'list_team_members']);
+    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'get_ai_usage', 'get_client_overview', 'get_product_packages', 'list_clients', 'list_deployments', 'list_pending_approvals', 'list_products', 'list_recent_activity', 'list_team_members']);
     const staff = await run(o.staffCtx, 'describe_capabilities');
-    expect(staff.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'list_pending_approvals']);
+    expect(staff.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'get_client_overview', 'get_product_packages', 'list_clients', 'list_deployments', 'list_pending_approvals', 'list_products']);
   });
 
   it('formats money so a small spend never shows as zero', () => {
@@ -144,7 +144,7 @@ describe('askAssistant: answers only from this organization', () => {
     const o = await makeOrg();
     const fake = new FakeProvider({ chat: [callTools([{ name: 'describe_capabilities', args: {} }]), say('Saya bisa melihat persetujuan yang menunggu.')] });
     const reply = await ask(o.staffCtx, fake, 'Apa yang bisa kamu lakukan?');
-    expect(fake.chatCalls[0].tools?.map((t) => t.name).sort()).toEqual(['describe_capabilities', 'list_pending_approvals', 'report_out_of_scope']);
+    expect(fake.chatCalls[0].tools?.map((t) => t.name).sort()).toEqual(['describe_capabilities', 'get_client_overview', 'get_product_packages', 'list_clients', 'list_deployments', 'list_pending_approvals', 'list_products', 'report_out_of_scope']);
     expect(reply.costMicroUsd).toBeNull();
     expect(reply.ok).toBe(true);
   });

@@ -21,6 +21,9 @@ export const PERMISSIONS = {
   'catalog.read': ALL,
   'catalog.price.read': ALL,
   'catalog.write': MANAGERS,
+  'catalog.archive': MANAGERS,
+  'client.write': ALL,
+  'deployment.write': ALL,
   // Billing
   'billing.read': MANAGERS,
   'billing.write': MANAGERS,

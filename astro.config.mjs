@@ -25,6 +25,9 @@ export default defineConfig({
 
   integrations: [react()],
 
+  // The floating dev toolbar sits over the phone tab bar and hides it while testing the app layout.
+  devToolbar: { enabled: false },
+
   security: appUrl
     ? {
         allowedDomains: [

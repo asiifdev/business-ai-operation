@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, auditLog, users } from '../../db/schema';
 import { getAiOverview } from '../../domain/ai/service';
+import { getClient360, listClients } from '../../domain/portfolio/clients';
+import { listDeployments } from '../../domain/portfolio/deployments';
+import { getProduct, listProducts } from '../../domain/portfolio/products';
+import { formatRupiah } from '../../lib/format';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
 import { ToolRegistry, defineTool } from './registry';
@@ -101,6 +105,103 @@ export function buildAssistantRegistry(): ToolRegistry {
           .orderBy(approvals.expiresAt)
           .limit(20);
         return { jumlah: rows.length, daftar: rows.map((r) => ({ alat: r.tool, alasan: r.rationale, diminta_untuk: r.forName, kedaluwarsa: r.expiresAt.toISOString() })) };
+      },
+    }),
+  );
+
+  // Portfolio (M02): every tool calls the same service the pages use, so the assistant sees exactly what the person may see.
+  const LIMIT = 40;
+  const stateLabel = { behind: 'tertinggal', current: 'terbaru', ahead: 'lebih baru dari produk', unknown: 'tidak bisa dibandingkan' } as const;
+
+  registry.register(
+    defineTool({
+      name: 'list_clients',
+      description: 'Lists the clients of this organization with contact, number of deployments and how many are behind the current product version. Can search by name, contact or email. Use it first to find a client id.',
+      tier: 'read',
+      permission: 'catalog.read',
+      args: z.object({ search: z.string().trim().max(80).optional(), includeArchived: z.boolean().default(false) }),
+      run: async (ctx, args) => {
+        const rows = await listClients(ctx, { q: args.search, includeArchived: args.includeArchived });
+        return {
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          klien: rows.slice(0, LIMIT).map((c) => ({ id: c.id, nama: c.name, kontak: c.contactName, email: c.email, diarsipkan: c.archivedAt !== null, jumlahDeployment: c.deploymentCount, deploymentTertinggal: c.behindCount })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_client_overview',
+      description: 'Shows one client in full: contact details and every deployment (product, environment, domain, installed version, product current version and whether it is behind). Needs the client id from list_clients.',
+      tier: 'read',
+      permission: 'catalog.read',
+      args: z.object({ clientId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const view = await getClient360(ctx, args.clientId);
+        const c = view.client;
+        return {
+          id: c.id,
+          nama: c.name,
+          kontak: c.contactName,
+          email: c.email,
+          telepon: c.phone,
+          alamat: c.address,
+          catatan: c.notes,
+          diarsipkan: c.archivedAt !== null,
+          deployment: view.deployments.map((d) => ({ produk: d.productName, lingkungan: d.environment, label: d.label, domain: d.domain, versiTerpasang: d.installedVersion, versiProdukSaatIni: d.productVersion, status: d.status, versi: stateLabel[d.versionState] })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_products',
+      description: 'Lists the products with their current version, number of active packages, number of deployments and how many deployments are behind the current version.',
+      tier: 'read',
+      permission: 'catalog.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const rows = await listProducts(ctx);
+        return { jumlah: rows.length, produk: rows.map((p) => ({ id: p.id, nama: p.name, deskripsi: p.description, versiSaatIni: p.currentVersion, jumlahPaket: p.packageCount, jumlahDeployment: p.deploymentCount, deploymentTertinggal: p.behindCount })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_product_packages',
+      description: 'Shows the official packages and monthly prices of one product. These are the only valid prices: never state a price that is not in this result. Needs the product id from list_products.',
+      tier: 'read',
+      permission: 'catalog.price.read',
+      args: z.object({ productId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const detail = await getProduct(ctx, args.productId);
+        return {
+          produk: detail.product.name,
+          versiSaatIni: detail.product.currentVersion,
+          paket: detail.packages.map((p) => ({ nama: p.name, hargaPerBulan: formatRupiah(p.monthlyPrice), hargaPerBulanAngka: p.monthlyPrice, fitur: p.features, diarsipkan: p.archivedAt !== null })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_deployments',
+      description: 'Lists deployments (a product installed for a client) with installed version and whether it is behind the product current version. Can filter by client, by product, or only the ones that are behind.',
+      tier: 'read',
+      permission: 'catalog.read',
+      args: z.object({ clientId: z.string().min(1).max(40).optional(), productId: z.string().min(1).max(40).optional(), behindOnly: z.boolean().default(false) }),
+      run: async (ctx, args) => {
+        const rows = await listDeployments(ctx, args);
+        return {
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          deployment: rows.slice(0, LIMIT).map((d) => ({ klien: d.clientName, produk: d.productName, lingkungan: d.environment, label: d.label, domain: d.domain, versiTerpasang: d.installedVersion, versiProdukSaatIni: d.productVersion, status: d.status, versi: stateLabel[d.versionState] })),
+        };
       },
     }),
   );

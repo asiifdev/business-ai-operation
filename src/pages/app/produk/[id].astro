@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { ProductDetail } from '../../../components/portfolio/ProductDetail';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const { id } = Astro.params;
+---
+
+<AppShell title="Produk" current="products">
+  <ProductDetail client:load id={id!} role={user.role} />
+</AppShell>

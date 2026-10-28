@@ -45,6 +45,12 @@
     radial-gradient(40vmax 40vmax at 4% 2%, color-mix(in oklab, var(--color-brand-ring) 12%, transparent), transparent 70%);
 }
 
+/* Bottom sheet of the phone app shell: rises into place. Transform and opacity only; with reduced motion it just appears. */
+@media (prefers-reduced-motion: no-preference) {
+  .sheet { animation: sheet-up 0.22s var(--ease-out); }
+  @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+
 /* Reveal once: rise, un-tilt and fade. Content is fully visible without JavaScript or with reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
   .js-reveal [data-reveal] {
