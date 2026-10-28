@@ -1,8 +1,8 @@
 import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
-export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai';
-export type IconName = 'home' | 'clients' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing';
+export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai';
+export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
 /**
@@ -35,6 +35,7 @@ export const NAV: readonly NavItem[] = [
   { id: 'clients', group: 'workspace', href: '/app/klien', label: 'navClients', icon: 'clients' },
   { id: 'assistant', group: 'intelligence', href: '/app/asisten', label: 'navAssistant', icon: 'assistant' },
   { id: 'products', group: 'workspace', href: '/app/produk', label: 'navProducts', icon: 'products', badge: 'behind' },
+  { id: 'pipeline', group: 'workspace', href: '/app/pipeline', label: 'navPipeline', icon: 'pipeline' },
   { id: 'briefing', group: 'intelligence', href: '/app/briefing', label: 'navBriefing', icon: 'briefing', roles: ['owner', 'admin'] },
   { id: 'invoices', group: 'billing', href: '/app/invoice', label: 'navInvoices', icon: 'invoice', roles: ['owner', 'admin'] },
   { id: 'subscriptions', group: 'billing', href: '/app/langganan', label: 'navSubscriptions', icon: 'repeat', roles: ['owner', 'admin'] },

@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { LeadDetail } from '../../../components/pipeline/LeadDetail';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const { id } = Astro.params;
+---
+
+<AppShell title="Pipeline" current="pipeline">
+  <LeadDetail client:load id={id!} role={user.role} />
+</AppShell>

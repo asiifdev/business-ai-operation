@@ -1,0 +1,10 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { PipelinePage } from '../../components/pipeline/PipelinePage';
+
+export const prerender = false;
+---
+
+<AppShell title="Pipeline" current="pipeline">
+  <PipelinePage client:load />
+</AppShell>

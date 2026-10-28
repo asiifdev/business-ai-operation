@@ -3,6 +3,7 @@ import type { IconName } from '../../lib/nav';
 const paths: Record<IconName, string> = {
   home: 'M3.5 11 12 4l8.5 7M5.5 9.5V20h13V9.5M10 20v-5h4v5',
   clients: 'M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 5.2a3 3 0 0 1 0 5.6',
+  pipeline: 'M4 5h4.5v14H4zM9.75 5h4.5v9.5h-4.5zM15.5 5H20v6h-4.5z',
   products: 'M12 3 4 7.5v9L12 21l8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9',
   assistant: 'M4 5.5h16v11H10l-4.5 3.5v-3.5H4zM8 10h8M8 13h5',
   usage: 'M4.5 17a7.5 7.5 0 1 1 15 0M12 17l3.5-5M7 17h.01M17 17h.01',
