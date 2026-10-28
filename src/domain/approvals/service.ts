@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client';
-import { approvals } from '../../db/schema';
+import { approvals, organizations } from '../../db/schema';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 
-/** Default time a request waits for a human: 24 hours (D-025, BR-M08). */
+/** Fallback time a request waits for a human: 24 hours. The organization setting `approval_ttl_hours` wins (D-025, BR-M08-05). */
 export const APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface ApprovalRequest {
@@ -24,7 +24,9 @@ export interface ApprovalRequest {
  */
 export async function requestApproval(db: Db, ctx: Ctx, input: ApprovalRequest): Promise<{ id: string; expiresAt: Date }> {
   if (!input.rationale.trim()) throw new DomainError('validation', 'an approval needs a reason');
-  const expiresAt = new Date(ctx.clock.now().getTime() + (input.ttlMs ?? APPROVAL_TTL_MS));
+  const [org] = await db.select({ hours: organizations.approvalTtlHours }).from(organizations).where(eq(organizations.id, ctx.orgId));
+  const ttlMs = input.ttlMs ?? (org ? org.hours * 60 * 60 * 1000 : APPROVAL_TTL_MS);
+  const expiresAt = new Date(ctx.clock.now().getTime() + ttlMs);
   return db.transaction(async (tx) => {
     const [row] = await tx
       .insert(approvals)

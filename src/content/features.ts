@@ -53,7 +53,7 @@ export const features: Feature[] = [
   {
     id: 'action-center',
     planRow: 'M08 Action Center',
-    status: 'planned',
+    status: 'in_development',
     page: 'product/action-center',
     name: { en: 'Action Center: AI suggests, you decide', id: 'Pusat Tindakan: AI menyarankan, Anda memutuskan' },
     summary: {

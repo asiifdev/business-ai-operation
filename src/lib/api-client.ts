@@ -32,6 +32,8 @@ const CODE_TEXT: Record<string, MessageKey> = {
   validation: 'errValidation',
   duplicate: 'errDuplicate',
   rate_limited: 'rateLimited',
+  expired: 'errExpired',
+  already_decided: 'errAlreadyDecided',
 };
 
 /** A message in the person's language for a failed call. Unknown failures get the generic one. */

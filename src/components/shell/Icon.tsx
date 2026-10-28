@@ -22,6 +22,7 @@ const paths: Record<IconName, string> = {
   sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4',
   moon: 'M19 14.5A7.5 7.5 0 0 1 9.5 5 7.5 7.5 0 1 0 19 14.5z',
   language: 'M4 6h9M8.5 4v2M6 6c.5 3.5 3 6 6 7M12 6c-.5 3-3 6-7 8M13 20l4-9 4 9M14.5 17h5',
+  briefing: 'M12 4v2M5.6 7.6 7 9M18.4 7.6 17 9M4 15h16M7 15a5 5 0 0 1 10 0M8 19h8',
 };
 
 /** One stroke style for every app icon, drawn on a 24 grid. Decorative: the label next to it carries the meaning. */

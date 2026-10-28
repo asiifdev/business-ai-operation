@@ -124,7 +124,8 @@ function AttentionBell({ counts }: { counts: AttentionCounts }) {
   const rows = [
     { n: counts.overdueInvoices ?? 0, label: t('bellOverdue', { n: counts.overdueInvoices ?? 0 }), href: '/app/invoice?overdue=1', ready: BILLING_PAGES_READY },
     { n: counts.draftsToReview ?? 0, label: t('bellDrafts', { n: counts.draftsToReview ?? 0 }), href: '/app/invoice?status=draft', ready: BILLING_PAGES_READY },
-    { n: counts.pendingApprovals ?? 0, label: t('bellApprovals', { n: counts.pendingApprovals ?? 0 }), href: '/app', ready: false },
+    { n: counts.openFindings, label: t('bellFindings', { n: counts.openFindings }), href: '/app/action-center', ready: true },
+    { n: counts.pendingApprovals ?? 0, label: t('bellApprovals', { n: counts.pendingApprovals ?? 0 }), href: '/app/action-center', ready: true },
     { n: counts.behindDeployments, label: t('bellBehind', { n: counts.behindDeployments }), href: '/app/produk', ready: true },
   ].filter((r) => r.n > 0);
   const total = rows.reduce((s, r) => s + r.n, 0);
@@ -209,6 +210,7 @@ function Sidebar({ organizationName, userName, role, current, counts }: ChromePr
                   <Icon name={item.icon} className={cx('size-5 transition-colors', active ? 'text-accent' : 'text-muted group-hover:text-ink')} />
                   <span className="flex-1">{t(item.label)}</span>
                   {item.badge === 'behind' && counts.behindDeployments > 0 && <CountPill n={counts.behindDeployments} />}
+                  {item.badge === 'findings' && counts.openFindings > 0 && <CountPill n={counts.openFindings} />}
                 </a>
               );
             })}

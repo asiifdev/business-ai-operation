@@ -196,7 +196,7 @@ function Actions({ overview }: { overview: DashboardOverview }) {
   const rows = [
     { n: f.overdue.count, label: t('actionsOverdue'), tone: 'bad' as const, href: '/app/invoice?overdue=1', ready: BILLING_PAGES_READY },
     { n: f.draftsToReview, label: t('actionsDrafts'), tone: 'accent' as const, href: '/app/invoice?status=draft', ready: BILLING_PAGES_READY },
-    { n: overview.pendingApprovals ?? 0, label: t('actionsApprovals'), tone: 'accent' as const, href: '/app', ready: false },
+    { n: overview.pendingApprovals ?? 0, label: t('actionsApprovals'), tone: 'accent' as const, href: '/app/action-center', ready: true },
     { n: overview.counts.behind, label: t('actionsBehind'), tone: 'warn' as const, href: '/app/produk', ready: true },
   ].filter((r) => r.n > 0);
   return (

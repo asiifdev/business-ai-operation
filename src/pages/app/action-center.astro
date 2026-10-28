@@ -1,0 +1,10 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { ActionCenterPage } from '../../components/actions/ActionCenterPage';
+
+export const prerender = false;
+---
+
+<AppShell title="Action Center" current="actions">
+  <ActionCenterPage client:load role={Astro.locals.user!.role} timezone={Astro.locals.timezone} />
+</AppShell>

@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { approvals, auditLog, clients, deployments, invoices, products } from '../../db/schema';
+import { countOpenFindings } from '../action-center/findings';
 import type { Ctx } from '../ctx';
 import { addDays, todayIn } from '../billing/dates';
 import { getAiOverview } from '../ai/service';
@@ -103,6 +104,8 @@ export interface AttentionCounts {
   overdueInvoices: number | null;
   draftsToReview: number | null;
   pendingApprovals: number | null;
+  /** Open Action Center findings this person may see (BRD-M08). */
+  openFindings: number;
 }
 
 /**
@@ -111,7 +114,8 @@ export interface AttentionCounts {
  */
 export async function getAttentionCounts(ctx: Ctx): Promise<AttentionCounts> {
   const behindDeployments = (await listDeployments(ctx, { behindOnly: true })).filter((d) => d.status === 'active').length;
-  if (!can(ctx.role, 'billing.read')) return { behindDeployments, overdueInvoices: null, draftsToReview: null, pendingApprovals: null };
+  const openFindings = await countOpenFindings(ctx);
+  if (!can(ctx.role, 'billing.read')) return { behindDeployments, overdueInvoices: null, draftsToReview: null, pendingApprovals: null, openFindings };
   const [{ tz }] = await db.execute<{ tz: string }>(sql`select timezone as tz from organizations where id = ${ctx.orgId}`);
   const today = todayIn(tz, ctx.clock.now());
   const [[overdue], [drafts], [pending]] = await Promise.all([
@@ -119,5 +123,5 @@ export async function getAttentionCounts(ctx: Ctx): Promise<AttentionCounts> {
     db.select({ n: count() }).from(invoices).where(and(eq(invoices.orgId, ctx.orgId), eq(invoices.status, 'draft'), eq(invoices.isAiDraft, true))),
     db.select({ n: count() }).from(approvals).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.status, 'pending'))),
   ]);
-  return { behindDeployments, overdueInvoices: overdue.n, draftsToReview: drafts.n, pendingApprovals: pending.n };
+  return { behindDeployments, overdueInvoices: overdue.n, draftsToReview: drafts.n, pendingApprovals: pending.n, openFindings };
 }

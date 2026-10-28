@@ -1,8 +1,8 @@
 import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
-export type NavId = 'dashboard' | 'clients' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai';
-export type IconName = 'home' | 'clients' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language';
+export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai';
+export type IconName = 'home' | 'clients' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
 /**
@@ -20,20 +20,22 @@ export interface NavItem {
   label: MessageKey;
   icon: IconName;
   /** Which attention count (from `getAttentionCounts`) shows as a pill beside the item. */
-  badge?: 'behind';
+  badge?: 'behind' | 'findings';
   /** Roles that see the item. Leave out to show it to everyone. */
   roles?: readonly Role[];
 }
 
 /**
- * Every destination of the signed-in app, in sidebar order. A new module adds one line here and appears in the sidebar
- * and, among the first four, in the phone tab bar. The rest go behind "More" on a phone.
+ * Every destination of the signed-in app. The sidebar shows them by group, in this order within each group; the first
+ * four overall form the phone tab bar (dashboard, Action Center, clients, assistant) and the rest go behind "More".
  */
 export const NAV: readonly NavItem[] = [
   { id: 'dashboard', group: 'workspace', href: '/app', label: 'navDashboard', icon: 'home' },
+  { id: 'actions', group: 'workspace', href: '/app/action-center', label: 'navActionCenter', icon: 'pulse', badge: 'findings' },
   { id: 'clients', group: 'workspace', href: '/app/klien', label: 'navClients', icon: 'clients' },
-  { id: 'products', group: 'workspace', href: '/app/produk', label: 'navProducts', icon: 'products', badge: 'behind' },
   { id: 'assistant', group: 'intelligence', href: '/app/asisten', label: 'navAssistant', icon: 'assistant' },
+  { id: 'products', group: 'workspace', href: '/app/produk', label: 'navProducts', icon: 'products', badge: 'behind' },
+  { id: 'briefing', group: 'intelligence', href: '/app/briefing', label: 'navBriefing', icon: 'briefing', roles: ['owner', 'admin'] },
   { id: 'invoices', group: 'billing', href: '/app/invoice', label: 'navInvoices', icon: 'invoice', roles: ['owner', 'admin'] },
   { id: 'subscriptions', group: 'billing', href: '/app/langganan', label: 'navSubscriptions', icon: 'repeat', roles: ['owner', 'admin'] },
   { id: 'ai', group: 'intelligence', href: '/app/ai', label: 'navAi', icon: 'usage' },

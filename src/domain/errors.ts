@@ -6,7 +6,11 @@ export type DomainErrorCode =
   | 'last_owner'
   | 'invalid_state'
   | 'duplicate'
-  | 'rate_limited';
+  | 'rate_limited'
+  /** An approval whose time ran out (BR-M08-05). */
+  | 'expired'
+  /** An approval someone else already decided, on the web or in Telegram (BR-M08-06). */
+  | 'already_decided';
 
 /** Business-rule failure. Endpoints map `code` to an HTTP status and an i18n message; `message` is for logs only. */
 export class DomainError extends Error {
@@ -28,4 +32,6 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   invalid_state: 409,
   duplicate: 409,
   rate_limited: 429,
+  expired: 409,
+  already_decided: 409,
 };

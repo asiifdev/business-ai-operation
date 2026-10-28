@@ -6,7 +6,7 @@ import { AppChrome } from '../shell/AppChrome';
 
 const html = (current?: 'dashboard' | 'assistant' | 'ai', role: 'owner' | 'admin' | 'staff' = 'owner') =>
   renderToStaticMarkup(
-    <AppChrome organizationName="Orbit Studio" userName="Rina" role={role} current={current} today="2026-10-28" counts={{ behindDeployments: 3, overdueInvoices: 1, draftsToReview: 2, pendingApprovals: 0 }} />,
+    <AppChrome organizationName="Orbit Studio" userName="Rina" role={role} current={current} today="2026-10-28" counts={{ behindDeployments: 3, overdueInvoices: 1, draftsToReview: 2, pendingApprovals: 0, openFindings: 0 }} />,
   );
 
 describe('app shell', () => {
@@ -60,7 +60,7 @@ describe('app shell', () => {
   });
 
   it('gives each role only the destinations it may see', () => {
-    expect(itemsFor('staff').map((i) => i.id)).toEqual(['dashboard', 'clients', 'products', 'assistant', 'ai']);
+    expect(itemsFor('staff').map((i) => i.id)).toEqual(['dashboard', 'actions', 'clients', 'assistant', 'products', 'ai']);
   });
 
   it('has a translated label for every destination in both languages', () => {
