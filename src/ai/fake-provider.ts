@@ -12,7 +12,8 @@ import type {
   Usage,
 } from './types';
 
-const META: CallMeta = { model: 'fake', rateLimit: {}, attempts: 1 };
+// Priced like the real default model so cost and budget logic behave the same in tests.
+const META: CallMeta = { model: 'muse-spark-1.3', rateLimit: {}, attempts: 1 };
 const USAGE: Usage = { inputTokens: 100, outputTokens: 50, cachedTokens: 0, reasoningTokens: 0 };
 
 /** A scripted chat answer: either a thrown error or a result. Build one with `say`, `callTools` or `fail`. */
@@ -55,17 +56,17 @@ export class FakeProvider implements AiProvider {
   }
 
   async chat(request: ChatRequest): Promise<ChatResult> {
-    this.chatCalls.push(request);
+    this.chatCalls.push(structuredClone(request)); // a snapshot, like a real call: the agent keeps appending to its own array
     return next(this.chatQueue, 'chat');
   }
 
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {
-    this.transcribeCalls.push(request);
+    this.transcribeCalls.push(structuredClone(request));
     return next(this.transcribeQueue, 'transcribe');
   }
 
   async generateImage(request: ImageRequest): Promise<ImageResult> {
-    this.imageCalls.push(request);
+    this.imageCalls.push(structuredClone(request));
     return next(this.imageQueue, 'generateImage');
   }
 }

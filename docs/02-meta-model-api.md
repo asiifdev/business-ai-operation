@@ -16,7 +16,18 @@ Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-lim
 | **Biasing kosakata** (`keywords`, `languageBias`) | Memperbaiki nama (`AsiifDev` dieja benar), tetapi **menambah derau**: muncul kata sisipan ("oh"), "agensi" menjadi "agency", dan satu kata terulang. **Pakai hemat**: hanya nama produk/klien, bukan istilah umum; `languageBias` tidak diperlukan untuk Indonesia |
 | Muse Image `/images/generations` | ✅ HTTP 200, respons `data[0].b64_json` (WebP, `output_format:"webp"`, `background:"opaque"`), `usage` memuat token. Satu gambar ≈ $0,01 per dokumentasi |
 
-**Belum diuji:** STT dengan **dua pembicara** dan rekaman berderau/code-switching, STT > 1 menit, image/video understanding, Responses API, streaming, `-contributor`, SAM, edit gambar multi-turn, akurasi teks dalam gambar.
+### 0a. Uji nyata lewat `MetaProvider` (2026-10-28, `pnpm ai:smoke --image --stt`)
+
+| Uji | Hasil |
+|---|---|
+| Chat polos, effort `low` | ✅ jawaban "siap"; `prompt_tokens` hanya 16 (konteks steering tidak dihitung), tetapi **76 sampai 105 token reasoning** untuk prompt sepele: ±$0,002 per panggilan. Anggaran agen USD 2 per hari ≈ 1.000 panggilan sepele |
+| Tool calling + hasil tool | ✅ argumen `{"invoiceNumber":"INV-1"}`; setelah hasil tool dikirim, jawaban akhir memuat angka dari tool |
+| Structured output `strict:true` lewat `response_format` | ✅ JSON sesuai skema (`budgetIdr` 15000000, `weeks` 6) |
+| Header respons | `x-request-id` **ada** (UUID); empat header `x-ratelimit-*` ada |
+| Gambar dengan `tool_enablement` semua `false`, `reasoning_strength:"low"`, `size:"1024x1024"` | ✅ diterima API; WebP 374 KB dalam ±9 dtk |
+| STT lewat multipart (`audioEncoding:"WAV"`, `mode:"DIARIZATION"`), suara sintetis Indonesia 8 dtk | ✅ HTTP 200 dalam ±3 dtk; 1 giliran; teks benar, tetapi "Orbyte" ditulis "Orbite" (tanpa `keywords`) |
+
+**Belum diuji:** STT dengan **dua pembicara** dan rekaman berderau/code-switching, STT > 1 menit, image/video understanding, Responses API, streaming, `-contributor`, SAM, edit gambar multi-turn, kualitas gambar dengan pencarian dimatikan, akurasi teks dalam gambar.
 
 ## 1. Akses
 

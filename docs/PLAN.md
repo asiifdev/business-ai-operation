@@ -20,7 +20,7 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 | Area | Status | Catatan |
 |---|---|---|
 | M14 Design system | 🚧 | token, Tailwind v4, komponen form, `Button`, `ThemeToggle`, `LocaleSwitch`, galeri `/dev/komponen`; sisa: `Card`, `Modal`, `Table`, `Toast`, `AppShell`, dst. (PRD §4 M14) |
-| Skema DB (ERD) | 🚧 | kelompok `auth_org` dan `ai_core` ditulis dan **diterapkan ke DB dev** (4 migrasi, 14 tes penjaga); 7 kelompok lain ⬜ |
+| Skema DB (ERD) | 🚧 | kelompok `auth_org` dan `ai_core` **diterapkan ke DB dev**; kelompok `action_center` (`findings`, `approvals`, `briefings`, migrasi `0004`) ditulis dan diterapkan di DB uji, **belum di DB dev**: jalankan `pnpm db:migrate` setelah meninjau berkasnya; 6 kelompok lain ⬜ |
 | M01 Registrasi dan login | ✅ | registrasi atomik, login/keluar, middleware sesi, `AppShell` dasar; diuji (tes + browser) |
 | M01 Pengguna dan pengaturan | 🚧 | layanan pengguna dan matriks izin selesai; sisa: halaman Pengguna dan Pengaturan Organisasi, wajib ganti kata sandi awal, E2E Playwright |
 | M15 Audit dan guardrail | 🚧 | selesai: tabel, penjaga DB, `recordAudit` dalam transaksi. Sisa: `automation.once`, keputusan persetujuan atomik, halaman audit |
@@ -29,7 +29,7 @@ PRD dan ERD disusun berurutan; persetujuan tetap per tahap.
 | M04 Pipeline | ⬜ | lead sampai klien |
 | M05 Tasks dan maintenance | ⬜ | |
 | M06 Dokumen | ⬜ | proposal, quotation, notulen |
-| M07 AI Core | 🚧 | selesai: `AiProvider` dengan `MetaProvider` (chat, STT, gambar) dan `FakeProvider`, klien HTTP dengan retry, tabel harga, pemeriksa WAV, 52 tes tanpa jaringan. Sisa: registri tool, loop agen, anggaran harian dan penulisan `ai_runs`, label "dibantu AI", uji langsung ke API Meta |
+| M07 AI Core | ✅ | `AiProvider` (`MetaProvider`, `FakeProvider`), registri tool dengan daftar terlarang, loop agen (batas putaran dan token, `act` menjadi persetujuan), anggaran harian per fitur, `ai_runs`, pembungkus data tak tepercaya, pemeriksa angka, pesan ramah dan label; diuji tanpa jaringan (tes penerimaan BRD-M07 §10) dan **lewat API Meta sungguhan** (`pnpm ai:smoke`). Sisa tampilan: label "dibantu AI" dipasang tiap fitur yang memakainya (M08 dan seterusnya), halaman pengaturan anggaran Owner (M01) |
 | M08 Action Center | ⬜ | temuan, persetujuan, briefing |
 | M09 Rapat | ⬜ | STT, notulen, draf lead/task |
 | M10 Marketing Studio | ⬜ | gambar dan caption |

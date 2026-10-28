@@ -154,7 +154,7 @@ Galat: `{ "error": { "message", "type", "param", "code" } }`; `type` ∈ `invali
 - Streaming: kegagalan di tengah aliran datang sebagai event `response.failed` atau `error` (mis. `server_shutting_down` → ulangi seluruh permintaan), bukan status HTTP. Tangani juga `response.incomplete`.
 - Responses tersimpan bisa sesaat 404 setelah selesai (atau 400 saat dirantai): ulangi dengan backoff pendek.
 - Membatalkan respons yang sudah selesai mengembalikan `status:"completed"` dengan `output` kosong: ambil lewat `GET`. `DELETE` bersifat soft-delete dan tidak idempoten (kedua kali → 404).
-- ⚠️ Header ID permintaan untuk dukungan tidak didokumentasikan: simpan seluruh header respons dan `id` respons di `ai_runs`.
+- Header `x-request-id` (UUID) **ada** pada respons (teramati 2026-10-28, tidak tertulis di dokumentasi); `MetaProvider` mengembalikannya di `meta.requestId`. Sebut ID itu saat menghubungi dukungan.
 
 ## 10. Caching dan hitung token
 
@@ -176,8 +176,8 @@ Galat: `{ "error": { "message", "type", "param", "code" } }`; `type` ∈ `invali
 ## 12. Hal yang belum diverifikasi (uji sebelum bergantung)
 
 - Bentuk persis `text.format` di Responses dan penanganan refusal.
-- STT dengan dua pembicara, rekaman berderau/code-switching, dan rekaman > 1 menit.
-- Efek mematikan pencarian bawaan Muse Image pada kualitas, serta batas panjang prompt gambar dan akurasi teks di gambar.
+- STT dengan dua pembicara, rekaman berderau/code-switching, dan rekaman > 1 menit (multipart dan WAV 8 detik sudah teruji lewat `MetaProvider`).
+- Kualitas gambar dengan pencarian bawaan dimatikan (parameternya sudah teruji diterima, 2026-10-28), serta batas panjang prompt gambar dan akurasi teks di gambar.
 - Stateless encrypted replay end-to-end (urutan item reasoning, `phase`, kompaksi) dengan loop tool kita.
 - Streaming end-to-end dari Astro SSR ke browser dan ke Telegram (`sendMessageDraft`).
 - Jumlah maksimum tool per permintaan dan perilaku model dengan set tool besar.

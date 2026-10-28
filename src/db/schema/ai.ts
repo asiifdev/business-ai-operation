@@ -1,13 +1,16 @@
 import { sql } from 'drizzle-orm';
 import {
-  check, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, smallint, text, unique, uniqueIndex,
+  boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, smallint, text, unique, uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { bigAmount, idColumn, tstz } from './_shared';
+import { bigAmount, createdAtColumn, idColumn, tstz, updatedAtColumn } from './_shared';
 import { organizations, users } from './auth';
 
 export const aiFeature = pgEnum('ai_feature', ['agent', 'minutes', 'transcribe', 'image']);
 export const aiRunStatus = pgEnum('ai_run_status', ['ok', 'error', 'blocked_budget', 'rejected_tool']);
 export const jobStatus = pgEnum('job_status', ['queued', 'running', 'done', 'failed']);
+export const approvalStatus = pgEnum('approval_status', ['pending', 'approved', 'rejected', 'expired']);
+export const findingStatus = pgEnum('finding_status', ['new', 'handled', 'ignored', 'snoozed', 'auto_resolved']);
+export const findingRule = pgEnum('finding_rule', ['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant']);
 
 /** ERD 3.8. One row per model call (BR-M15-05). Summaries only, never full document text (BR-M15-06). */
 export const aiRuns = pgTable(
@@ -120,3 +123,87 @@ export const jobs = pgTable(
   ],
 );
 
+
+/**
+ * Action Center findings (ERD 3.8, BR-M08). One per (rule, entity, period): the unique key makes a repeated rule run a
+ * no-op (CR-10). Amounts and days are never stored here, the card reads them from the source entity (BR-M08-03).
+ */
+export const findings = pgTable(
+  'findings',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    rule: findingRule('rule').notNull(),
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    periodKey: text('period_key').notNull(),
+    status: findingStatus('status').notNull().default('new'),
+    snoozedUntil: tstz('snoozed_until'),
+    explanation: text('explanation'),
+    draftMessage: text('draft_message'),
+    aiRunId: text('ai_run_id'),
+    resolvedAt: tstz('resolved_at'),
+    resolvedBy: text('resolved_by'),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (t) => [
+    unique('uq_findings_org_id').on(t.orgId, t.id),
+    uniqueIndex('uq_findings_dedupe').on(t.orgId, t.rule, t.entityId, t.periodKey),
+    foreignKey({ columns: [t.orgId, t.aiRunId], foreignColumns: [aiRuns.orgId, aiRuns.id], name: 'fk_findings_ai_run' }),
+    foreignKey({ columns: [t.orgId, t.resolvedBy], foreignColumns: [users.orgId, users.id], name: 'fk_findings_resolved_by' }),
+    index('idx_findings_status').on(t.orgId, t.status, t.createdAt),
+  ],
+);
+
+/**
+ * A risky action waiting for a human (BR-M15-07, -08). `args` holds the arguments exactly as validated, so what is
+ * approved is what runs. The decision is one atomic UPDATE ... WHERE status = 'pending' AND expires_at > now().
+ */
+export const approvals = pgTable(
+  'approvals',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    findingId: text('finding_id'),
+    tool: text('tool').notNull(),
+    args: jsonb('args').notNull(),
+    rationale: text('rationale').notNull(),
+    /** The person the action is for: their role limits what may be approved (BR-M01-08). */
+    requestedFor: text('requested_for').notNull(),
+    aiRunId: text('ai_run_id'),
+    status: approvalStatus('status').notNull().default('pending'),
+    expiresAt: tstz('expires_at').notNull(),
+    decidedBy: text('decided_by'),
+    decidedAt: tstz('decided_at'),
+    executionResult: jsonb('execution_result'),
+    executedAt: tstz('executed_at'),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    unique('uq_approvals_org_id').on(t.orgId, t.id),
+    foreignKey({ columns: [t.orgId, t.findingId], foreignColumns: [findings.orgId, findings.id], name: 'fk_approvals_finding' }),
+    foreignKey({ columns: [t.orgId, t.requestedFor], foreignColumns: [users.orgId, users.id], name: 'fk_approvals_requested_for' }),
+    foreignKey({ columns: [t.orgId, t.aiRunId], foreignColumns: [aiRuns.orgId, aiRuns.id], name: 'fk_approvals_ai_run' }),
+    foreignKey({ columns: [t.orgId, t.decidedBy], foreignColumns: [users.orgId, users.id], name: 'fk_approvals_decided_by' }),
+    index('idx_approvals_queue').on(t.orgId, t.status, t.expiresAt),
+  ],
+);
+
+/** Daily briefing (BR-M08-11). `isAi = false` means numbers only and the UI says it is not an AI result. */
+export const briefings = pgTable(
+  'briefings',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    briefingDate: date('briefing_date', { mode: 'string' }).notNull(),
+    content: text('content').notNull(),
+    isAi: boolean('is_ai').notNull(),
+    aiRunId: text('ai_run_id'),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    uniqueIndex('uq_briefings_day').on(t.orgId, t.briefingDate),
+    foreignKey({ columns: [t.orgId, t.aiRunId], foreignColumns: [aiRuns.orgId, aiRuns.id], name: 'fk_briefings_ai_run' }),
+  ],
+);
