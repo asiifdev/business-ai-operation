@@ -41,9 +41,15 @@ export function MeetingsPage({ timezone }: { timezone: string }) {
       {t('mtNew')}
     </a>
   );
+  const liveButton = (
+    <a href="/app/rapat/live" className={buttonClasses('secondary')}>
+      <Icon name="mic" className="size-4" />
+      {t('lvLink')}
+    </a>
+  );
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('mtTitle')} intro={t('mtIntro')} action={newButton} />
+      <PageHeader title={t('mtTitle')} intro={t('mtIntro')} action={<div className="flex flex-wrap gap-2">{liveButton}{newButton}</div>} />
       <Panel aria-busy={list.value.state === 'loading'}>
         {list.value.state === 'loading' && <Skeleton rows={5} />}
         {list.value.state === 'error' && <ErrorBox onRetry={list.retry}>{t(errorKey(list.value.error))}</ErrorBox>}
@@ -66,6 +72,7 @@ export function MeetingsPage({ timezone }: { timezone: string }) {
                     <td data-label={t('mtColTitle')} className={`py-3 pr-3 ${tbl.label} ${tbl.full}`}>
                       <a href={`/app/rapat/${m.id}`} className="font-medium text-ink no-underline hover:text-accent [overflow-wrap:anywhere]">{m.title}</a>
                       {m.source === 'telegram' && <span className="ml-2 text-xs text-muted">{t('mtSourceTelegram')}</span>}
+                      {m.source === 'live' && <span className="ml-2 text-xs text-muted">{t('lvLink')}</span>}
                     </td>
                     <td data-label={t('mtColDuration')} className={`py-3 pr-3 tabular-nums ${tbl.label}`}>{minutesOf(m.durationMs) != null ? t('mtMinutesShort', { n: minutesOf(m.durationMs)! }) : '—'}</td>
                     <td data-label={t('mtColBy')} className={`py-3 pr-3 ${tbl.label}`}>{m.createdByName ?? '—'}</td>

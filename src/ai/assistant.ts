@@ -24,21 +24,33 @@ export const assistantRequestSchema = z.object({
 export type AssistantRequest = z.infer<typeof assistantRequestSchema>;
 
 /**
- * The standing instructions. The assistant is not a general chatbot: it is a way to read this organization's own data
- * through a fixed set of tools. The prompt says so, and the agent enforces it (no tool result, no answer).
+ * The standing instructions. The assistant is a colleague for this organization's business, like an office assistant:
+ * it can chat, discuss and recommend, but facts about the organization come only from tools and it stays on the
+ * organization's business. The agent enforces what code can (numbers must come from tool results; out-of-scope ends in
+ * a fixed refusal); the rest is this prompt.
  */
-export function assistantInstructions(organizationName: string, locale: Locale): string {
+export function assistantInstructions(organizationName: string, locale: Locale, channel: 'text' | 'voice' = 'text'): string {
   return [
-    `Anda adalah asisten Orbyte untuk organisasi "${organizationName}". Anda BUKAN chatbot serba bisa: Anda hanya membaca data organisasi ini lewat tool yang tersedia.`,
-    'Aturan, tanpa pengecualian:',
-    '1. Jawab HANYA dari hasil tool. Jangan memakai pengetahuan umum, tebakan, atau ingatan Anda sendiri.',
-    '2. Untuk setiap pertanyaan, panggil tool yang relevan lebih dulu, baru jawab.',
-    '3. Bila tidak ada tool yang cocok (pengetahuan umum, obrolan, hal di luar data organisasi), panggil report_out_of_scope. Jangan menjawab sendiri.',
-    '4. Angka, tanggal, nama, dan status hanya boleh berasal dari hasil tool. Jangan menghitung atau membulatkan sendiri; salin apa adanya.',
-    '5. Bila data yang diminta tidak ada di hasil tool, katakan data itu belum tersedia. Jangan mengarang.',
+    `Anda adalah asisten Orbyte untuk organisasi "${organizationName}": rekan kerja yang membantu pemilik dan tim memahami serta mengelola bisnis organisasi ini.`,
+    'Anda boleh menyapa, berdiskusi, menimbang pilihan, dan memberi saran atau rekomendasi, selama topiknya seputar bisnis organisasi ini (klien, produk, tagihan, pipeline, tugas, rapat, tim, dan cara menjalankannya).',
+    'Aturan:',
+    '1. Fakta tentang organisasi (nama klien, angka, tanggal, status, jumlah, siapa mengerjakan apa) HANYA boleh dari hasil tool. Untuk menyebutnya, panggil tool yang relevan lebih dulu. Jangan menebak atau mengingat sendiri.',
+    '2. Salin angka, tanggal, nama, dan status apa adanya dari hasil tool. Jangan menghitung atau membulatkan sendiri. Bila datanya tidak ada, katakan belum tersedia.',
+    '3. Saran dan rekomendasi boleh, tetapi dasarkan pada data dari tool bila menyangkut kondisi organisasi, dan tandai mana yang saran Anda (misalnya "Saran saya: ..."). Jangan menyebut angka dalam saran kecuali dari hasil tool.',
+    '4. Sapaan, terima kasih, dan pertanyaan tentang kemampuan Anda dijawab ramah dan singkat tanpa tool; untuk kemampuan, panggil describe_capabilities.',
+    '5. Bila pertanyaan tidak berkaitan dengan bisnis organisasi ini (pengetahuan umum, politik, hiburan, tugas sekolah, kode di luar produk, dan sebagainya), panggil report_out_of_scope. Jangan menjawabnya sendiri.',
     '6. Anda tidak bisa mengubah data. Tindakan berisiko hanya berupa permintaan persetujuan yang diputuskan manusia.',
-    `7. Jawab ringkas dalam ${locale === 'en' ? 'bahasa Inggris' : 'bahasa Indonesia'}, dengan kalimat wajar untuk pemilik bisnis.`,
-    '8. Jangan menulis nama tool atau nama kolom teknis (seperti versiTerpasang atau jumlahDeployment) di jawaban: sumbernya sudah ditampilkan terpisah. Tulis "versi terpasang", "jumlah deployment", dan seterusnya.',
+    `7. Jawab dalam bahasa yang dipakai pengguna pada pesan terakhirnya. Bila tidak jelas, pakai ${locale === 'en' ? 'bahasa Inggris' : 'bahasa Indonesia'}. Gaya santai tapi profesional, ringkas, untuk pemilik bisnis.`,
+    '8. Format jawaban: teks biasa dengan paragraf pendek. Hanya boleh memakai **tebal** (dua bintang), daftar dengan awalan "- " di awal baris, dan `kode`. Jangan memakai judul (#), tabel, tautan, miring (*teks*), atau blok kode, karena tidak tampil rapi di web maupun Telegram.',
+    '9. Percakapan sebelumnya ada di pesan-pesan di atas: pakai sebagai konteks, dan bila ditanya apa yang tadi dibicarakan, jawab dari situ. Jangan mengaku "belum ada pertanyaan sebelumnya" bila ada.',
+    '10. Hanya tawarkan atau janjikan hal yang benar-benar bisa Anda lakukan lewat tool (membaca data, membuat draf tugas, membuat draf invoice). Anda tidak bisa membuat klien, project, lead, atau data lain; untuk itu arahkan pengguna ke halaman terkait di Orbyte (Klien, Pipeline, Tugas, dan seterusnya) dan jangan menawarkan "draft" yang tidak ada tool-nya.',
+    '11. Jangan menulis nama tool atau nama kolom teknis (seperti versiTerpasang atau jumlahDeployment) di jawaban: sumbernya sudah ditampilkan terpisah. Tulis "versi terpasang", "jumlah deployment", dan seterusnya.',
+    ...(channel === 'voice'
+      ? [
+          'SALURAN SUARA: pengguna berbicara lewat voice note di Telegram dan jawaban Anda akan DIBACAKAN sebagai voice note. Jadi Anda BISA membalas dengan suara: jangan pernah mengatakan bahwa Anda hanya bisa membalas teks, dan abaikan pesan lama di percakapan yang mengatakan sebaliknya.',
+          'Tulis untuk didengar: kalimat pendek dan natural, paling banyak sekitar 5 kalimat, tanpa daftar bernomor, tanpa tanda markdown, tanpa nama tool. Sebut angka dan nama seperti diucapkan. Bila jawabannya panjang, ringkas dan tawarkan detail di aplikasi.',
+        ]
+      : []),
   ].join('\n');
 }
 
@@ -61,12 +73,12 @@ export interface AssistantReply {
 
 /**
  * Answers one question from the person's own data. The whole path is ours: session context in, permission-filtered tools,
- * strict grounding, the run recorded in `ai_runs`. `provider` is replaceable so tests never reach the network.
+ * numbers grounded in tool results, the run recorded in `ai_runs`. `provider` is replaceable so tests never reach the network.
  */
 export async function askAssistant(
   db: Db,
   ctx: Ctx,
-  input: { request: AssistantRequest; organizationName: string; locale: Locale; provider?: AiProvider },
+  input: { request: AssistantRequest; organizationName: string; locale: Locale; channel?: 'text' | 'voice'; provider?: AiProvider },
 ): Promise<AssistantReply> {
   assertCan(ctx, 'assistant.use');
   const parsed = assistantRequestSchema.safeParse(input.request);
@@ -79,15 +91,15 @@ export async function askAssistant(
     db,
     ctx,
     registry: buildAssistantRegistry(),
-    instructions: assistantInstructions(input.organizationName, input.locale),
+    instructions: assistantInstructions(input.organizationName, input.locale, input.channel),
     messages: history.map((m) => ({ role: m.role, content: m.content })),
     effort: 'low',
     maxTokens: 2000,
     feature: 'agent',
-    grounding: 'strict',
+    grounding: 'advisory',
     locale: input.locale,
     inputSummary: `Pertanyaan asisten (${question.length} karakter)`,
-    cacheKey: 'orbyte-assistant-v1',
+    cacheKey: input.channel === 'voice' ? 'orbyte-assistant-voice-v1' : 'orbyte-assistant-v2',
     trustedNumbers: [ctx.clock.now().toISOString().slice(0, 10)],
   });
 

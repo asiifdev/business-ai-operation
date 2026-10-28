@@ -5,7 +5,8 @@ import { parseApprovalCallback } from '../../integrations/telegram/callback';
 import type { InlineKeyboard, TelegramClient } from '../../integrations/telegram/client';
 import { TelegramError } from '../../integrations/telegram/errors';
 import { parseStartCommand } from '../../integrations/telegram/pairing';
-import { chunkText, escapeHtml } from '../../integrations/telegram/text';
+import { spokenText } from '../../integrations/speech/spoken';
+import { answerToTelegramParts, escapeHtml } from '../../integrations/telegram/text';
 import type { TelegramMessage, TelegramUpdate } from '../../integrations/telegram/webhook';
 import type { Clock } from '../../lib/clock';
 import { formatDate, formatDateTime, formatRupiah } from '../../lib/format';
@@ -26,13 +27,20 @@ import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from '
 
 /** What the handler needs from the outside world, so tests can pass fakes and never reach Telegram or a model. */
 export interface BotDeps {
-  client: Pick<TelegramClient, 'sendMessage' | 'editMessageText' | 'answerCallbackQuery' | 'sendChatAction' | 'downloadFile'>;
+  client: Pick<TelegramClient, 'sendMessage' | 'editMessageText' | 'answerCallbackQuery' | 'sendChatAction' | 'downloadFile'> & Partial<Pick<TelegramClient, 'sendVoice'>>;
   clock: Clock;
   /** Public address of the web app, for links in messages. */
   appUrl?: string;
   /** Free text goes to the grounded assistant (M07). Left out, the bot answers with the command list instead. */
-  ask?: (ctx: Ctx, question: string, person: LinkedUser) => Promise<string>;
+  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean }) => Promise<string>;
+  /** Reads an answer aloud (D-052). Left out, or returning null, the answer stays text only. */
+  speak?: (text: string, locale: 'id' | 'en', ctx: Ctx, person: LinkedUser) => Promise<{ ogg: Uint8Array; durationMs: number } | null>;
+  /** Short speech to text for a chat voice note (M09 STT). Left out, a voice note is treated as a meeting recording. */
+  transcribe?: (ctx: Ctx, audio: Uint8Array, person: LinkedUser) => Promise<{ ok: true; text: string } | { ok: false; message: string }>;
 }
+
+/** A voice note up to this long is a message to the assistant; anything longer is a recording (PRD section 6). */
+const CHAT_VOICE_MAX_MS = 3 * 60_000;
 
 /** Free-text questions per person per minute: each one is a model call that spends the organization's budget. */
 const ASK_PER_MINUTE = 6;
@@ -110,7 +118,8 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
       return send(deps, chatId, `${escapeHtml(t('tgUnknownCommand'))}\n\n${helpText(person.locale)}`);
   }
 
-  if (message.voice) return onVoice(message.voice, ctx, person, deps);
+  const audio = message.voice ?? message.audio;
+  if (audio) return onVoice(audio, { forceMeeting: Boolean(message.audio) || /^\/(rapat|meeting)\b/i.test(message.caption?.trim() ?? '') }, ctx, person, deps);
   if (message.photo) return send(deps, chatId, escapeHtml(t('tgMediaLater')));
   if (!text) return;
   if (!deps.ask) return send(deps, chatId, helpText(person.locale));
@@ -120,15 +129,17 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
   // an approval that a person decides (CR-12).
   await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
   const answer = await deps.ask(ctx, text.slice(0, 2000), person);
-  for (const part of chunkText(answer)) await send(deps, chatId, escapeHtml(part));
+  for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
 }
 
 /**
- * A voice note becomes a meeting recording (PRD section 6): downloaded (at most 20 MB), stored, and processed by the same
- * job as an upload on the web. The person sent their own voice, which stands for the consent the web form asks for
- * (BR-M09-11, D-047). The summary comes back to this chat when it is ready (see `notifyLinkedUsers`).
+ * A short voice note is a message to the assistant (D-050): it is transcribed and answered like typed text, in text.
+ * A recording becomes a meeting only on purpose: an audio file, a caption starting with /rapat, or a voice note longer
+ * than three minutes. Then it is downloaded (at most 20 MB), stored and processed by the same job as an upload on the
+ * web. The person sent their own voice, which stands for the consent the web form asks for (BR-M09-11, D-047). The
+ * summary comes back to this chat when it is ready (see `notifyLinkedUsers`).
  */
-async function onVoice(voice: NonNullable<TelegramMessage['voice']>, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+async function onVoice(voice: NonNullable<TelegramMessage['voice']>, opts: { forceMeeting: boolean }, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
   if (voice.duration * 1000 > MAX_DURATION_MS) return send(deps, person.chatId, escapeHtml(t('mtErrTooLong')));
   let bytes: Uint8Array;
@@ -138,6 +149,8 @@ async function onVoice(voice: NonNullable<TelegramMessage['voice']>, ctx: Ctx, p
     if (err instanceof TelegramError && err.kind === 'too_large') return send(deps, person.chatId, escapeHtml(t('tgVoiceTooLarge')));
     throw err;
   }
+  const asChat = !opts.forceMeeting && voice.duration * 1000 <= CHAT_VOICE_MAX_MS && deps.transcribe && deps.ask;
+  if (asChat) return onVoiceChat(bytes, ctx, person, deps);
   try {
     const title = t('tgVoiceTitle', { when: formatDateTime(deps.clock.now(), person.timezone) });
     await createMeeting(ctx, { title, consent: true }, { bytes, name: 'voice.ogg' }, { source: 'telegram' });
@@ -146,6 +159,45 @@ async function onVoice(voice: NonNullable<TelegramMessage['voice']>, ctx: Ctx, p
     throw err;
   }
   return send(deps, person.chatId, escapeHtml(t('tgVoiceReceived')));
+}
+
+/** The words of a short voice note go to the assistant like typed text, and the answer comes back as a voice note when it can. */
+async function onVoiceChat(bytes: Uint8Array, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const t = (key: MessageKey) => translate(person.locale, key);
+  if (!limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, person.chatId, escapeHtml(t('tgSlowDown')));
+  await deps.client.sendChatAction(person.chatId, 'typing').catch(() => undefined);
+  const heard = await deps.transcribe!(ctx, bytes, person);
+  if (!heard.ok) return send(deps, person.chatId, escapeHtml(heard.message));
+  const words = heard.text.trim().slice(0, 2000);
+  if (!words) return send(deps, person.chatId, escapeHtml(t('tgVoiceUnclear')));
+  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice) });
+  if (await replyAloud(answer, ctx, person, deps)) return;
+  for (const part of answerToTelegramParts(answer)) await send(deps, person.chatId, part);
+}
+
+/**
+ * Someone who spoke gets the answer as a voice note and nothing else (D-052). Text is the fallback and is sent when the
+ * answer cannot be spoken: no speech engine, a voice that failed, an answer that is not Indonesian, or one too long to
+ * read aloud whole (a list of invoices is better read than heard). Returns whether the voice note went out.
+ */
+async function replyAloud(answer: string, ctx: Ctx, person: LinkedUser, deps: BotDeps): Promise<boolean> {
+  const chatId = person.chatId;
+  if (!deps.speak || !deps.client.sendVoice) return false;
+  const words = spokenText(answer);
+  if (!words) return false;
+  try {
+    await deps.client.sendChatAction(chatId, 'record_voice').catch(() => undefined);
+    const voice = await deps.speak(words.text, words.locale, ctx, person);
+    if (!voice) return false;
+    await deps.client.sendVoice({ chatId, bytes: voice.ogg, durationSeconds: voice.durationMs / 1000 });
+    return true;
+  } catch (err) {
+    if (err instanceof TelegramError && err.kind === 'blocked') {
+      await unlinkChat(chatId, deps.clock, 'blocked');
+      return true; // nobody is there to read the text either
+    }
+    return false;
+  }
 }
 
 function helpText(locale: Locale): string {

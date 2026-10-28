@@ -32,6 +32,20 @@ export const OUT_OF_SCOPE_REFUSAL: Record<Locale, string> = {
   en: 'That is outside the data and functions I have, so I will not answer it. Ask "what can you do?" to see what I can help with.',
 };
 
+const EN_WORDS = new Set(['the', 'is', 'are', 'what', 'who', 'how', 'why', 'when', 'where', 'can', 'could', 'please', 'hi', 'hello', 'hey', 'thanks', 'thank', 'you', 'my', 'me', 'do', 'does', 'show', 'tell', 'give', 'list', 'which', 'any', 'and', 'of', 'to', 'for', 'with', 'this', 'that', 'have', 'has', 'should', 'would']);
+const ID_WORDS = new Set(['yang', 'dan', 'apa', 'siapa', 'bagaimana', 'kenapa', 'mengapa', 'kapan', 'dimana', 'di', 'ke', 'dari', 'untuk', 'dengan', 'ini', 'itu', 'saya', 'aku', 'kamu', 'anda', 'tolong', 'halo', 'hai', 'terima', 'kasih', 'makasih', 'bisa', 'tidak', 'belum', 'sudah', 'berapa', 'mana', 'ada', 'lagi', 'dong', 'ya', 'gak', 'nggak', 'klien', 'tagihan']);
+
+/** The language the person wrote in, by common words; `fallback` (their interface language) when it is unclear. */
+export function detectLocale(text: string, fallback: Locale): Locale {
+  let en = 0;
+  let id = 0;
+  for (const w of text.toLowerCase().match(/[a-z]+/g) ?? []) {
+    if (EN_WORDS.has(w)) en += 1;
+    if (ID_WORDS.has(w)) id += 1;
+  }
+  return en > id ? 'en' : id > en ? 'id' : fallback;
+}
+
 export function friendlyAiError(kind: AiErrorKind, locale: Locale = 'id'): string {
   return FRIENDLY[kind][locale];
 }

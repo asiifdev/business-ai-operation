@@ -26,6 +26,7 @@ const message = z.object({
   caption: z.string().optional(),
   media_group_id: z.string().optional(),
   voice: z.object({ file_id: z.string(), duration: z.number(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
+  audio: z.object({ file_id: z.string(), duration: z.number(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
   photo: z.array(z.object({ file_id: z.string(), width: z.number(), height: z.number(), file_size: z.number().optional() })).optional(),
 });
 

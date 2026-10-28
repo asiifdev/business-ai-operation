@@ -61,7 +61,7 @@ export function MeetingDetail({ id, timezone }: { id: string; timezone: string }
           <MeetingStatusBadge status={m.status} contentDeleted={m.contentDeleted} />
         </h1>
         <p className="m-0 text-sm text-muted">
-          {[m.createdByName, formatDateTime(m.createdAt, timezone), length != null ? t('mtMinutesShort', { n: length }) : null, m.source === 'telegram' ? t('mtSourceTelegram') : m.fileName].filter(Boolean).join(' · ')}
+          {[m.createdByName, formatDateTime(m.createdAt, timezone), length != null ? t('mtMinutesShort', { n: length }) : null, m.source === 'telegram' ? t('mtSourceTelegram') : m.source === 'live' ? t('lvLink') : m.fileName].filter(Boolean).join(' · ')}
         </p>
         {error != null && <p role="alert" className="m-0 text-danger">{t(errorKey(error))}</p>}
       </header>

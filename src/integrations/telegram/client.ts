@@ -123,6 +123,15 @@ export class TelegramClient {
     return this.call<{ message_id: number }>('sendDocument', undefined, form);
   }
 
+  /** A voice note: OGG/Opus bytes, shown with a play button. */
+  async sendVoice(input: { chatId: number; bytes: Uint8Array; durationSeconds?: number }) {
+    const form = new FormData();
+    form.append('chat_id', String(input.chatId));
+    if (input.durationSeconds) form.append('duration', String(Math.max(1, Math.round(input.durationSeconds))));
+    form.append('voice', new Blob([input.bytes as BlobPart], { type: 'audio/ogg' }), 'reply.ogg');
+    return this.call<{ message_id: number }>('sendVoice', undefined, form);
+  }
+
   getFile(fileId: string) {
     return this.call<TelegramFile>('getFile', { file_id: fileId });
   }

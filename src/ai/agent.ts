@@ -6,7 +6,7 @@ import type { Ctx } from '../domain/ctx';
 import { DomainError } from '../domain/errors';
 import { can } from '../domain/permissions';
 import { AiProviderError, type AiErrorKind } from './errors';
-import { AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, friendlyAiError, type Locale } from './messages';
+import { AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, detectLocale, friendlyAiError, type Locale } from './messages';
 import { findUnverifiedNumbers } from './numbers';
 import type { AiProvider } from './provider';
 import type { ToolRegistry } from './tools/registry';
@@ -49,9 +49,11 @@ export interface AgentInput {
   /**
    * `strict` (the assistant): no tool result, no answer. A final answer must follow at least one successful tool call and
    * may only contain numbers that appear in tool results; otherwise the model gets one correction and then the fixed
-   * "no data" text replaces its answer. `none` (extraction from text we provide): the default.
+   * "no data" text replaces its answer. `advisory` (the assistant): the model may talk, discuss and recommend without a
+   * tool call, but numbers still have to come from tool results and out-of-scope questions still end in the fixed refusal.
+   * `none` (extraction from text we provide): the default.
    */
-  grounding?: 'strict' | 'none';
+  grounding?: 'strict' | 'advisory' | 'none';
   /** Extra values the answer may mention that did not come from a tool, such as today's date. */
   trustedNumbers?: string[];
   requestApproval?: typeof defaultRequestApproval;
@@ -142,6 +144,10 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   let corrections = 0;
   let rounds = 0;
   const strict = input.grounding === 'strict';
+  const guarded = strict || input.grounding === 'advisory';
+  // Fixed refusals follow the language the person wrote in, not only their interface language.
+  const lastUser = [...input.messages].reverse().find((m) => m.role === 'user');
+  const refusalLocale = detectLocale(typeof lastUser?.content === 'string' ? lastUser.content : '', locale);
   const sourcesOf = () => [...new Set(run.toolLog.filter((t) => t.status === 'ok').map((t) => t.name))];
 
   const stop = async (kind: AgentResult['errorKind'], message: string, error: string, status: AiRunStatus = 'error'): Promise<AgentResult> => {
@@ -225,26 +231,26 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
         const unverified = findUnverifiedNumbers(text, toolOutputs, input.trustedNumbers);
         const grounded = toolOutputs.length > 0;
 
-        if (strict && (!grounded || unverified.length > 0)) {
+        if (guarded && ((strict && !grounded) || unverified.length > 0)) {
           // One correction, then the fixed refusal: the model's own words are never shown when they rest on nothing.
           if (corrections < 1 && rounds < maxRounds) {
             corrections += 1;
             messages.push({ role: 'assistant', content: text });
             messages.push({
               role: 'developer',
-              content: grounded
+              content: grounded || !strict
                 ? `Jawaban Anda memuat angka yang tidak ada di hasil tool (${unverified.join(', ')}). Tulis ulang hanya dengan angka dari hasil tool, atau hapus angka itu.`
                 : 'Anda belum memanggil tool. Jangan jawab dari pengetahuan sendiri: panggil tool yang relevan, atau panggil report_out_of_scope bila tidak ada tool yang cocok.',
             });
             continue;
           }
-          const reason = grounded ? 'unverified_numbers' : 'no_data';
+          const reason = grounded || !strict ? 'unverified_numbers' : 'no_data';
           await run.finish('ok', { outputSummary: `refused: ${reason}` });
           return {
             ok: true,
             label: NOT_AI_LABEL[locale],
             status: 'ok',
-            text: NO_DATA_REFUSAL[locale],
+            text: NO_DATA_REFUSAL[refusalLocale],
             runId: run.id,
             rounds,
             costMicroUsd: run.spentMicroUsd,
@@ -280,13 +286,13 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
 
       messages.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls });
       for (const call of result.toolCalls) messages.push({ role: 'tool', toolCallId: call.id, content: await execute(call, rounds) });
-      if (strict && outOfScope) {
+      if (guarded && outOfScope) {
         await run.finish('ok', { outputSummary: 'refused: out_of_scope' });
         return {
           ok: true,
           label: NOT_AI_LABEL[locale],
           status: 'ok',
-          text: OUT_OF_SCOPE_REFUSAL[locale],
+          text: OUT_OF_SCOPE_REFUSAL[refusalLocale],
           runId: run.id,
           rounds,
           costMicroUsd: run.spentMicroUsd,

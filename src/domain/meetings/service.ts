@@ -11,6 +11,7 @@ import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
 import { who } from '../portfolio/shared';
+import type { LiveTurn } from './live';
 import { MAX_UPLOAD_BYTES, sniffAudio, type AudioFormat } from './rules';
 
 type MeetingRecord = typeof meetings.$inferSelect;
@@ -80,6 +81,25 @@ export async function createMeeting(ctx: Ctx, raw: z.input<typeof meetingUploadS
     await storage().delete(key).catch(() => undefined); // nothing points at it any more
     throw err;
   }
+}
+
+/**
+ * Saves a meeting that was transcribed while it ran (D-051): the transcript is already there, so there is no audio file
+ * and the job only has to write the minutes. `source` is `live`. Refuses a meeting with no words, so empty rooms leave no
+ * rows behind.
+ */
+export async function createLiveMeeting(ctx: Ctx, raw: { title: string; durationMs: number; turns: LiveTurn[] }): Promise<{ id: string }> {
+  assertCan(ctx, 'meeting.upload');
+  const title = z.string().trim().min(2).max(160).parse(raw.title);
+  const turns = raw.turns.filter((t) => t.text.trim());
+  if (turns.length === 0) throw new DomainError('validation', 'transcript:empty');
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(meetings).values({ orgId: ctx.orgId, title, source: 'live', fileId: null, durationMs: Math.max(0, Math.round(raw.durationMs)), createdBy: ctx.userId }).returning({ id: meetings.id });
+    await tx.insert(meetingTurns).values(turns.map((t, i) => ({ orgId: ctx.orgId, meetingId: row.id, seq: i + 1, speaker: t.speaker, startMs: Math.round(t.startMs), endMs: Math.round(t.endMs), text: t.text })));
+    await enqueueJob(tx, { orgId: ctx.orgId, type: 'meeting.process', payload: { meetingId: row.id } });
+    await recordAudit(tx, who(ctx), { action: 'meeting.recorded_live', entityType: 'meeting', entityId: row.id, summary: { turns: turns.length, durationMs: Math.round(raw.durationMs) } });
+    return { id: row.id };
+  });
 }
 
 export interface MeetingRow {

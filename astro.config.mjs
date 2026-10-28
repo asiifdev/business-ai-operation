@@ -17,13 +17,25 @@ try {
 const appUrl = process.env.APP_URL ? new URL(process.env.APP_URL) : undefined;
 const hostAllowList = appUrl ? [appUrl.hostname] : undefined;
 
+// The live meeting socket (D-051). In production `scripts/start.ts` attaches it; in dev the Vite server is the HTTP server.
+/** @type {import('astro').AstroIntegration} */
+const liveSocket = {
+  name: 'live-meeting-socket',
+  hooks: {
+    'astro:server:setup': async ({ server }) => {
+      const { attachLiveSocket } = await server.ssrLoadModule('/src/server/live-socket.ts');
+      if (server.httpServer) attachLiveSocket(server.httpServer);
+    }
+  }
+};
+
 // https://astro.build/config
 export default defineConfig({
   adapter: node({
     mode: 'standalone'
   }),
 
-  integrations: [react()],
+  integrations: [react(), liveSocket],
 
   // The floating dev toolbar sits over the phone tab bar and hides it while testing the app layout.
   devToolbar: { enabled: false },

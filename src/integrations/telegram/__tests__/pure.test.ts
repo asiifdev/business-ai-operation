@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { encodeApprovalCallback, parseApprovalCallback } from '../callback';
 import { generatePairingCode, hashPairingCode, pairingLink, parseStartCommand } from '../pairing';
-import { MAX_MESSAGE, chunkText, escapeHtml, escapeHtmlAttr } from '../text';
+import { MAX_MESSAGE, answerToTelegramParts, chunkText, escapeHtml, escapeHtmlAttr } from '../text';
 import { ALLOWED_UPDATES, pickPhoto, updateSchema, verifyWebhookSecret } from '../webhook';
 
 describe('verifyWebhookSecret', () => {
@@ -118,5 +118,18 @@ describe('update parsing', () => {
     expect(pickPhoto(photo)?.file_id).toBe('m');
     expect(pickPhoto([{ file_id: 'huge', width: 5000, height: 5000, file_size: 25 * 1024 * 1024 }])).toBeNull();
     expect(pickPhoto(undefined)).toBeNull();
+  });
+});
+
+describe('answerToTelegramParts', () => {
+  it('turns bold, code and bullets into Telegram HTML and keeps everything else literal', () => {
+    expect(answerToTelegramParts('Bisa!\n\n- **Klien siapa?**\n- Pakai `get_x` & <b>')).toEqual(['Bisa!\n\n• <b>Klien siapa?</b>\n• Pakai <code>get_x</code> &amp; &lt;b&gt;']);
+  });
+
+  it('cuts between blocks so a tag is never split, and falls back to plain text for one huge block', () => {
+    const parts = answerToTelegramParts(`**a**\n\n**b**\n\n${'x'.repeat(30)}`, 20);
+    expect(parts.slice(0, 1)).toEqual(['<b>a</b>\n\n<b>b</b>']);
+    expect(parts.every((p) => p.length <= 20)).toBe(true);
+    expect(parts.join('')).not.toMatch(/<b>[^<]*$/);
   });
 });

@@ -429,7 +429,7 @@ export function buildAssistantRegistry(): ToolRegistry {
   registry.register(
     defineTool({
       name: 'report_out_of_scope',
-      description: 'Call this when no other tool can answer the question (general knowledge, chit-chat, anything not about this organization data). Never answer such a question yourself.',
+      description: 'Call this when the question is not about this organization business at all (general knowledge, politics, entertainment, homework, anything unrelated). Greetings, thanks, questions about what you can do, and business discussion or advice are NOT out of scope. Never answer an out-of-scope question yourself.',
       tier: 'read',
       permission: 'assistant.use',
       args: z.object({ reason: z.string().trim().min(1).max(200) }),

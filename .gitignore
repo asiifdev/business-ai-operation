@@ -1,3 +1,6 @@
+# Piper (text to speech) and its voice, installed by `pnpm tts:setup`
+.piper/
+
 # build output
 dist/
 # generated types

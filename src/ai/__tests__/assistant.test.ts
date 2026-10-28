@@ -132,12 +132,36 @@ describe('askAssistant: answers only from this organization', () => {
     expect(reply.text).toMatch(/di luar data dan fungsi/);
   });
 
-  it('refuses even when the model ignores the rules and answers a general question directly', async () => {
+  it('answers a greeting in the language it was written in, without any tool', async () => {
     const o = await makeOrg();
-    const fake = new FakeProvider({ chat: [say('Soekarno.'), say('Soekarno, presiden pertama.')] });
-    const reply = await ask(o.ownerCtx, fake, 'Siapa presiden pertama Indonesia?');
-    expect(reply).toMatchObject({ refused: true, refusalReason: 'no_data' });
-    expect(reply.text).not.toContain('Soekarno');
+    const fake = new FakeProvider({ chat: [say('Halo! Ada yang bisa saya bantu soal klien, tagihan, atau tugas Anda?')] });
+    const reply = await ask(o.ownerCtx, fake, 'Halo');
+    expect(reply).toMatchObject({ ok: true, refused: false, label: 'dibantu AI', sources: [] });
+    expect(reply.text).toMatch(/Halo/);
+  });
+
+  it('discusses and recommends, grounding the facts in a tool result', async () => {
+    const o = await makeOrg();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'get_ai_usage', args: {} }]), say('Anggaran agen hari ini USD 2.00 dan belum terpakai (USD 0.00). Saran saya: aman untuk dipakai lebih banyak.')] });
+    const reply = await ask(o.ownerCtx, fake, 'Menurutmu anggaran AI kita cukup?');
+    expect(reply).toMatchObject({ ok: true, refused: false, sources: ['get_ai_usage'] });
+    expect(reply.text).toMatch(/Saran saya/);
+  });
+
+  it('never shows a number the model made up, even in a casual answer without tools', async () => {
+    const o = await makeOrg();
+    const fake = new FakeProvider({ chat: [say('Klien kita ada 37 sekarang.'), say('Ada 37 klien, menurut saya.')] });
+    const reply = await ask(o.ownerCtx, fake, 'Ada berapa klien kita?');
+    expect(reply).toMatchObject({ ok: true, refused: true, refusalReason: 'unverified_numbers' });
+    expect(reply.text).not.toContain('37');
+  });
+
+  it('writes the fixed refusal in the language of the question, not only of the interface', async () => {
+    const o = await makeOrg();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'report_out_of_scope', args: { reason: 'general' } }])] });
+    const reply = await ask(o.ownerCtx, fake, 'Who is the first president of Indonesia, please?');
+    expect(reply).toMatchObject({ refused: true, refusalReason: 'out_of_scope' });
+    expect(reply.text).toMatch(/outside the data and functions/);
   });
 
   it('gives the model only the tools of the person asking, and hides cost from staff', async () => {
@@ -155,9 +179,20 @@ describe('askAssistant: answers only from this organization', () => {
     await ask(o.ownerCtx, fake, 'Kamu bisa apa?');
     const instructions = (fake.chatCalls[0].messages[0] as { content: string }).content;
     expect(instructions).toContain('Orbit Studio');
-    expect(instructions).toMatch(/BUKAN chatbot serba bisa/);
-    expect(instructions).toMatch(/HANYA dari hasil tool/);
+    expect(instructions).toMatch(/berdiskusi/);
+    expect(instructions).toMatch(/HANYA boleh dari hasil tool/);
+    expect(instructions).toMatch(/bahasa yang dipakai pengguna/);
     expect(assistantInstructions('X', 'en')).toContain('bahasa Inggris');
+  });
+
+  it('tells the model its answer will be spoken in the voice channel, so it never claims it cannot reply by voice', async () => {
+    const o = await makeOrg();
+    const fake = new FakeProvider({ chat: [say('Halo! Ada yang bisa saya bantu?')] });
+    await askAssistant(db, o.ownerCtx, { request: { messages: [{ role: 'user', content: 'Halo' }] }, organizationName: 'Orbit Studio', locale: 'id', channel: 'voice', provider: fake });
+    const instructions = (fake.chatCalls[0].messages[0] as { content: string }).content;
+    expect(instructions).toMatch(/SALURAN SUARA/);
+    expect(instructions).toMatch(/BISA membalas dengan suara/);
+    expect(assistantInstructions('X', 'id')).not.toMatch(/SALURAN SUARA/);
   });
 
   it('blocks with a clear message when the AI budget is spent, without calling the model', async () => {

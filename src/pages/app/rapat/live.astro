@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { LiveMeeting } from '../../../components/meetings/LiveMeeting';
+
+export const prerender = false;
+---
+
+<AppShell title="Rapat" current="meetings">
+  <LiveMeeting client:load />
+</AppShell>

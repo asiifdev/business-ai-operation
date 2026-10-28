@@ -76,41 +76,52 @@ export async function processMeeting(payload: Record<string, unknown>, deps: Mee
   const ctx: Ctx = userCtx({ orgId, userId: m.createdBy, role: person.role }, deps.clock);
   await db.update(meetings).set({ status: 'processing', error: null }).where(and(eq(meetings.orgId, orgId), eq(meetings.id, meetingId)));
 
-  // 1. Audio → WAV pieces.
-  const [file] = m.fileId ? await db.select().from(files).where(and(eq(files.orgId, orgId), eq(files.id, m.fileId), isNull(files.deletedAt))) : [];
-  if (!file) return fail(meetingId, orgId, t('mtErrNoAudio'));
-  let segments: WavSegment[];
-  try {
-    segments = await deps.toSegments(await deps.storage.get(file.storageKey), { maxDurationMs: MAX_DURATION_MS });
-  } catch (err) {
-    if (err instanceof AudioError) return fail(meetingId, orgId, t(err.kind === 'ffmpeg_missing' ? 'mtErrFfmpeg' : err.kind === 'too_long' ? 'mtErrTooLong' : 'mtErrUnreadable'));
-    throw err;
-  }
+  let turns: ReturnType<typeof mergeTurns>;
+  let durationMs: number;
+  let text: string;
+  if (m.source === 'live') {
+    // The transcript was written while the meeting ran (D-051): there is no audio to convert or transcribe.
+    turns = (await db.select().from(meetingTurns).where(and(eq(meetingTurns.orgId, orgId), eq(meetingTurns.meetingId, meetingId))).orderBy(meetingTurns.seq)).map((r) => ({ seq: r.seq, speaker: r.speaker, startMs: r.startMs, endMs: r.endMs, text: r.text }));
+    durationMs = m.durationMs ?? 0;
+    text = transcriptLines(turns);
+    if (!text.trim()) return fail(meetingId, orgId, t('mtErrNoSpeech'));
+  } else {
+    // 1. Audio → WAV pieces.
+    const [file] = m.fileId ? await db.select().from(files).where(and(eq(files.orgId, orgId), eq(files.id, m.fileId), isNull(files.deletedAt))) : [];
+    if (!file) return fail(meetingId, orgId, t('mtErrNoAudio'));
+    let segments: WavSegment[];
+    try {
+      segments = await deps.toSegments(await deps.storage.get(file.storageKey), { maxDurationMs: MAX_DURATION_MS });
+    } catch (err) {
+      if (err instanceof AudioError) return fail(meetingId, orgId, t(err.kind === 'ffmpeg_missing' ? 'mtErrFfmpeg' : err.kind === 'too_long' ? 'mtErrTooLong' : 'mtErrUnreadable'));
+      throw err;
+    }
 
-  // 2. Transcribe each piece, biased only towards our own product and client names.
-  const names = await Promise.all([
-    db.select({ name: products.name }).from(products).where(and(eq(products.orgId, orgId), isNull(products.archivedAt))),
-    db.select({ name: clients.name }).from(clients).where(and(eq(clients.orgId, orgId), isNull(clients.archivedAt))),
-  ]);
-  const keywords = names.flat().map((n) => n.name).slice(0, MAX_KEYWORDS);
-  const pieces: Array<{ offsetMs: number; turns: Array<{ startMs: number; endMs: number; transcript: string; speaker?: string }> }> = [];
-  for (const [index, segment] of segments.entries()) {
-    const out = await transcribeOnce({ db, ctx, provider: deps.provider, locale, request: { wav: segment.wav, mode: 'DIARIZATION', keywords, languageBias: ['Indonesian', 'English'] }, inputSummary: `Rekaman rapat, bagian ${index + 1} dari ${segments.length}`, entityType: 'meeting', entityId: meetingId });
-    if (!out.ok) return failOrRetry(meetingId, orgId, out);
-    // A piece with speech but no turns (PUSH_TO_TALK-like answer) still keeps its text.
-    pieces.push({ offsetMs: segment.offsetMs, turns: out.value.turns.length ? out.value.turns : out.value.transcript.trim() ? [{ startMs: 0, endMs: segment.durationMs, transcript: out.value.transcript }] : [] });
-  }
-  const turns = mergeTurns(pieces);
-  const durationMs = segments.reduce((sum, s) => sum + s.durationMs, 0);
-  const text = transcriptLines(turns);
+    // 2. Transcribe each piece, biased only towards our own product and client names.
+    const names = await Promise.all([
+      db.select({ name: products.name }).from(products).where(and(eq(products.orgId, orgId), isNull(products.archivedAt))),
+      db.select({ name: clients.name }).from(clients).where(and(eq(clients.orgId, orgId), isNull(clients.archivedAt))),
+    ]);
+    const keywords = names.flat().map((n) => n.name).slice(0, MAX_KEYWORDS);
+    const pieces: Array<{ offsetMs: number; turns: Array<{ startMs: number; endMs: number; transcript: string; speaker?: string }> }> = [];
+    for (const [index, segment] of segments.entries()) {
+      const out = await transcribeOnce({ db, ctx, provider: deps.provider, locale, request: { wav: segment.wav, mode: 'DIARIZATION', keywords, languageBias: ['Indonesian', 'English'] }, inputSummary: `Rekaman rapat, bagian ${index + 1} dari ${segments.length}`, entityType: 'meeting', entityId: meetingId });
+      if (!out.ok) return failOrRetry(meetingId, orgId, out);
+      // A piece with speech but no turns (PUSH_TO_TALK-like answer) still keeps its text.
+      pieces.push({ offsetMs: segment.offsetMs, turns: out.value.turns.length ? out.value.turns : out.value.transcript.trim() ? [{ startMs: 0, endMs: segment.durationMs, transcript: out.value.transcript }] : [] });
+    }
+    turns = mergeTurns(pieces);
+    durationMs = segments.reduce((sum, s) => sum + s.durationMs, 0);
+    text = transcriptLines(turns);
 
-  // 3. Save the transcript first: it is useful on its own, even if the minutes fail below.
-  await db.transaction(async (tx) => {
-    await tx.delete(meetingTurns).where(and(eq(meetingTurns.orgId, orgId), eq(meetingTurns.meetingId, meetingId)));
-    if (turns.length) await tx.insert(meetingTurns).values(turns.map((turn) => ({ orgId, meetingId, ...turn })));
-    await tx.update(meetings).set({ durationMs }).where(and(eq(meetings.orgId, orgId), eq(meetings.id, meetingId)));
-  });
-  if (!text.trim()) return fail(meetingId, orgId, t('mtErrNoSpeech'));
+    // 3. Save the transcript first: it is useful on its own, even if the minutes fail below.
+    await db.transaction(async (tx) => {
+      await tx.delete(meetingTurns).where(and(eq(meetingTurns.orgId, orgId), eq(meetingTurns.meetingId, meetingId)));
+      if (turns.length) await tx.insert(meetingTurns).values(turns.map((turn) => ({ orgId, meetingId, ...turn })));
+      await tx.update(meetings).set({ durationMs }).where(and(eq(meetings.orgId, orgId), eq(meetings.id, meetingId)));
+    });
+    if (!text.trim()) return fail(meetingId, orgId, t('mtErrNoSpeech'));
+  }
 
   // 4. Minutes as structured output. The transcript is wrapped as untrusted data; the model has no tools.
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, orgId));
