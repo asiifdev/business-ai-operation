@@ -8,7 +8,7 @@ Nama folder/kerja: `business-ai-operation`. Nama produk/merek: **Orbyte** (`docs
 
 **Dokumen disetujui owner (2026-10-28): BRD, PRD, dan ERD.** Coding **terbuka**, dikerjakan per gelombang (`docs/PRD.md` §12). Aturan:
 
-- **Skema dan migrasi hanya dari `docs/ERD.md`.** Perubahan skema = ubah ERD dulu (catat di `docs/DECISIONS.md`), baru migrasi. Migrasi ditinjau sebelum diterapkan dan tidak diubah setelah diterapkan di server live (D-006).
+- **Skema dan migrasi hanya dari `docs/ERD.md`.** Perubahan skema = ubah ERD dulu (catat di `docs/DECISIONS.md`), baru migrasi. **Migrasi boleh langsung dijalankan** (`pnpm db:migrate`) tanpa menunggu persetujuan owner; berlaku untuk semua agent dan sesi. Tetap tinjau SQL hasil `pnpm db:generate` sebelum menjalankannya, dan migrasi yang sudah diterapkan di server live tidak diubah (D-006).
 - Pustaka komponen UI/M14 sudah sebagian dibangun (D-021); sisanya mengikuti PRD §4 M14.
 - **Skill integrasi** `meta-model-api-integration` dan `telegram-bot-integration` sudah ditulis (baca sebelum coding lapisan AI dan modul Telegram; tabel skill di bawah).
 - Hanya data demo palsu (seed); jangan ada data klien nyata.
@@ -38,11 +38,11 @@ Dirancang untuk **dua jalur kerja paralel**. Untuk hackathon, kedua jalur dipega
 
 - **Jalur A — Platform & Data:** tenancy/auth, ERD dan migrasi, modul Portfolio, Billing (subscription, invoice, PDF), scheduler/overdue, Pipeline, audit log.
 - **Jalur B — AI & Pengalaman:** `AiProvider` + registri tool, Action Center dan approval, alur rapat (STT), Marketing Studio, **bot Telegram interaktif**, pustaka komponen UI dan design system.
-- **File bersama** (`CLAUDE.md`, `docs/*`, `package.json`, `astro.config.mjs`, `src/db/schema.ts`/skema final, `src/ai/tools/registry.ts`): **perubahan lewat PR dan direview lewat checklist DoD (self-review oleh owner, sesi lain sebagai pembanding).** Jangan edit langsung di `main`.
-- **Satu modul = satu pemilik.** Pemilik modul ada di `docs/PLAN.md`. Mengubah modul orang lain = buka PR dan beri tahu, bukan push langsung.
-- **Branch:** `feat/<modul>-<slug>`, `fix/<slug>`, `docs/<slug>`. `main` selalu bisa dibangun (`pnpm build` lolos). Rebase dari `main` sebelum PR. Pesan commit gaya Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
-- **Kontrak antarjalur** dibekukan di dokumen (PRD/ERD) dulu: tanda tangan fungsi service, skema tool AI, bentuk event. Jangan mengubah kontrak tanpa PR dan catatan di `docs/DECISIONS.md`.
-- Jangan push tanpa diminta owner. Jangan `--force` ke `main`.
+- **File bersama** (`CLAUDE.md`, `docs/*`, `package.json`, `astro.config.mjs`, `src/db/schema.ts`/skema final, `src/ai/tools/registry.ts`): **perubahan ditinjau lewat checklist DoD (self-review oleh owner, sesi lain sebagai pembanding).**
+- **Satu modul = satu pemilik.** Pemilik modul ada di `docs/PLAN.md`. Mengubah modul orang lain = beri tahu pemiliknya dulu.
+- **Kerja langsung di `main`, tanpa membuat branch atau PR.** `main` selalu bisa dibangun (`pnpm build` lolos). Pesan commit gaya Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
+- **Kontrak antarjalur** dibekukan di dokumen (PRD/ERD) dulu: tanda tangan fungsi service, skema tool AI, bentuk event. Jangan mengubah kontrak tanpa catatan di `docs/DECISIONS.md`.
+- **LARANGAN TINGKAT TINGGI: Claude dan semua agent dilarang keras menjalankan `git commit`, `git push`, `git reset`, atau membuat branch sendiri**, dalam kondisi apa pun, termasuk setelah tugas selesai atau saat diminta "lanjut". Hanya tulis perubahan ke working tree; owner yang commit dan push. Jangan `--force` ke `main`.
 
 ## Definition of Done per fitur (end-to-end, tidak ambigu)
 
@@ -55,14 +55,14 @@ Fitur selesai hanya jika semua lapisan jalan dan terhubung ke modul lain:
 | Service | `src/domain/<modul>/service.ts` | **Semua logika bisnis di sini.** Bisa diuji tanpa HTTP |
 | Data | `src/db/**` | Query selalu difilter `org_id`. Field yang tampil di form benar-benar tersimpan |
 
-Checklist (tempel di setiap PR):
+Checklist (periksa sebelum owner commit):
 
 - [ ] UI selesai, komponen reusable, tema terang dan gelap diperiksa
 - [ ] Endpoint tipis, service berisi logika, repositori memfilter `org_id`
 - [ ] Terhubung dan diuji dengan modul dependensinya (`docs/09-breakdown-fitur.md`)
 - [ ] Istilah/status konsisten dengan glosarium dan modul lain
 - [ ] Unit test untuk kalkulasi dan state machine
-- [ ] **E2E**: uji manual di browser untuk verifikasi eksploratif, **Playwright** untuk regression yang masuk CI
+- [ ] **E2E**: uji manual di browser untuk verifikasi eksploratif, **wajib lewat Claude in Chrome** (`mcp__claude-in-chrome__*`), **bukan Playwright MCP** (menyampah tangkapan layar dan log di repo); **Playwright** (pustaka tes) tetap untuk regression yang masuk CI
 - [ ] Dicoba manual di browser minimal sekali
 - [ ] `docs/PLAN.md` (§1 status dokumen, §1a status implementasi), `CHANGELOG.md`, dan `README.md` (bila relevan) diperbarui di commit yang sama. **`pnpm test` memeriksa sinkronisasi dokumen** (`tests/docs-sync.test.ts`): jangan menyalin status ke dokumen lain, tautkan ke `docs/PLAN.md`
 

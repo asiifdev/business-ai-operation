@@ -1,3 +1,7 @@
+## Project rules
+
+All agents must follow `CLAUDE.md` in this repo (workflow, hackathon rules, git rules, migrations). It overrides the defaults below.
+
 ## Development
 
 When starting the dev server, use background mode:
