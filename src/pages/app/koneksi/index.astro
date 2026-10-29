@@ -20,6 +20,7 @@ if (canWrite && Astro.url.searchParams.has('installation_id') && !proof && !gith
 <AppShell title="Koneksi" current="connections">
   <ConnectionsPage
     client:load
+    egressIps={(env('EGRESS_IPS') ?? '').split(',').map((x) => x.trim()).filter((x) => /^[0-9a-fA-F:.]{3,45}$/.test(x))}
     canWrite={canWrite}
     githubReady={Boolean(env('GITHUB_APP_ID') && env('GITHUB_APP_PRIVATE_KEY') && env('GITHUB_APP_CLIENT_ID') && env('GITHUB_APP_CLIENT_SECRET'))}
     githubSlug={env('GITHUB_APP_SLUG') ?? null}

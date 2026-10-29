@@ -6,19 +6,26 @@ import { env } from '../../lib/env';
  * `base64(nonce | tag | ciphertext)`. The organization and connection ids are bound in as authenticated data, so a
  * ciphertext copied to another row or another organization fails to decrypt instead of being accepted.
  *
- * The master key is `CONNECTIONS_KEY` (32 bytes, base64). Its version is stored beside the value for rotation (⚠️ the
- * rotation procedure is not built yet: version 1 is the only one).
+ * Rotation: `CONNECTIONS_KEY` is the CURRENT key, numbered by `CONNECTIONS_KEY_VERSION` (default 1). Every stored secret
+ * remembers the version it was sealed with. To rotate, keep each old key as `CONNECTIONS_KEY_V<n>`, set the new key as
+ * `CONNECTIONS_KEY` with the next version number, and run `pnpm connections:rotate`: it re-seals every secret under the
+ * current key. Until that finishes, secrets sealed with an older version still open.
  */
-export const KEY_VERSION = 1;
+export const currentKeyVersion = (): number => {
+  const n = Number(env('CONNECTIONS_KEY_VERSION') ?? '1');
+  if (!Number.isInteger(n) || n < 1 || n > 32_000) throw new Error('CONNECTIONS_KEY_VERSION must be a whole number from 1');
+  return n;
+};
 
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
 
-function masterKey(): Buffer {
-  const raw = env('CONNECTIONS_KEY');
-  if (!raw) throw new Error('CONNECTIONS_KEY is not set: connections cannot hold secrets without it');
+function masterKey(version: number = currentKeyVersion()): Buffer {
+  const name = version === currentKeyVersion() ? 'CONNECTIONS_KEY' : `CONNECTIONS_KEY_V${version}`;
+  const raw = env(name);
+  if (!raw) throw new Error(`${name} is not set: secrets sealed with key version ${version} cannot be opened`);
   const key = Buffer.from(raw, 'base64');
-  if (key.length !== 32) throw new Error('CONNECTIONS_KEY must be 32 bytes, base64 encoded');
+  if (key.length !== 32) throw new Error(`${name} must be 32 bytes, base64 encoded`);
   return key;
 }
 
@@ -29,13 +36,13 @@ export function encryptSecret(secret: Record<string, string>, orgId: string, con
   const cipher = createCipheriv('aes-256-gcm', masterKey(), nonce);
   cipher.setAAD(aad(orgId, connectionId));
   const body = Buffer.concat([cipher.update(JSON.stringify(secret), 'utf8'), cipher.final()]);
-  return { ciphertext: Buffer.concat([nonce, cipher.getAuthTag(), body]).toString('base64'), keyVersion: KEY_VERSION };
+  return { ciphertext: Buffer.concat([nonce, cipher.getAuthTag(), body]).toString('base64'), keyVersion: currentKeyVersion() };
 }
 
-export function decryptSecret(ciphertext: string, orgId: string, connectionId: string): Record<string, string> {
+export function decryptSecret(ciphertext: string, orgId: string, connectionId: string, keyVersion: number = currentKeyVersion()): Record<string, string> {
   const raw = Buffer.from(ciphertext, 'base64');
   if (raw.length < NONCE_BYTES + TAG_BYTES) throw new Error('secret is damaged');
-  const decipher = createDecipheriv('aes-256-gcm', masterKey(), raw.subarray(0, NONCE_BYTES));
+  const decipher = createDecipheriv('aes-256-gcm', masterKey(keyVersion), raw.subarray(0, NONCE_BYTES));
   decipher.setAAD(aad(orgId, connectionId));
   decipher.setAuthTag(raw.subarray(NONCE_BYTES, NONCE_BYTES + TAG_BYTES));
   const plain = Buffer.concat([decipher.update(raw.subarray(NONCE_BYTES + TAG_BYTES)), decipher.final()]).toString('utf8');

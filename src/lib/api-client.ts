@@ -42,6 +42,9 @@ const CODE_TEXT: Record<string, MessageKey> = {
   rate_limited: 'rateLimited',
   expired: 'errExpired',
   already_decided: 'errAlreadyDecided',
+  key_unreadable: 'errKeyUnreadable',
+  key_needs_passphrase: 'errKeyNeedsPassphrase',
+  key_wrong_passphrase: 'errKeyWrongPassphrase',
 };
 
 /** A message in the person's language for a failed call. Unknown failures get the generic one. */

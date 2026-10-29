@@ -10,7 +10,11 @@ export type DomainErrorCode =
   /** An approval whose time ran out (BR-M08-05). */
   | 'expired'
   /** An approval someone else already decided, on the web or in Telegram (BR-M08-06). */
-  | 'already_decided';
+  | 'already_decided'
+  /** A pasted private key that cannot be used: unreadable, needs its passphrase, or the passphrase is wrong. */
+  | 'key_unreadable'
+  | 'key_needs_passphrase'
+  | 'key_wrong_passphrase';
 
 /** Business-rule failure. Endpoints map `code` to an HTTP status and an i18n message; `message` is for logs only. */
 export class DomainError extends Error {
@@ -34,4 +38,7 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   rate_limited: 429,
   expired: 409,
   already_decided: 409,
+  key_unreadable: 400,
+  key_needs_passphrase: 400,
+  key_wrong_passphrase: 400,
 };

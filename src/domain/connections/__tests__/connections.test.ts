@@ -139,3 +139,104 @@ describe('M17 connections', () => {
     expect(await listConnections(o.ownerCtx)).toEqual([]);
   });
 });
+
+describe('M17 connections: limits and rotation (D-059)', () => {
+  it('stops at the per-organization ceiling', async () => {
+    const { MAX_CONNECTIONS_PER_ORG } = await import('../service');
+    const o = await makeOrg();
+    for (let i = 0; i < MAX_CONNECTIONS_PER_ORG; i++) await createConnection(o.ownerCtx, { ...ssh, name: `Server ${i}` });
+    await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'One too many' }), 'invalid_state');
+  });
+
+  it('re-seals secrets under a new key and every connection still works afterwards', async () => {
+    const { rotateConnectionSecrets } = await import('../service');
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    const oldKey = process.env.CONNECTIONS_KEY!;
+    try {
+      process.env.CONNECTIONS_KEY_V1 = oldKey;
+      process.env.CONNECTIONS_KEY = Buffer.alloc(32, 9).toString('base64');
+      process.env.CONNECTIONS_KEY_VERSION = '2';
+      const before = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+      expect(before.secretKeyVersion).toBe(1);
+      expect((await rotateConnectionSecrets()).rotated).toBeGreaterThanOrEqual(1);
+      const after = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+      expect(after.secretKeyVersion).toBe(2);
+      expect(after.secretCiphertext).not.toBe(before.secretCiphertext);
+      delete process.env.CONNECTIONS_KEY_V1; // the old key is no longer needed
+      expect(await testConnection(o.ownerCtx, id, { acceptHostKey: FP }, deps())).toMatchObject({ status: 'ok' }); // decrypts with the new key
+      expect((await rotateConnectionSecrets()).rotated).toBe(0); // idempotent
+    } finally {
+      process.env.CONNECTIONS_KEY = oldKey;
+      delete process.env.CONNECTIONS_KEY_VERSION;
+      delete process.env.CONNECTIONS_KEY_V1;
+    }
+  });
+});
+
+describe('M17 connections: editing', () => {
+  it('renames without touching the secret, the pinned key or the last test', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    await testConnection(o.ownerCtx, id, { acceptHostKey: FP }, deps());
+    const before = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+    await updateConnection(o.ownerCtx, id, { name: 'Server Produksi' });
+    const after = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+    expect(after.name).toBe('Server Produksi');
+    expect(after.secretCiphertext).toBe(before.secretCiphertext);
+    expect(after).toMatchObject({ hostKeyFingerprint: FP, testStatus: 'ok' });
+  });
+
+  it('a new password replaces the old one, and the new one is what gets used', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    await updateConnection(o.ownerCtx, id, { password: 'password-baru-456' });
+    const row = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+    expect(decryptSecret(row.secretCiphertext!, o.ownerCtx.orgId, id)).toEqual({ password: 'password-baru-456' });
+    expect((await getConnection(o.ownerCtx, id)).secretHint).toBe('••••-456');
+  });
+
+  it('switching the login method needs its secret, and keeps the secrets it already has', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    await expect(updateConnection(o.ownerCtx, id, { authMethod: 'key_and_password' })).rejects.toBeInstanceOf(DomainError); // no key yet
+    const key = (await import('ssh2')).default.utils.generateKeyPairSync('ed25519').private;
+    await updateConnection(o.ownerCtx, id, { authMethod: 'key_and_password', privateKey: key });
+    const row = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+    expect(decryptSecret(row.secretCiphertext!, o.ownerCtx.orgId, id)).toMatchObject({ password: 'rahasia-banget-123', privateKey: key });
+  });
+
+  it('a name already used is refused, a GitHub connection only has a name to change, and only the owner edits', async () => {
+    const o = await makeOrg();
+    const a = await createConnection(o.ownerCtx, ssh);
+    await createConnection(o.ownerCtx, { ...ssh, name: 'Server Lain' });
+    await rejects(updateConnection(o.ownerCtx, a.id, { name: 'server lain' }), 'duplicate');
+    const gh = await createConnection(o.ownerCtx, { kind: 'github', installationId: 8123, verification: sealVerificationForTest(o.ownerCtx, [{ id: 8123, account: 'x' }]) });
+    await rejects(updateConnection(o.ownerCtx, gh.id, { host: 'evil.example' } as never), 'validation');
+    await updateConnection(o.ownerCtx, gh.id, { name: 'GitHub Utama' });
+    await rejects(updateConnection(o.adminCtx, a.id, { name: 'Diubah Admin' }), 'forbidden');
+  });
+
+  it('refuses to point a connection at a private address', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    await rejects(updateConnection(o.ownerCtx, id, { host: '10.0.0.5' }), 'validation');
+    await rejects(updateConnection(o.ownerCtx, id, { host: '0:0:0:0:0:ffff:7f00:1' }), 'validation');
+  });
+});
+
+describe('M17 connections: pasted private keys', () => {
+  const { utils } = require('ssh2') as typeof import('ssh2');
+  it('stores a tidy key even when the paste had debris, and says why when it cannot be used', async () => {
+    const o = await makeOrg();
+    const good = utils.generateKeyPairSync('ed25519').private;
+    const { id } = await createConnection(o.ownerCtx, { ...ssh, name: 'Pakai Kunci', authMethod: 'private_key', password: undefined, privateKey: good.trimEnd() + '%    ' });
+    const row = (await db.select().from(connections).where(eq(connections.id, id)))[0];
+    expect(decryptSecret(row.secretCiphertext!, o.ownerCtx.orgId, id).privateKey).toBe(good); // stored clean
+    await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'Bukan Kunci', authMethod: 'private_key', password: undefined, privateKey: '-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----' }), 'key_unreadable');
+    const enc = utils.generateKeyPairSync('ed25519', { passphrase: 'hunter2-pass', cipher: 'aes256-ctr', rounds: 8 }).private;
+    await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'Tanpa Passphrase', authMethod: 'private_key', password: undefined, privateKey: enc }), 'key_needs_passphrase');
+    await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'Passphrase Salah', authMethod: 'private_key', password: undefined, privateKey: enc, passphrase: 'salah' }), 'key_wrong_passphrase');
+    await createConnection(o.ownerCtx, { ...ssh, name: 'Passphrase Benar', authMethod: 'private_key', password: undefined, privateKey: enc, passphrase: 'hunter2-pass' });
+  });
+});

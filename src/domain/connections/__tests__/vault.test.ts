@@ -38,3 +38,27 @@ describe('connection vault (BR-M17-02)', () => {
     expect(scrubSecrets('a b c', ['a'])).toBe('a b c');
   });
 });
+
+describe('key rotation', () => {
+  it('opens a secret sealed with an older key version, and seals new ones with the current one', () => {
+    const oldKey = process.env.CONNECTIONS_KEY!;
+    const sealedV1 = encryptSecret({ apiKey: 'sealed-with-v1' }, 'o', 'c');
+    expect(sealedV1.keyVersion).toBe(1);
+    try {
+      process.env.CONNECTIONS_KEY_V1 = oldKey;
+      process.env.CONNECTIONS_KEY = Buffer.alloc(32, 7).toString('base64');
+      process.env.CONNECTIONS_KEY_VERSION = '2';
+      expect(decryptSecret(sealedV1.ciphertext, 'o', 'c', 1)).toEqual({ apiKey: 'sealed-with-v1' });
+      const sealedV2 = encryptSecret({ apiKey: 'sealed-with-v2' }, 'o', 'c');
+      expect(sealedV2.keyVersion).toBe(2);
+      expect(decryptSecret(sealedV2.ciphertext, 'o', 'c', 2)).toEqual({ apiKey: 'sealed-with-v2' });
+      expect(() => decryptSecret(sealedV1.ciphertext, 'o', 'c', 2)).toThrow(); // the wrong key does not open it
+      delete process.env.CONNECTIONS_KEY_V1;
+      expect(() => decryptSecret(sealedV1.ciphertext, 'o', 'c', 1)).toThrow(/CONNECTIONS_KEY_V1 is not set/);
+    } finally {
+      process.env.CONNECTIONS_KEY = oldKey;
+      delete process.env.CONNECTIONS_KEY_VERSION;
+      delete process.env.CONNECTIONS_KEY_V1;
+    }
+  });
+});

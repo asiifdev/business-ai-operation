@@ -44,7 +44,7 @@ interface Verification {
   installations: Array<{ id: number; account: string }>;
 }
 
-export function ConnectionsPage({ canWrite, githubReady, githubSlug, verification, githubError, githubLinked }: { canWrite: boolean; githubReady: boolean; githubSlug: string | null; verification: Verification | null; githubError: string | null; githubLinked: boolean }) {
+export function ConnectionsPage({ egressIps, canWrite, githubReady, githubSlug, verification, githubError, githubLinked }: { egressIps: string[]; canWrite: boolean; githubReady: boolean; githubSlug: string | null; verification: Verification | null; githubError: string | null; githubLinked: boolean }) {
   const t = useT();
   const list = useLoad(() => api<{ connections: Conn[] }>('GET', '/api/connections'), []);
   const [adding, setAdding] = useState<Kind | null>(verification || githubError ? 'github' : null);
@@ -53,6 +53,7 @@ export function ConnectionsPage({ canWrite, githubReady, githubSlug, verificatio
     <div className="flex flex-col gap-6">
       <PageHeader title={t('connTitle')} intro={t('connIntro')} />
       {!canWrite && <p className="m-0 text-sm text-muted">{t('connOwnerOnly')}</p>}
+      {canWrite && egressIps.length > 0 && <p className="m-0 text-sm text-muted">{t('connEgress')}: <span className="font-mono text-ink">{egressIps.join(', ')}</span></p>}
       {githubLinked && <p role="status" className="m-0 text-sm text-success">{t('connGithubLinked')}</p>}
       {canWrite && (
         <Panel className="flex flex-wrap items-center gap-2" aria-label={t('connAdd')}>
@@ -90,6 +91,7 @@ function ConnectionCard({ c, canWrite, onChange }: { c: Conn; canWrite: boolean;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   async function test(acceptHostKey?: string) {
     setBusy(true);
@@ -105,7 +107,9 @@ function ConnectionCard({ c, canWrite, onChange }: { c: Conn; canWrite: boolean;
     }
   }
 
-  const failure = c.testStatus === 'failed' && c.testMessage ? t(FAIL[c.testMessage] ?? 'connErrFailed') : null;
+  const [failCode, ...failRest] = (c.testStatus === 'failed' && c.testMessage ? c.testMessage : '').split(':');
+  const failure = failCode ? t(FAIL[failCode] ?? 'connErrFailed') : null;
+  const panelSays = failRest.join(':').trim();
   const where = c.kind === 'ssh' ? `${String(c.config.username)}@${String(c.config.host)}:${String(c.config.port)}` : c.kind === 'aapanel' ? String(c.config.url) : c.config.account ? `@${String(c.config.account)}` : `#${String(c.config.installationId)}`;
   return (
     <Panel className="flex flex-col gap-3" aria-label={c.name}>
@@ -124,11 +128,14 @@ function ConnectionCard({ c, canWrite, onChange }: { c: Conn; canWrite: boolean;
         {canWrite && (
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => test()} loading={busy}>{busy ? t('connTesting') : t('connTest')}</Button>
+            <Button size="sm" onClick={() => setEditing((v) => !v)}>{t('edit')}</Button>
             <ConfirmButton variant="danger" busy={busy} onConfirm={async () => { setBusy(true); try { await api('DELETE', `/api/connections/${c.id}`); await onChange(); } catch (e) { setError(e); } finally { setBusy(false); } }}>{t('connDelete')}</ConfirmButton>
           </div>
         )}
       </div>
+      {editing && <EditForm c={c} onDone={() => { setEditing(false); void onChange(); }} onCancel={() => setEditing(false)} />}
       {failure && <p role="status" className="m-0 text-sm text-danger">{failure}</p>}
+      {panelSays && <p className="m-0 text-sm text-muted">{t('connPanelSays')}: <span className="font-mono">{panelSays}</span></p>}
       {error ? <p role="alert" className="m-0 text-sm text-danger">{t(errorKey(error))}</p> : null}
       {fingerprint && (
         <div className="flex flex-col gap-2 rounded-input border border-rule p-3">
@@ -265,6 +272,117 @@ function AddForm({ kind, githubReady, githubSlug, verification, githubError, onD
           </div>
         )}
       </Panel>
+    </form>
+  );
+}
+
+/** Changes a connection. A secret field left empty keeps the stored secret (it is never shown). Moving the address or the login forgets the host key and the last test. */
+function EditForm({ c, onDone, onCancel }: { c: Conn; onDone: () => void; onCancel: () => void }) {
+  const t = useT();
+  const cfg = c.config as Record<string, unknown>;
+  const [name, setName] = useState(c.name);
+  const [host, setHost] = useState(String(cfg.host ?? ''));
+  const [port, setPort] = useState<number | null>(Number(cfg.port ?? 22));
+  const [username, setUsername] = useState(String(cfg.username ?? ''));
+  const [authMethod, setAuthMethod] = useState(String(cfg.authMethod ?? 'password'));
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [passphrase, setPassphrase] = useState('');
+  const [url, setUrl] = useState(String(cfg.url ?? ''));
+  const [apiKey, setApiKey] = useState('');
+  const [tlsInsecure, setTlsInsecure] = useState(Boolean(cfg.tlsInsecure));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const bad = badFields(error);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    // Only what changed is sent, so an untouched secret stays exactly as stored.
+    const patch: Record<string, unknown> = {};
+    if (name !== c.name) patch.name = name;
+    if (c.kind === 'ssh') {
+      if (host !== String(cfg.host)) patch.host = host;
+      if (port !== null && port !== Number(cfg.port)) patch.port = port;
+      if (username !== String(cfg.username)) patch.username = username;
+      if (authMethod !== String(cfg.authMethod)) patch.authMethod = authMethod;
+      if (password) patch.password = password;
+      if (privateKey) patch.privateKey = privateKey;
+      if (passphrase) patch.passphrase = passphrase;
+    } else if (c.kind === 'aapanel') {
+      if (url !== String(cfg.url)) patch.url = url;
+      if (apiKey) patch.apiKey = apiKey;
+      if (tlsInsecure !== Boolean(cfg.tlsInsecure)) patch.tlsInsecure = tlsInsecure;
+    }
+    if (Object.keys(patch).length === 0) return onCancel();
+    try {
+      await api('PATCH', `/api/connections/${c.id}`, patch);
+      onDone();
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  }
+
+  const keep = t('connKeepSecret');
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-input border border-rule p-4">
+      <FormField label={t('fConnName')} required error={bad.name ? t('errValidation') : null}>
+        <TextInput value={name} onChange={(e) => setName(e.currentTarget.value)} maxLength={80} autoComplete="off" />
+      </FormField>
+      {c.kind === 'ssh' && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+            <FormField label={t('fConnHost')} error={bad.host ? t('connErrValidation') : null}>
+              <TextInput value={host} onChange={(e) => setHost(e.currentTarget.value)} autoComplete="off" />
+            </FormField>
+            <FormField label={t('fConnPort')}>
+              <NumberInput value={port} onChange={setPort} min={1} max={65535} />
+            </FormField>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label={t('fConnUser')} error={bad.username ? t('errValidation') : null}>
+              <TextInput value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="off" />
+            </FormField>
+            <FormField label={t('fConnAuth')}>
+              <SelectMenu value={authMethod} onChange={setAuthMethod} searchable={false} options={[{ value: 'password', label: t('connAuthPassword') }, { value: 'private_key', label: t('connAuthKey') }, { value: 'key_and_password', label: t('connAuthBoth') }]} />
+            </FormField>
+          </div>
+          {authMethod !== 'private_key' && (
+            <FormField label={t('fConnPassword')} help={keep} error={bad.password ? t('errValidation') : null}>
+              <TextInput type="password" value={password} onChange={(e) => setPassword(e.currentTarget.value)} placeholder="••••••••" autoComplete="off" />
+            </FormField>
+          )}
+          {authMethod !== 'password' && (
+            <>
+              <FormField label={t('fConnPrivateKey')} help={keep} error={bad.privateKey ? t('errValidation') : null}>
+                <Textarea value={privateKey} onChange={(e) => setPrivateKey(e.currentTarget.value)} rows={4} spellCheck={false} autoComplete="off" />
+              </FormField>
+              <FormField label={t('fConnPassphrase')} help={keep}>
+                <TextInput type="password" value={passphrase} onChange={(e) => setPassphrase(e.currentTarget.value)} placeholder="••••••••" autoComplete="off" />
+              </FormField>
+            </>
+          )}
+        </>
+      )}
+      {c.kind === 'aapanel' && (
+        <>
+          <FormField label={t('fConnUrl')} error={bad.url ? t('connErrValidation') : null}>
+            <TextInput value={url} onChange={(e) => setUrl(e.currentTarget.value)} autoComplete="off" />
+          </FormField>
+          <FormField label={t('fConnApiKey')} help={keep} error={bad.apiKey ? t('errValidation') : null}>
+            <TextInput type="password" value={apiKey} onChange={(e) => setApiKey(e.currentTarget.value)} placeholder="••••••••" autoComplete="off" />
+          </FormField>
+          <Toggle label={t('fConnTlsInsecure')} description={t('connTlsInsecureHelp')} checked={tlsInsecure} onChange={setTlsInsecure} />
+        </>
+      )}
+      {c.kind !== 'github' && <p className="m-0 text-xs text-muted">{t('connResetNote')}</p>}
+      {error && !Object.keys(bad).length ? <p role="alert" className="m-0 text-danger">{t(errorKey(error))}</p> : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="primary" loading={busy}>{t('saveChanges')}</Button>
+        <Button onClick={onCancel} disabled={busy}>{t('cancel')}</Button>
+      </div>
     </form>
   );
 }

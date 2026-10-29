@@ -1,4 +1,9 @@
-import { Client, type AuthenticationType, type ClientChannel } from 'ssh2';
+// `ssh2` is a CommonJS package: Node's native ESM loader (the built server) cannot see its named exports, so it is imported
+// as a whole and taken apart here. Named imports work under Vitest and tsx and then fail only in `pnpm start`.
+import ssh2, { type AuthenticationType, type ClientChannel } from 'ssh2';
+import { checkPrivateKey, normalizePrivateKey } from './key';
+
+const { Client } = ssh2;
 
 /**
  * SSH client (skill `ssh-integration`). One connection option among several, standing on its own (D-055). Three ways to log
@@ -58,6 +63,14 @@ function authHandler(cfg: SshConfig, secret: SshSecret) {
  * refused.
  */
 export function sshConnect(cfg: SshConfig, secret: SshSecret, pinned: string | null, opts: { readyTimeoutMs?: number } = {}): Promise<SshSession | { fingerprint: string }> {
+  // A key that cannot be read, or a wrong passphrase, would otherwise be skipped silently and look like a refused login.
+  // The key is tidied first, so one stored with paste debris (an older save) still works. Only when a credential is about to be
+  // sent: the first contact (`pinned === null`) just reads the server's fingerprint and has no key to check yet.
+  if (pinned !== null && cfg.authMethod !== 'password') {
+    const tidy = normalizePrivateKey(secret.privateKey ?? '');
+    if (!tidy || checkPrivateKey(tidy, secret.passphrase) !== 'ok') return Promise.reject(new SshError('bad_key'));
+    secret = { ...secret, privateKey: tidy };
+  }
   return new Promise((resolve, reject) => {
     const client = new Client();
     let seen = '';
@@ -82,11 +95,12 @@ export function sshConnect(cfg: SshConfig, secret: SshSecret, pinned: string | n
                 let stderr = '';
                 let truncated = false;
                 const take = (acc: string, chunk: Buffer) => {
-                  if (acc.length >= limit) {
+                  const next = acc + chunk.toString('utf8');
+                  if (next.length > limit) {
                     truncated = true;
-                    return acc;
+                    return next.slice(0, limit);
                   }
-                  return acc + chunk.toString('utf8');
+                  return next;
                 };
                 stream.on('data', (c: Buffer) => (stdout = take(stdout, c)));
                 stream.stderr.on('data', (c: Buffer) => (stderr = take(stderr, c)));

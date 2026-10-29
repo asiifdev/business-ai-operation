@@ -20,6 +20,7 @@
     "tts:setup": "bash scripts/setup-piper.sh",
     "bot:dev": "node --env-file=.env --import tsx scripts/bot-dev.ts",
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
+    "connections:rotate": "node --env-file-if-exists=.env --import tsx scripts/rotate-connections-key.ts",
     "start": "node --env-file-if-exists=.env --import tsx --import ./scripts/warm.mjs scripts/start.ts",
     "verify": "pnpm build && vitest run"
   },
