@@ -47,6 +47,8 @@ export const PERMISSIONS = {
   'meeting.read_own': ALL,
   'meeting.read_any': MANAGERS,
   'marketing.use': ALL,
+  'marketing.brand_kit': MANAGERS,
+  'marketing.delete_any': MANAGERS,
   'dashboard.read_nonfinancial': ALL,
   'dashboard.read_financial': MANAGERS,
   'audit.read': MANAGERS,

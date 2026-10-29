@@ -1,0 +1,12 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { StudioPage } from '../../components/studio/StudioPage';
+import { can } from '../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+---
+
+<AppShell title="Marketing Studio" current="marketing">
+  <StudioPage client:load canEditBrand={can(user.role, 'marketing.brand_kit')} canDeleteAny={can(user.role, 'marketing.delete_any')} userId={user.id} />
+</AppShell>

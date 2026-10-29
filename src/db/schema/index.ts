@@ -6,3 +6,4 @@ export * from './meetings';
 export * from './pipeline';
 export * from './documents';
 export * from './operations';
+export * from './marketing';

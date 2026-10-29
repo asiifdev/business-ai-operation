@@ -86,7 +86,7 @@ export const features: Feature[] = [
   {
     id: 'marketing-studio',
     planRow: 'M10 Marketing Studio',
-    status: 'planned',
+    status: 'in_development',
     page: 'product/marketing-studio',
     name: { en: 'Marketing Studio (images and text)', id: 'Studio Pemasaran (gambar dan teks)' },
     summary: {

@@ -99,6 +99,13 @@
       "when": 1793257834026,
       "tag": "0013_sharp_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793263424970,
+      "tag": "0014_flat_scalphunter",
+      "breakpoints": true
     }
   ]
 }
