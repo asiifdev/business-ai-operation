@@ -8,5 +8,5 @@ const { id } = Astro.params;
 ---
 
 <AppShell title="Produk" current="products">
-  <ProductDetail client:load id={id!} role={user.role} />
+  <ProductDetail client:load id={id!} role={user.role} timezone={Astro.locals.timezone} />
 </AppShell>

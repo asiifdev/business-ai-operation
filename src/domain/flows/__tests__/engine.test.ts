@@ -247,6 +247,14 @@ describe('flow engine against a real SSH server, real git, and a panel look-alik
     expect(await code(plan(other.bindings))).toBe('not_found'); // another organization's connections
   });
 
+  it('refuses a client that is a typed name or belongs to another organization, with a validation error instead of a database failure', async () => {
+    const s = await setup();
+    const { id } = await createFlow(s.o.ownerCtx, { name: 'Flow Klien', kind: 'setup', definition: miniFlow() });
+    for (const bad of ['Samawa Rent Car', '01HZZZZZZZZZZZZZZZZZZZZZZZ']) {
+      expect(await code(planRun(s.o.ownerCtx, { flowId: id, productId: s.product.id, params: params(bad), bindings: s.bindings }))).toBe('validation');
+    }
+  });
+
   it('who may do what: Staff cannot plan; an Admin runs flows but only the Owner saves one with a free command', async () => {
     const s = await setup();
     const { id } = await createFlow(s.o.ownerCtx, { name: 'Flow Y', kind: 'setup', definition: miniFlow() });

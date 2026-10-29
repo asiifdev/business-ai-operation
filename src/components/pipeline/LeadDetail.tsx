@@ -1,3 +1,4 @@
+import { AuditTimeline } from '../audit/AuditTimeline';
 import { useState, type FormEvent } from 'react';
 import type { LeadRow } from '../../domain/pipeline/leads';
 import type { ClientRow } from '../../domain/portfolio/clients';
@@ -22,7 +23,7 @@ type Role = 'owner' | 'admin' | 'staff';
 type Lead = Jsonify<LeadRow>;
 
 /** One lead: its details, where it can go next, and the manager-only steps (accept, convert, reopen, archive). */
-export function LeadDetail({ id, role }: { id: string; role: Role }) {
+export function LeadDetail({ id, role, timezone }: { id: string; role: Role; timezone: string }) {
   const t = useT();
   const isManager = role !== 'staff';
   const load = useLoad(() => api<Lead>('GET', `/api/leads/${id}`), [id]);
@@ -175,6 +176,7 @@ export function LeadDetail({ id, role }: { id: string; role: Role }) {
           </>
         )}
       </Panel>
+      {isManager && <AuditTimeline entityType="lead" entityId={id} timezone={timezone} />}
     </div>
   );
 }

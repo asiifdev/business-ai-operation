@@ -2,7 +2,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { newId } from '../../db/ids';
-import { connections, flows, flowVersions, playbookRuns, playbookSteps, productSetups, products } from '../../db/schema';
+import { clients, connections, flows, flowVersions, playbookRuns, playbookSteps, productSetups, products } from '../../db/schema';
 import { requestApproval } from '../approvals/service';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
@@ -221,6 +221,12 @@ export async function planRun(ctx: Ctx, input: { flowId: string; productId: stri
     if (c.testStatus !== 'ok') throw new DomainError('invalid_state', `the connection "${c.name}" has not passed its test`);
     if (c.kind === 'ssh' && !c.hostKeyFingerprint) throw new DomainError('invalid_state', 'the server fingerprint was not confirmed');
     bindings[slot.name] = id;
+  }
+
+  // A client is chosen from the organization's own list; a name typed by hand would only fail later at the database.
+  if (typeof params.client_id === 'string' && params.client_id) {
+    const [client] = await db.select({ id: clients.id }).from(clients).where(and(eq(clients.orgId, ctx.orgId), eq(clients.id, params.client_id)));
+    if (!client) throw new DomainError('validation', 'client_id: choose a client from the list');
   }
 
   const hash = planHash(def, order, params, bindings);

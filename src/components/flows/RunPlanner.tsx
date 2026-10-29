@@ -27,6 +27,7 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
   const t = useT();
   const flows = useLoad(() => api<{ flows: FlowRow[] }>('GET', '/api/flows'), []);
   const products = useLoad(() => api<{ products: ProductRow[] }>('GET', '/api/products'), []);
+  const clientList = useLoad(() => api<{ clients: Array<{ id: string; name: string }> }>('GET', '/api/clients'), []);
   const conns = useLoad(() => api<{ connections: ConnRow[] }>('GET', '/api/connections'), []);
   const [flowId, setFlowId] = useState(initialFlowId ?? '');
   const [productId, setProductId] = useState(initialProductId ?? '');
@@ -39,6 +40,8 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
   const [error, setError] = useState<unknown>(null);
 
   const def = flow.value.state === 'ready' ? flow.value.data?.definition ?? null : null;
+  /** `product_id` comes from the product chosen above; asking again only invites a typo. */
+  const askedParams = def ? def.params.filter((p) => p.name !== 'product_id') : [];
   const profile = setup.value.state === 'ready' ? setup.value.data?.profile ?? null : null;
   useEffect(() => {
     if (!def) return;
@@ -61,7 +64,7 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
     });
   }, [def, profile, conns.value]);
 
-  const ready = useMemo(() => !!def && !!productId && def.slots.every((s) => bindings[s.name]) && def.params.every((p) => !p.required || p.type === 'boolean' || String(params[p.name] ?? '') !== ''), [def, productId, bindings, params]);
+  const ready = useMemo(() => !!def && !!productId && def.slots.every((s) => bindings[s.name]) && askedParams.every((p) => !p.required || p.type === 'boolean' || String(params[p.name] ?? '') !== ''), [def, productId, bindings, params]);
 
   async function propose() {
     setBusy(true);
@@ -126,7 +129,13 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
             );
           })}
 
-          {def && def.params.map((p) => p.type === 'boolean'
+          {def && askedParams.map((p) => p.name === 'client_id'
+            ? (
+              <FormField key={p.name} label={p.label ?? p.name} required>
+                <SelectMenu value={String(params[p.name] ?? '')} onChange={(v) => { setParams({ ...params, [p.name]: v }); setPlan(null); }} placeholder={t('choose')} options={(clientList.value.state === 'ready' ? clientList.value.data.clients : []).map((c) => ({ value: c.id, label: c.name }))} />
+              </FormField>
+            )
+            : p.type === 'boolean'
             ? <Toggle key={p.name} label={p.label ?? p.name} checked={params[p.name] === true} onChange={(v) => { setParams({ ...params, [p.name]: v }); setPlan(null); }} />
             : (
               <FormField key={p.name} label={p.label ?? p.name} required={p.required}>

@@ -8,5 +8,5 @@ const { id } = Astro.params;
 ---
 
 <AppShell title="Pipeline" current="pipeline">
-  <LeadDetail client:load id={id!} role={user.role} />
+  <LeadDetail client:load id={id!} role={user.role} timezone={Astro.locals.timezone} />
 </AppShell>

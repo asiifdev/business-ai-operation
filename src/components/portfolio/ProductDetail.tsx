@@ -15,6 +15,7 @@ import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
+import { AuditTimeline } from '../audit/AuditTimeline';
 import { LogoEditor, ProductLogo, SOURCE_LABEL } from './ProductLogo';
 import { ProductSetup } from './ProductSetup';
 import { VersionBadge } from './VersionBadge';
@@ -25,7 +26,7 @@ type Pkg = Jsonify<PackageRow>;
 type Dep = Jsonify<ProductDeploymentRow>;
 
 /** One product: its details, its official packages and prices, and where it is installed. */
-export function ProductDetail({ id, role }: { id: string; role: Role }) {
+export function ProductDetail({ id, role, timezone }: { id: string; role: Role; timezone: string }) {
   const t = useT();
   const canWrite = role !== 'staff';
   const load = useLoad(() => api<Detail>('GET', `/api/products/${id}`), [id]);
@@ -93,6 +94,8 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
       <Packages productId={id} packages={packages} canWrite={canWrite && !archived} canArchive={canWrite} onChanged={() => void load.reload()} />
 
       <ProductSetup productId={id} canWrite={canWrite && !archived} />
+
+      {canWrite && <AuditTimeline entityType="product" entityId={id} timezone={timezone} />}
 
       <Panel className="flex flex-col gap-4">
         <h2 className="m-0 text-lg font-semibold text-ink">{t('deploymentsTitle')}</h2>

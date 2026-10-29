@@ -14,9 +14,21 @@ export class ToolError extends Error {
 /** Scripts go in on stdin of a login shell, so the PATH of the server's own user (nvm, composer, pm2) applies and nothing sits in `ps`. */
 const SHELL = `if command -v bash >/dev/null 2>&1; then exec bash -l -s; else exec sh -s; fi`;
 
+/**
+ * Where Node tools usually live when they are not on a login shell's PATH: nvm (set up in `~/.bashrc`, which a login shell
+ * skips) and the aaPanel Node manager. Only adds folders that exist and only after the normal PATH, so it never hides a tool.
+ */
+export const PATH_PRELUDE = [
+  'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+  '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1',
+  'for d in /www/server/nodejs/*/bin "$HOME"/.nvm/versions/node/*/bin /usr/local/bin "$HOME/.local/bin" "$HOME/.npm-global/bin"; do [ -d "$d" ] && case ":$PATH:" in *":$d:"*) ;; *) PATH="$PATH:$d";; esac; done',
+  'export PATH',
+  '',
+].join('\n');
+
 export async function runScript(t: ToolContext, script: string): Promise<{ stdout: string; log: string }> {
   const session = await t.ssh();
-  const r = await session.exec(`sh -c ${shellQuote(SHELL)}`, { stdin: script, timeoutMs: t.timeoutMs, maxBytes: 64 * 1024 });
+  const r = await session.exec(`sh -c ${shellQuote(SHELL)}`, { stdin: PATH_PRELUDE + script, timeoutMs: t.timeoutMs, maxBytes: 64 * 1024 });
   const log = t.scrub(`${r.stdout}${r.stderr ? `\n${r.stderr}` : ''}`.trim());
   if (r.code !== 0) throw new ToolError(`the command ended with code ${r.code}`, log);
   return { stdout: r.stdout, log };
