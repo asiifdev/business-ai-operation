@@ -4,7 +4,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
 import { auditLog, invoices, telegramLinks } from '../../../db/schema';
 import type { TelegramUpdate } from '../../../integrations/telegram/webhook';
-import { encodeApprovalCallback } from '../../../integrations/telegram/callback';
+import sharp from 'sharp';
+import { FakeProvider, say, sayJson } from '../../../ai/fake-provider';
+import { encodeApprovalCallback, encodePosterMake, encodePosterPick } from '../../../integrations/telegram/callback';
+import { createPackage, createProduct } from '../../portfolio/products';
 import { makeOrg } from '../../ai/__tests__/support';
 import { requestApproval } from '../../approvals/service';
 import { createInvoiceDraft } from '../../billing/invoices';
@@ -267,5 +270,85 @@ describe('voice notes (D-050)', () => {
     await handleUpdate(voiceUpdate(chatId, 5), { ...deps, ask, transcribe: async () => ({ ok: false, message: 'Layanan suara sedang sibuk.' }) });
     expect(tg.sent.at(-1)!.text).toBe('Layanan suara sedang sibuk.');
     expect(asked).toBe(0);
+  });
+});
+
+describe('poster from Telegram (D-066)', () => {
+  const webp = async () => new Uint8Array(await sharp({ create: { width: 300, height: 450, channels: 3, background: '#1F3A5F' } }).webp().toBuffer());
+  const images = async (n = 1) => ({ images: await Promise.all(Array.from({ length: n }, async () => ({ bytes: await webp(), mime: 'image/webp' as const }))), meta: { model: 'muse-image-1.0', rateLimit: {}, attempts: 1 } });
+  const COPY = sayJson({ headline: 'Bekerja lebih rapi', subheadline: 'Satu tempat untuk urusan agensi kecil.', cta: 'Kenali kami' });
+  const PROMPT = 'A calm office scene in warm cream and navy, soft light, clean corners, no writing anywhere in the picture.';
+
+  async function posterOrg(provider: FakeProvider) {
+    const { o, tg, deps, link } = await linkedOrg();
+    const photos: Array<{ chatId: number; bytes: Uint8Array; caption?: string }> = [];
+    deps.client = { ...tg.client, sendPhoto: async (p) => { photos.push({ chatId: p.chatId, bytes: p.bytes, caption: p.caption }); return { message_id: 900 }; } };
+    deps.aiProvider = provider;
+    const product = await createProduct(o.ownerCtx, { name: 'Orbit CRM' });
+    await createPackage(o.ownerCtx, product.id, { name: 'Bisnis', monthlyPrice: 450_000 });
+    return { o, tg, deps, link, photos, productId: product.id };
+  }
+
+  it('/poster offers the company and each product, then the purposes, then sends the picture and a caption', async () => {
+    const provider = new FakeProvider({ chat: [say(PROMPT), COPY, say('Aksara membantu agensi kecil bekerja lebih rapi.')], image: [await images()] });
+    const { o, tg, deps, link, photos } = await posterOrg(provider);
+    const chatId = await link(o.ownerCtx);
+
+    await handleUpdate(textUpdate(chatId, '/poster'), deps);
+    const menu = tg.sent.at(-1)!;
+    const labels = (menu.keyboard as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard.flat();
+    expect(labels.map((b) => b.text)).toEqual(['Perusahaan (tanpa produk)', 'Orbit CRM']);
+
+    await handleUpdate(pressUpdate(chatId, encodePosterPick('o')), deps);
+    expect(tg.edited.at(-1)!.text).toContain('Untuk apa');
+
+    await handleUpdate(pressUpdate(chatId, encodePosterMake('o', 'brand')), deps);
+    expect(photos).toHaveLength(1);
+    expect(photos[0].bytes[0]).toBe(0xff); // a JPEG, because Telegram does not take WebP as a photo
+    expect(photos[0].caption).toContain('AI');
+    expect(tg.sent.at(-1)!.text).toContain('Aksara membantu');
+    expect(tg.sent.at(-1)!.text).toContain('https://app.example.test/app/marketing');
+    const rows = await db.select().from(auditLog).where(and(eq(auditLog.orgId, o.orgId), eq(auditLog.action, 'telegram.poster_made')));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('sends the poster but withholds a caption that carries an invented figure', async () => {
+    const provider = new FakeProvider({ chat: [say(PROMPT), COPY, say('Diskon 50% untuk 1.000 pengguna pertama!')], image: [await images()] });
+    const { o, tg, deps, link, photos } = await posterOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await handleUpdate(pressUpdate(chatId, encodePosterMake('o', 'promo')), deps);
+    expect(photos).toHaveLength(1);
+    expect(tg.sent.at(-1)!.text).not.toContain('Diskon');
+    expect(tg.sent.at(-1)!.text).toContain('dibuang');
+  });
+
+  it('tells the person when the image limit is reached, and makes nothing', async () => {
+    const provider = new FakeProvider();
+    const { o, tg, deps, link, photos } = await posterOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    process.env.MARKETING_DAILY_IMAGE_QUOTA = '0';
+    try {
+      await handleUpdate(pressUpdate(chatId, encodePosterMake('o', 'brand')), deps);
+    } finally {
+      delete process.env.MARKETING_DAILY_IMAGE_QUOTA;
+    }
+    expect(photos).toHaveLength(0);
+    expect(provider.imageCalls).toHaveLength(0);
+    expect(tg.sent.at(-1)!.text).toContain('Batas gambar');
+  });
+
+  it('refuses a chat that is not linked, and a product that belongs to another organization', async () => {
+    const provider = new FakeProvider({ chat: [say(PROMPT), COPY], image: [await images()] });
+    const mine = await posterOrg(provider);
+    const stranger = uid();
+    await handleUpdate(pressUpdate(stranger, encodePosterMake('o', 'brand')), mine.deps);
+    expect(mine.photos).toHaveLength(0);
+    expect(mine.tg.answers.at(-1)!.text).toContain('belum tertaut');
+
+    const other = await posterOrg(new FakeProvider());
+    const chatId = await other.link(other.o.ownerCtx);
+    await handleUpdate(pressUpdate(chatId, encodePosterMake(mine.productId, 'launch')), other.deps);
+    expect(other.photos).toHaveLength(0);
+    expect(other.tg.sent.at(-1)!.text).toContain('belum bisa dibuat');
   });
 });

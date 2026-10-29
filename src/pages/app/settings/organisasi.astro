@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { OrgSettingsForm } from '../../../components/settings/OrgSettingsForm';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+---
+
+<AppShell title="Organisasi" current="orgsettings">
+  <OrgSettingsForm client:load canEdit={can(user.role, 'org.settings.update')} />
+</AppShell>

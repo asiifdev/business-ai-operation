@@ -49,8 +49,8 @@
 | `ai_run_status` | `ok` · `error` · `blocked_budget` · `rejected_tool` |
 | `job_status` | `queued` · `running` · `done` · `failed` |
 | `meeting_status` | `uploaded` · `processing` · `done` · `failed` |
-| `file_kind` | `meeting_audio` · `marketing_image` |
-| `marketing_purpose` | `launch` · `promo` · `education` · `release` |
+| `file_kind` | `meeting_audio` · `marketing_image` · `product_logo` · `brand_logo` |
+| `marketing_purpose` | `launch` · `promo` · `education` · `release` · `brand` (D-066) |
 | `deployment_status` | `active` · `inactive` |
 | `connection_kind` | `github` · `ssh` · `aapanel` (CyberPanel dan cPanel ditambahkan lewat migrasi saat didukung, D-055) |
 | `connection_test` | `untested` · `ok` · `failed` |
@@ -174,7 +174,7 @@ Unik parsial: `UNIQUE (user_id) WHERE unlinked_at IS NULL`.
 
 **`products`** · BR-M02-01, -02, -05, -06
 
-`id`, `org_id`, `name` (wajib), `description N`, `current_version text N`, `archived_at N`, timestamps. `UNIQUE (org_id, id)`, `UNIQUE (org_id, lower(name)) WHERE archived_at IS NULL`.
+`id`, `org_id`, `name` (wajib), `description N`, `current_version text N`, `logo_file_id N` (ref `files` dengan `kind = product_logo`; D-065), `archived_at N`, timestamps. `UNIQUE (org_id, id)`, `UNIQUE (org_id, lower(name)) WHERE archived_at IS NULL`.
 
 **`packages`** (paket dan harga resmi, **satu-satunya sumber harga**, CR-05)
 
@@ -266,9 +266,9 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 ### 3.7 Marketing (M10)
 
-**`brand_kits`**: `id`, `org_id` (**`UNIQUE`**, satu per organisasi), `brand_name`, `colors text N` (daftar kode warna), `tone text N`, `prohibitions text N`, timestamps.
+**`brand_kits`**: `id`, `org_id` (**`UNIQUE`**, satu per organisasi), `brand_name`, `colors text N` (daftar kode warna), `tone text N`, `prohibitions text N`, `logo_file_id N` (ref `files` dengan `kind = brand_logo`; logo perusahaan, D-066), timestamps.
 
-**`marketing_assets`**: `id`, `org_id`, `product_id` (ref), `purpose marketing_purpose`, `prompt text`, `parent_asset_id N` (ref diri sendiri, rantai revisi, yang lama tetap), `file_id` (ref `files`), `caption text N`, `ai_run_id N`, `created_by text`, `created_at`.
+**`marketing_assets`**: `id`, `org_id`, `product_id N` (ref; kosong = pemasaran tingkat perusahaan, D-066), `purpose marketing_purpose`, `prompt text`, `parent_asset_id N` (ref diri sendiri, rantai revisi, yang lama tetap), `file_id` (ref `files`), `caption text N`, `background_file_id N` (ref `files`: gambar latar dari model tanpa teks dan tanpa logo; ada bila poster memakai teks, D-067), `poster_copy jsonb N` (judul, subjudul, ajakan, posisi teks, tampilkan harga, logo, sudut; D-067), `ai_run_id N`, `created_by text`, `created_at`. Bila `poster_copy` terisi, `file_id` adalah poster jadi yang dirender kode dari `background_file_id`.
 
 ### 3.8 AI, Action Center, audit (M07, M08, M15)
 

@@ -46,6 +46,10 @@ export function UserMenu({ userName, role }: { userName: string; role: Role }) {
             <LocaleSwitch />
             <ThemeToggle />
           </div>
+          <a href="/app/settings/profil" className="flex min-h-10 items-center gap-2 rounded-input px-2 text-base text-ink no-underline hover:bg-paper-2">
+            <Icon name="clients" className="size-4" />
+            {t('navProfile')}
+          </a>
           <button type="button" onClick={signOut} disabled={busy} className="flex min-h-10 items-center gap-2 rounded-input px-2 text-base text-ink hover:bg-paper-2 disabled:opacity-50">
             <Icon name="signout" className="size-4" />
             {t('signOut')}

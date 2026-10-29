@@ -2,7 +2,8 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { isUniqueViolation } from '../../db/errors';
-import { clients, deployments, packages, products } from '../../db/schema';
+import { clients, deployments, files, packages, products } from '../../db/schema';
+import { storage } from '../../integrations/storage';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
@@ -101,13 +102,16 @@ export async function unarchiveProduct(ctx: Ctx, id: string) {
 
 export async function deleteProduct(ctx: Ctx, id: string) {
   assertCan(ctx, 'catalog.archive');
+  let logoKey: string | undefined;
   await db.transaction(async (tx) => {
     const row = await loadProduct(tx, ctx.orgId, id);
     if (await productHasHistory(tx, ctx.orgId, id)) throw new DomainError('invalid_state', 'this product has history: archive it instead');
     await tx.delete(packages).where(and(eq(packages.orgId, ctx.orgId), eq(packages.productId, id)));
     await tx.delete(products).where(and(eq(products.orgId, ctx.orgId), eq(products.id, id)));
+    if (row.logoFileId) logoKey = (await tx.delete(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, row.logoFileId))).returning({ key: files.storageKey }))[0]?.key;
     await recordAudit(tx, who(ctx), { action: 'product.deleted', entityType: 'product', entityId: id, summary: { name: row.name } });
   });
+  if (logoKey) await storage().delete(logoKey).catch(() => undefined);
 }
 
 export interface ProductRow {
@@ -115,6 +119,7 @@ export interface ProductRow {
   name: string;
   description: string | null;
   currentVersion: string | null;
+  hasLogo: boolean;
   archivedAt: Date | null;
   packageCount: number;
   deploymentCount: number;
@@ -129,6 +134,7 @@ export async function listProducts(ctx: Ctx, options: { includeArchived?: boolea
       name: products.name,
       description: products.description,
       currentVersion: products.currentVersion,
+      hasLogo: sql<boolean>`${products.logoFileId} is not null`,
       archivedAt: products.archivedAt,
       // Drizzle drops the table prefix in single-table selects, so the outer id is written out to correlate the subquery.
       packageCount: sql<number>`(select count(*) from ${packages} where ${packages.productId} = "products"."id" and ${packages.archivedAt} is null)::int`,

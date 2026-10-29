@@ -168,3 +168,26 @@ export async function listConnectionRepos(ctx: Ctx, connectionId: string, gh: Gi
     throw e;
   }
 }
+
+/**
+ * What version the repository says it is (D-065): its latest release, else its newest tag, else the commit at the tip of its
+ * default branch, because many repositories never publish versions. It is only a suggestion; the person saves it.
+ */
+export async function detectRepoVersion(ctx: Ctx, connectionId: string, repo: string, gh: GithubClient = githubClient()): Promise<{ version: string; source: 'release' | 'tag' | 'commit' } | null> {
+  assertCan(ctx, 'setup.read');
+  const [c] = await db.select({ kind: connections.kind, config: connections.config }).from(connections).where(and(eq(connections.orgId, ctx.orgId), eq(connections.id, connectionId)));
+  if (!c || c.kind !== 'github') throw new DomainError('not_found', 'connection');
+  // Only repositories this installation can see: a name typed by hand cannot be used to probe other repositories.
+  const allowed = await gh.listRepositories(Number(c.config.installationId)).catch((e: unknown) => {
+    if (e instanceof GithubError) throw new DomainError(e.kind === 'rate_limited' ? 'rate_limited' : 'invalid_state', e.kind);
+    throw e;
+  });
+  const match = allowed.find((r) => r.fullName === repo);
+  if (!match) throw new DomainError('not_found', 'repository');
+  try {
+    return await gh.latestVersion(Number(c.config.installationId), repo, match.defaultBranch);
+  } catch (e) {
+    if (e instanceof GithubError) throw new DomainError(e.kind === 'rate_limited' ? 'rate_limited' : 'invalid_state', e.kind);
+    throw e;
+  }
+}

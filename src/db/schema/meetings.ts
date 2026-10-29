@@ -3,7 +3,7 @@ import { bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTa
 import { createdAtColumn, idColumn, tstz, updatedAtColumn } from './_shared';
 import { organizations } from './auth';
 
-export const fileKind = pgEnum('file_kind', ['meeting_audio', 'marketing_image']);
+export const fileKind = pgEnum('file_kind', ['meeting_audio', 'marketing_image', 'product_logo', 'brand_logo']);
 export const meetingStatus = pgEnum('meeting_status', ['uploaded', 'processing', 'done', 'failed']);
 
 /**

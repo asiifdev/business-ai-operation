@@ -1,0 +1,10 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { ProfilePage } from '../../../components/settings/ProfilePage';
+
+export const prerender = false;
+---
+
+<AppShell title="Profil">
+  <ProfilePage client:load mustChange={Astro.locals.user!.mustChangePassword} />
+</AppShell>

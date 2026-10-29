@@ -1,0 +1,13 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { AuditPage } from '../../components/audit/AuditPage';
+import { can } from '../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+if (!can(user.role, 'audit.read')) return Astro.redirect('/app');
+---
+
+<AppShell title="Log audit" current="audit">
+  <AuditPage client:load timezone={Astro.locals.timezone} isOwner={can(user.role, 'audit.read_financial')} />
+</AppShell>

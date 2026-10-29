@@ -15,6 +15,7 @@ import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
+import { LogoEditor, ProductLogo, SOURCE_LABEL } from './ProductLogo';
 import { ProductSetup } from './ProductSetup';
 import { VersionBadge } from './VersionBadge';
 
@@ -30,6 +31,7 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
   const load = useLoad(() => api<Detail>('GET', `/api/products/${id}`), [id]);
   const [actionError, setActionError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [logoVersion, setLogoVersion] = useState(0);
 
   async function act(fn: () => Promise<unknown>, after?: () => void) {
     setBusy(true);
@@ -56,12 +58,15 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
       <header className="flex flex-col gap-3">
         <a href="/app/produk" className="w-fit text-sm text-accent underline underline-offset-4">{t('navProducts')}</a>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-4">
+            <ProductLogo id={id} name={product.name} hasLogo={product.logoFileId !== null} size="lg" version={logoVersion} />
+            <div className="min-w-0">
             <h1 className="m-0 flex flex-wrap items-center gap-3 text-2xl font-semibold text-ink lg:text-3xl">
               {product.name}
               {archived && <Badge>{t('archivedBadge')}</Badge>}
             </h1>
             <p className="mt-2 mb-0 text-muted">{product.currentVersion ? `${t('fVersion')} ${product.currentVersion}` : t('noValue')}</p>
+            </div>
           </div>
           {canWrite && (
             <div className="flex flex-wrap items-center gap-2">
@@ -78,7 +83,10 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
 
       {canWrite && !archived && (
         <Panel aria-label={t('edit')}>
-          <ProductEdit product={product} onSaved={() => void load.reload()} />
+          <div className="flex flex-col gap-6">
+            <ProductEdit product={product} onSaved={() => void load.reload()} />
+            <LogoEditor productId={id} name={product.name} hasLogo={product.logoFileId !== null} onChanged={() => { setLogoVersion((v) => v + 1); void load.reload(); }} />
+          </div>
         </Panel>
       )}
 
@@ -130,8 +138,29 @@ function ProductEdit({ product, onSaved }: { product: Detail['product']; onSaved
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
+  const [versionNote, setVersionNote] = useState<string | null>(null);
+  const [versionBusy, setVersionBusy] = useState(false);
   const bad = badFields(error);
   const dirty = values.name !== product.name || values.description !== (product.description ?? '') || values.currentVersion !== (product.currentVersion ?? '');
+
+  /** Reads the latest release or tag of the repository chosen in the setup section; the person still saves it. */
+  async function fetchVersion() {
+    setVersionBusy(true);
+    setVersionNote(null);
+    try {
+      const setup = await api<{ profile: { githubConnectionId: string | null; repo: string | null } | null }>('GET', `/api/products/${product.id}/setup`);
+      const p = setup.profile;
+      if (!p?.repo || !p.githubConnectionId) return setVersionNote(t('pVersionNoRepo'));
+      const r = await api<{ found: { version: string; source: 'release' | 'tag' | 'commit' } | null }>('GET', `/api/setup/version?connectionId=${p.githubConnectionId}&repo=${encodeURIComponent(p.repo)}`);
+      if (!r.found) return setVersionNote(t('pVersionNotFound'));
+      setValues((v) => ({ ...v, currentVersion: r.found!.version }));
+      setVersionNote(t('pVersionFound', { source: t(SOURCE_LABEL[r.found.source]), version: r.found.version }));
+    } catch {
+      setVersionNote(t('pVersionFailed'));
+    } finally {
+      setVersionBusy(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -158,7 +187,13 @@ function ProductEdit({ product, onSaved }: { product: Detail['product']; onSaved
         <Textarea value={values.description} onChange={(e) => setValues({ ...values, description: e.currentTarget.value })} rows={2} maxLength={2000} />
       </FormField>
       <FormField label={t('fVersion')} help={t('fVersionHelp')}>
-        <TextInput value={values.currentVersion} onChange={(e) => setValues({ ...values, currentVersion: e.currentTarget.value })} maxLength={40} placeholder="2.1.0" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-40 flex-1">
+            <TextInput value={values.currentVersion} onChange={(e) => setValues({ ...values, currentVersion: e.currentTarget.value })} maxLength={40} placeholder="2.1.0" />
+          </div>
+          <Button size="sm" loading={versionBusy} onClick={fetchVersion}>{t('pVersionFromRepo')}</Button>
+        </div>
+        {versionNote && <p role="status" className="mt-1 mb-0 text-sm text-muted">{versionNote}</p>}
       </FormField>
       <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" loading={busy} disabled={!dirty}>{t('save')}</Button>

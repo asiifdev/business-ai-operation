@@ -9,7 +9,7 @@ export const GET: APIRoute = (context) =>
   handle(async () => {
     const q = context.url.searchParams;
     const purpose = q.get('purpose');
-    return ok({ assets: await listAssets(requireCtx(context), { productId: q.get('productId') ?? undefined, purpose: PURPOSES.includes(purpose as Purpose) ? (purpose as Purpose) : undefined }) });
+    return ok({ assets: await listAssets(requireCtx(context), { productId: q.get('productId') && q.get('productId') !== 'company' ? q.get('productId')! : undefined, company: q.get('productId') === 'company' ? true : undefined, purpose: PURPOSES.includes(purpose as Purpose) ? (purpose as Purpose) : undefined }) });
   });
 
 /** `POST /api/marketing/assets`: makes one to four images for a product. Quota and AI budget are checked inside. */

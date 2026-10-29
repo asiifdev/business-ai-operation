@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { bigint, check, foreignKey, index, integer, pgEnum, pgTable, text, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { createdAtColumn, idColumn, lower, tstz, updatedAtColumn } from './_shared';
 import { organizations } from './auth';
+import { files } from './meetings';
 
 export const deploymentStatus = pgEnum('deployment_status', ['active', 'inactive']);
 export const uptimeState = pgEnum('uptime_state', ['up', 'down']);
@@ -16,12 +17,15 @@ export const products = pgTable(
     description: text('description'),
     /** The version clients should be on. "Behind" is derived from this, never stored (BR-M02-05). */
     currentVersion: text('current_version'),
+    /** A `files` row of kind `product_logo` (D-065). Cleared, not deleted, when the logo is removed. */
+    logoFileId: text('logo_file_id'),
     archivedAt: tstz('archived_at'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (t) => [
     unique('uq_products_org_id').on(t.orgId, t.id),
+    foreignKey({ columns: [t.orgId, t.logoFileId], foreignColumns: [files.orgId, files.id], name: 'fk_products_logo' }),
     uniqueIndex('uq_products_name_active').on(t.orgId, lower(t.name)).where(sql`${t.archivedAt} is null`),
   ],
 );

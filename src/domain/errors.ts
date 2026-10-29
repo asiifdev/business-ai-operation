@@ -12,6 +12,8 @@ export type DomainErrorCode =
   /** An approval someone else already decided, on the web or in Telegram (BR-M08-06). */
   | 'already_decided'
   /** A pasted private key that cannot be used: unreadable, needs its passphrase, or the passphrase is wrong. */
+  /** The current password given when changing one does not match. */
+  | 'wrong_password'
   | 'key_unreadable'
   | 'key_needs_passphrase'
   | 'key_wrong_passphrase';
@@ -38,6 +40,7 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   rate_limited: 429,
   expired: 409,
   already_decided: 409,
+  wrong_password: 400,
   key_unreadable: 400,
   key_needs_passphrase: 400,
   key_wrong_passphrase: 400,

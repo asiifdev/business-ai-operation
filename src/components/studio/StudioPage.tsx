@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import type { getBrandKit, imageQuotaStatus, listAssets, listStudioProducts } from '../../domain/marketing/service';
-import { api, badFields, errorKey } from '../../lib/api-client';
+import { api, badFields, errorKey, upload } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useLoad } from '../../lib/use-load';
 import { useT } from '../../lib/use-t';
+import { FileInput } from '../forms/FileInput';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
+import { Toggle } from '../forms/Toggle';
 import { TextInput } from '../forms/TextInput';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClasses } from '../ui/Button';
@@ -15,6 +17,7 @@ import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
+import { LOGO_MAX_BYTES, LOGO_TYPES } from '../portfolio/ProductLogo';
 
 type Options = Jsonify<{
   products: Awaited<ReturnType<typeof listStudioProducts>>;
@@ -25,8 +28,12 @@ type Asset = Jsonify<Awaited<ReturnType<typeof listAssets>>[number]>;
 /** What the generate, revise and caption endpoints answer: a result the page can show, not an HTTP error (BR-M10-08). */
 type Outcome = { ok: true } | { ok: false; kind: string; message: string };
 
-const PURPOSES = ['launch', 'promo', 'education', 'release'] as const;
-const PURPOSE_LABEL: Record<(typeof PURPOSES)[number], MessageKey> = { launch: 'mkPurposeLaunch', promo: 'mkPurposePromo', education: 'mkPurposeEducation', release: 'mkPurposeRelease' };
+const PURPOSES = ['launch', 'promo', 'education', 'release', 'brand'] as const;
+const PURPOSE_LABEL: Record<(typeof PURPOSES)[number], MessageKey> = { launch: 'mkPurposeLaunch', promo: 'mkPurposePromo', education: 'mkPurposeEducation', release: 'mkPurposeRelease', brand: 'mkPurposeBrand' };
+const CORNER_LABEL = { bottom_right: 'mkCornerBottomRight', bottom_left: 'mkCornerBottomLeft', top_right: 'mkCornerTopRight', top_left: 'mkCornerTopLeft' } as const satisfies Record<string, MessageKey>;
+const COMPANY = 'company';
+
+type PosterCopy = { headline: string; subheadline: string | null; cta: string | null; showPrice: boolean; textPosition: 'top' | 'bottom'; logo: boolean; corner: keyof typeof CORNER_LABEL };
 const ASPECT_LABEL = { square: 'mkAspectSquare', portrait: 'mkAspectPortrait', story: 'mkAspectStory', wide: 'mkAspectWide' } as const satisfies Record<string, MessageKey>;
 
 /** Brand kit, image maker and gallery in one page (BRD-M10). No video or voice anywhere (BR-M10-10). */
@@ -56,7 +63,7 @@ export function StudioPage({ canEditBrand, canDeleteAny, userId }: { canEditBran
       <Panel className="flex flex-col gap-4">
         <h2 className="m-0 text-lg font-semibold text-ink">{t('mkGalleryTitle')}</h2>
         <div className="grid gap-3 sm:max-w-lg sm:grid-cols-2">
-          <SelectMenu value={productFilter} onChange={setProductFilter} includeAll={t('mkFilterProduct')} options={opts.products.map((p) => ({ value: p.id, label: p.name }))} />
+          <SelectMenu value={productFilter} onChange={setProductFilter} includeAll={t('mkFilterProduct')} options={[{ value: COMPANY, label: t('mkScopeCompany') }, ...opts.products.map((p) => ({ value: p.id, label: p.name }))]} />
           <SelectMenu value={purposeFilter} onChange={setPurposeFilter} includeAll={t('mkAllPurposes')} searchable={false} options={PURPOSES.map((p) => ({ value: p, label: t(PURPOSE_LABEL[p]) }))} />
         </div>
         {assets.value.state === 'loading' && <Skeleton rows={4} />}
@@ -123,6 +130,7 @@ function BrandKitPanel({ brandKit, canEdit, onSaved }: { brandKit: Options['bran
           </FormField>
         </div>
         {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
+        <BrandLogoEditor saved={Boolean(brandKit)} hasLogo={Boolean(brandKit?.logoFileId)} canEdit={canEdit} onChanged={onSaved} />
         {canEdit && (
           <div className="flex items-center gap-3">
             <Button type="submit" variant="primary" loading={busy}>{t('mkBrandSave')}</Button>
@@ -131,6 +139,55 @@ function BrandKitPanel({ brandKit, canEdit, onSaved }: { brandKit: Options['bran
         )}
       </form>
     </Panel>
+  );
+}
+
+/** The company logo: shown, replaced or removed. It needs a saved brand kit to hang on (D-066). */
+function BrandLogoEditor({ saved, hasLogo, canEdit, onChanged }: { saved: boolean; hasLogo: boolean; canEdit: boolean; onChanged: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  async function send(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set('file', file);
+      await upload('/api/marketing/brand-kit/logo', form);
+      setVersion((v) => v + 1);
+      onChanged();
+    } catch (err) {
+      setError(String((err as { code?: string }).code) === 'validation' ? t('pLogoBad') : t(errorKey(err)));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api('DELETE', '/api/marketing/brand-kit/logo');
+      onChanged();
+    } catch (err) {
+      setError(t(errorKey(err)));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-sm font-medium text-ink">{t('mkBrandLogo')}</span>
+      {hasLogo && (
+        <div className="flex items-center gap-3">
+          <img src={`/api/marketing/brand-kit/logo?v=${version}`} alt="" className="size-16 rounded-input border border-rule-2 bg-paper object-contain" />
+          {canEdit && <ConfirmButton variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
+        </div>
+      )}
+      {canEdit && (saved ? <FileInput accept={LOGO_TYPES} maxSize={LOGO_MAX_BYTES} disabled={busy} onChange={(files) => files[0] && void send(files[0])} onReject={() => setError(t('pLogoBad'))} /> : <p className="m-0 text-sm text-muted">{t('mkBrandLogoNeedsKit')}</p>)}
+      <p className="m-0 text-sm text-muted">{t('mkBrandLogoHelp')}</p>
+      {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+    </div>
   );
 }
 
@@ -145,6 +202,11 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
   const t = useT();
   const [productId, setProductId] = useState('');
   const [purpose, setPurpose] = useState<(typeof PURPOSES)[number]>('launch');
+  const [withText, setWithText] = useState(true);
+  const [textPosition, setTextPosition] = useState<'top' | 'bottom'>('bottom');
+  const [showPrice, setShowPrice] = useState(false);
+  const [useLogo, setUseLogo] = useState(true);
+  const [corner, setCorner] = useState<keyof typeof CORNER_LABEL>('bottom_right');
   const [aspect, setAspect] = useState<keyof typeof ASPECT_LABEL>('square');
   const [variants, setVariants] = useState('1');
   const [direction, setDirection] = useState('');
@@ -153,6 +215,8 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
   const [refused, setRefused] = useState<string | null>(null);
   const bad = badFields(error);
   const noQuota = options.quota.remaining < 1;
+  const company = productId === COMPANY;
+  const hasLogo = Boolean(options.brandKit?.logoFileId) || (!company && Boolean(options.products.find((p) => p.id === productId)?.hasLogo));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -160,7 +224,7 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
     setError(null);
     setRefused(null);
     try {
-      const result = await api<Outcome>('POST', '/api/marketing/assets', { productId, purpose, aspect, variants: Number(variants), direction });
+      const result = await api<Outcome>('POST', '/api/marketing/assets', { productId: productId === COMPANY ? null : productId, purpose, aspect, variants: Number(variants), direction, logo: useLogo, corner, withText, textPosition, showPrice: showPrice && !company });
       if (result.ok) onDone();
       else setRefused(outcomeMessage(t, result));
     } catch (err) {
@@ -174,13 +238,11 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
     <Panel>
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <h2 className="m-0 text-lg font-semibold text-ink">{t('mkMakeTitle')}</h2>
-        {options.products.length === 0 ? (
-          <EmptyState>{t('mkNoProducts')}</EmptyState>
-        ) : (
+        {(
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <FormField label={t('mkProduct')} required error={bad.productId ? t('errValidation') : null}>
-                <SelectMenu value={productId} onChange={setProductId} placeholder={t('choose')} options={options.products.map((p) => ({ value: p.id, label: p.name }))} />
+                <SelectMenu value={productId} onChange={setProductId} placeholder={t('choose')} options={[{ value: COMPANY, label: t('mkScopeCompany') }, ...options.products.map((p) => ({ value: p.id, label: p.name }))]} />
               </FormField>
               <FormField label={t('mkPurpose')} required>
                 <SelectMenu value={purpose} onChange={(v) => setPurpose(v as typeof purpose)} searchable={false} options={PURPOSES.map((p) => ({ value: p, label: t(PURPOSE_LABEL[p]) }))} />
@@ -195,7 +257,36 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
             <FormField label={t('mkDirection')} help={t('mkDirectionHelp')}>
               <Textarea value={direction} onChange={(e) => setDirection(e.currentTarget.value)} maxLength={500} rows={2} />
             </FormField>
-            <p className="m-0 text-sm text-muted">{t('mkTextWarning')}</p>
+            <div className="flex flex-col gap-3 rounded-input border border-rule-2 p-3">
+              <Toggle label={t('mkWithText')} checked={withText} onChange={setWithText} />
+              <p className="m-0 text-sm text-muted">{t('mkWithTextHelp')}</p>
+              {withText && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FormField label={t('mkTextPosition')}>
+                    <SelectMenu value={textPosition} onChange={(v) => setTextPosition(v as typeof textPosition)} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
+                  </FormField>
+                  {!company && productId && (
+                    <div className="flex flex-col justify-end gap-1">
+                      <Toggle label={t('mkShowPrice')} checked={showPrice} onChange={setShowPrice} />
+                      <p className="m-0 text-sm text-muted">{t('mkShowPriceHelp')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 rounded-input border border-rule-2 p-3">
+              <Toggle label={t('mkLogoUse')} checked={useLogo} onChange={setUseLogo} />
+              <p className="m-0 text-sm text-muted">{t('mkLogoUseHelp')}</p>
+              {useLogo && productId && !hasLogo && <p role="status" className="m-0 text-sm text-warm-ink">{t('mkLogoMissing')}</p>}
+              {useLogo && (
+                <div className="max-w-xs">
+                  <FormField label={t('mkCorner')}>
+                    <SelectMenu value={corner} onChange={(v) => setCorner(v as typeof corner)} searchable={false} options={(Object.keys(CORNER_LABEL) as Array<keyof typeof CORNER_LABEL>).map((k) => ({ value: k, label: t(CORNER_LABEL[k]) }))} />
+                  </FormField>
+                </div>
+              )}
+            </div>
+            <p className="m-0 text-sm text-muted">{t('mkTextWarningNew')}</p>
             {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
             {refused && <ErrorBox>{refused}</ErrorBox>}
             <div className="flex flex-wrap items-center gap-3">
@@ -218,6 +309,7 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
   const [message, setMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const file = `/api/marketing/assets/${asset.id}/file`;
+  const [imageVersion, setImageVersion] = useState(0);
 
   async function run<T>(what: NonNullable<typeof busy>, fn: () => Promise<T>) {
     setBusy(what);
@@ -260,13 +352,14 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
 
   return (
     <li className="flex flex-col gap-3 rounded-card border border-rule-2 bg-paper-2 p-3">
-      <img src={file} alt={`${asset.productName} · ${t(PURPOSE_LABEL[asset.purpose])}`} loading="lazy" className="w-full rounded-input border border-rule-2 bg-paper object-contain" />
+      <img src={`${file}?v=${imageVersion}`} alt={`${asset.productName ?? t('mkScopeCompany')} · ${t(PURPOSE_LABEL[asset.purpose])}`} loading="lazy" className="w-full rounded-input border border-rule-2 bg-paper object-contain" />
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-ink">{asset.productName}</span>
+        <span className="font-medium text-ink">{asset.productName ?? t('mkCompanyBadge')}</span>
         <Badge tone="accent">{t(PURPOSE_LABEL[asset.purpose])}</Badge>
         <Badge>{t('mkAiLabel')}</Badge>
         {asset.parentAssetId && <Badge tone="neutral">{t('mkRevisionOf')}</Badge>}
       </div>
+      {asset.posterCopy && <PosterTextEditor asset={asset} onApplied={() => { setImageVersion((v) => v + 1); onChanged(); }} />}
       <FormField label={t('mkCaption')} help={t('mkCaptionHelp')}>
         <Textarea value={caption} onChange={(e) => setCaption(e.currentTarget.value)} maxLength={2200} rows={3} />
       </FormField>
@@ -289,8 +382,63 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => setReviseOpen((v) => !v)}>{t('mkRevise')}</Button>
         <a href={`${file}?download=1`} className={buttonClasses('secondary', 'sm')}>{t('mkDownload')}</a>
+        {asset.hasLogo && <a href={`/api/marketing/assets/${asset.id}/logo?download=1`} className={buttonClasses('secondary', 'sm')}>{t('mkDownloadLogo')}</a>}
         {canDelete && <ConfirmButton variant="danger" busy={busy === 'delete'} onConfirm={remove}>{t('delete')}</ConfirmButton>}
       </div>
     </li>
+  );
+}
+
+
+/** The words on a poster: edited here and drawn again from the saved background, so no AI is used and nothing is charged (D-067). */
+function PosterTextEditor({ asset, onApplied }: { asset: Asset; onApplied: () => void }) {
+  const t = useT();
+  const start = asset.posterCopy as unknown as PosterCopy;
+  const [copy, setCopy] = useState<PosterCopy>(start);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const dirty = JSON.stringify(copy) !== JSON.stringify(start);
+
+  async function apply() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await api('PUT', `/api/marketing/assets/${asset.id}/text`, copy);
+      setMessage({ ok: true, text: t('mkTextApplied') });
+      onApplied();
+    } catch (err) {
+      setMessage({ ok: false, text: t(errorKey(err)) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-input border border-rule-2 p-3">
+      <span className="text-sm font-medium text-ink">{t('mkPosterText')}</span>
+      <FormField label={t('mkHeadline')} required>
+        <TextInput value={copy.headline} onChange={(e) => setCopy({ ...copy, headline: e.currentTarget.value })} maxLength={70} autoComplete="off" />
+      </FormField>
+      <FormField label={t('mkSubheadline')}>
+        <TextInput value={copy.subheadline ?? ''} onChange={(e) => setCopy({ ...copy, subheadline: e.currentTarget.value })} maxLength={160} autoComplete="off" />
+      </FormField>
+      <FormField label={t('mkCta')}>
+        <TextInput value={copy.cta ?? ''} onChange={(e) => setCopy({ ...copy, cta: e.currentTarget.value })} maxLength={30} autoComplete="off" />
+      </FormField>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label={t('mkTextPosition')}>
+          <SelectMenu value={copy.textPosition} onChange={(v) => setCopy({ ...copy, textPosition: v as PosterCopy['textPosition'] })} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
+        </FormField>
+        <FormField label={t('mkCorner')}>
+          <SelectMenu value={copy.corner} onChange={(v) => setCopy({ ...copy, corner: v as PosterCopy['corner'] })} searchable={false} options={(Object.keys(CORNER_LABEL) as Array<keyof typeof CORNER_LABEL>).map((k) => ({ value: k, label: t(CORNER_LABEL[k]) }))} />
+        </FormField>
+      </div>
+      <Toggle label={t('mkLogoUse')} checked={copy.logo} onChange={(v) => setCopy({ ...copy, logo: v })} />
+      {asset.productName !== null && <Toggle label={t('mkShowPrice')} checked={copy.showPrice} onChange={(v) => setCopy({ ...copy, showPrice: v })} />}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="primary" loading={busy} disabled={!dirty || !copy.headline.trim()} onClick={apply}>{t('mkApplyText')}</Button>
+        {message && <span role={message.ok ? 'status' : 'alert'} className={message.ok ? 'text-sm text-success' : 'text-sm text-danger'}>{message.text}</span>}
+      </div>
+    </div>
   );
 }

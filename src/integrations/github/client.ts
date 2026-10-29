@@ -70,6 +70,12 @@ export interface GithubClient {
   getBranchHead(installationId: number, repo: string, branch: string): Promise<string>;
   /** How many commits `head` is ahead of `base` (the deployed commit). 0 means the server has the latest. */
   commitsAhead(installationId: number, repo: string, base: string, head: string): Promise<number>;
+  /**
+   * The newest version of a repository (D-065): its latest release, else its newest tag, else (when a branch is given)
+   * the short id of the commit at the tip of that branch, for repositories that never publish versions. Returns null when
+   * none applies. The leading `v` of a release or tag is dropped; nothing else is guessed.
+   */
+  latestVersion(installationId: number, repo: string, branch?: string | null): Promise<{ version: string; source: 'release' | 'tag' | 'commit' } | null>;
   /** A token for git over HTTPS, kept only for the step that needs it. */
   installationToken(installationId: number): Promise<string>;
 }
@@ -114,6 +120,22 @@ export function githubClient(f: Fetch = fetch, now: () => Date = () => new Date(
       if (base === head) return 0;
       const r = (await call(f, 'GET', `/repos/${repo}/compare/${base}...${head}`, await token(installationId))) as { ahead_by: number };
       return r.ahead_by;
+    },
+    async latestVersion(installationId, repo, branch) {
+      if (!REPO.test(repo)) throw new GithubError('not_found', 'invalid repo');
+      const clean = (name: string) => name.trim().replace(/^v(?=\d)/i, '');
+      const t = await token(installationId);
+      try {
+        const release = (await call(f, 'GET', `/repos/${repo}/releases/latest`, t)) as { tag_name?: string };
+        if (release.tag_name) return { version: clean(release.tag_name), source: 'release' };
+      } catch (e) {
+        if (!(e instanceof GithubError) || e.kind !== 'not_found') throw e; // no release yet is normal; anything else is a real failure
+      }
+      const tags = (await call(f, 'GET', `/repos/${repo}/tags?per_page=1`, t)) as Array<{ name: string }>;
+      if (tags[0]?.name) return { version: clean(tags[0].name), source: 'tag' };
+      if (!branch) return null;
+      const head = (await this.getBranchHead(installationId, repo, branch)).slice(0, 7);
+      return { version: head, source: 'commit' };
     },
     installationToken: token,
   };

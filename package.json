@@ -42,6 +42,7 @@
     "better-auth": "^1.7.14",
     "cookie": "^2.0.1",
     "drizzle-orm": "^0.45.4",
+    "fontkit": "2.0.4",
     "postgres": "^3.4.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

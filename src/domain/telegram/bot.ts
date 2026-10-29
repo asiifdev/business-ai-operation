@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { approvals, telegramUpdates } from '../../db/schema';
-import { parseApprovalCallback } from '../../integrations/telegram/callback';
+import { parseApprovalCallback, parsePosterCallback } from '../../integrations/telegram/callback';
+import type { AiProvider } from '../../ai/provider';
 import type { InlineKeyboard, TelegramClient } from '../../integrations/telegram/client';
 import { TelegramError } from '../../integrations/telegram/errors';
 import { parseStartCommand } from '../../integrations/telegram/pairing';
@@ -24,11 +25,14 @@ import { createMeeting } from '../meetings/service';
 import { getTaskSummary, listTasks } from '../tasks/service';
 import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
+import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
 /** What the handler needs from the outside world, so tests can pass fakes and never reach Telegram or a model. */
 export interface BotDeps {
-  client: Pick<TelegramClient, 'sendMessage' | 'editMessageText' | 'answerCallbackQuery' | 'sendChatAction' | 'downloadFile'> & Partial<Pick<TelegramClient, 'sendVoice'>>;
+  client: Pick<TelegramClient, 'sendMessage' | 'editMessageText' | 'answerCallbackQuery' | 'sendChatAction' | 'downloadFile'> & Partial<Pick<TelegramClient, 'sendVoice' | 'sendPhoto'>>;
   clock: Clock;
+  /** Model provider for posters; tests pass a fake, production leaves it out. */
+  aiProvider?: AiProvider;
   /** Public address of the web app, for links in messages. */
   appUrl?: string;
   /** Free text goes to the grounded assistant (M07). Left out, the bot answers with the command list instead. */
@@ -108,6 +112,9 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
     case 'tugas':
     case 'tasks':
       return send(deps, chatId, tasksMessage(person.locale, await listTasks(ctx, { assignee: 'me' }), deps.appUrl));
+    case 'poster':
+      if (!can(person.role, 'marketing.use')) return send(deps, chatId, escapeHtml(t('errForbidden')));
+      return send(deps, chatId, posterText(person.locale, 'tgPosterPick'), await posterScopeKeyboard(ctx, person.locale));
     case 'putus':
     case 'unlink':
       await unlinkChat(chatId, deps.clock, 'command');
@@ -244,6 +251,8 @@ type Callback = NonNullable<TelegramUpdate['callback_query']>;
  * behind the web button, so permission is checked again and web plus Telegram at once still decide only once.
  */
 async function onCallback(cb: Callback, updateId: number, deps: BotDeps) {
+  const poster = parsePosterCallback(cb.data);
+  if (poster) return onPosterCallback(cb, poster, deps);
   const parsed = parseApprovalCallback(cb.data);
   const person = await findLinkedUser(cb.from.id);
   const locale = person?.locale ?? localeOf(cb.from.language_code);
@@ -283,4 +292,52 @@ async function onCallback(cb: Callback, updateId: number, deps: BotDeps) {
   await deps.client.editMessageText({ chatId: cb.message.chat.id, messageId: cb.message.message_id, text: `${head}${line}`, parseMode: 'HTML' }).catch((err) => {
     if (!(err instanceof TelegramError && err.kind === 'bad_request')) throw err; // the card is gone or unchanged
   });
+}
+
+/** Poster buttons: first who it is about, then what for; the second press makes the picture. */
+async function onPosterCallback(cb: Callback, poster: NonNullable<ReturnType<typeof parsePosterCallback>>, deps: BotDeps) {
+  const person = await findLinkedUser(cb.from.id);
+  const locale = person?.locale ?? localeOf(cb.from.language_code);
+  if (!person || !cb.message) {
+    await deps.client.answerCallbackQuery({ id: cb.id, text: translate(locale, 'tgNotLinked'), showAlert: !person });
+    return;
+  }
+  const ctx = ctxOf(person, deps.clock);
+  const chatId = cb.message.chat.id;
+  if (!can(person.role, 'marketing.use')) {
+    await deps.client.answerCallbackQuery({ id: cb.id, text: translate(locale, 'errForbidden'), showAlert: true });
+    return;
+  }
+
+  if (poster.kind === 'pick') {
+    await deps.client.answerCallbackQuery({ id: cb.id });
+    await deps.client.editMessageText({ chatId, messageId: cb.message.message_id, text: posterText(locale, 'tgPosterPurpose'), parseMode: 'HTML', replyMarkup: posterPurposeKeyboard(poster.scope, locale) }).catch(() => undefined);
+    return;
+  }
+
+  // A poster costs money and takes a while: one at a time per person, a few a minute.
+  if (!limiter.allow(`telegram-poster:${person.userId}`, 3, 60_000)) {
+    await deps.client.answerCallbackQuery({ id: cb.id, text: translate(locale, 'tgSlowDown'), showAlert: true });
+    return;
+  }
+  await deps.client.answerCallbackQuery({ id: cb.id, text: translate(locale, 'tgPosterMaking') });
+  await deps.client.editMessageText({ chatId, messageId: cb.message.message_id, text: posterText(locale, 'tgPosterMaking'), parseMode: 'HTML' }).catch(() => undefined);
+  await deps.client.sendChatAction(chatId, 'upload_photo').catch(() => undefined);
+
+  try {
+    const result = await makePoster(ctx, poster.scope, poster.purpose, deps.aiProvider);
+    if (!result.ok) {
+      const key: MessageKey = result.reason === 'quota' ? 'mkQuotaReached' : 'tgPosterFailed';
+      return send(deps, chatId, result.reason === 'failed' ? `${posterText(locale, key)}\n${escapeHtml(result.message)}` : posterText(locale, key));
+    }
+    if (!deps.client.sendPhoto) return send(deps, chatId, posterText(locale, 'tgPosterFailed'));
+    await deps.client.sendPhoto({ chatId, bytes: result.jpeg, filename: 'poster.jpg', caption: posterText(locale, 'tgPosterDone') });
+    // Words live in the caption, never in the picture (BR-M10-05); a figure the model invented is not sent.
+    const link = deps.appUrl ? `\n\n<a href="${escapeHtml(`${deps.appUrl.replace(/\/$/, '')}/app/marketing`)}">${escapeHtml(translate(locale, 'tgPosterOpenWeb'))}</a>` : '';
+    await send(deps, chatId, result.caption ? `<b>${posterText(locale, 'mkCaption')}</b>\n${escapeHtml(result.caption)}${link}` : `${posterText(locale, 'mkCaptionDiscarded')}${link}`);
+    await recordAudit(db, { orgId: person.orgId, actor: `user:${person.userId}`, userId: person.userId }, { action: 'telegram.poster_made', entityType: 'marketing_asset', entityId: result.assetId, summary: { scope: poster.scope === 'o' ? 'company' : 'product', purpose: poster.purpose } });
+  } catch (err) {
+    if (err instanceof DomainError) return send(deps, chatId, posterText(locale, err.code === 'forbidden' ? 'errForbidden' : 'tgPosterFailed'));
+    throw err;
+  }
 }

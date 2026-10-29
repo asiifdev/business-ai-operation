@@ -133,3 +133,20 @@ describe('answerToTelegramParts', () => {
     expect(parts.join('')).not.toMatch(/<b>[^<]*$/);
   });
 });
+
+import { encodePosterMake, encodePosterPick, parsePosterCallback } from '../callback';
+
+describe('poster callback data (D-066)', () => {
+  it('round-trips the company and a product id, and stays within 64 bytes', () => {
+    const id = '01M63DPQ5XT7P3JRXHFYHJKDR1';
+    expect(parsePosterCallback(encodePosterPick('o'))).toEqual({ kind: 'pick', scope: 'o' });
+    expect(parsePosterCallback(encodePosterPick(id))).toEqual({ kind: 'pick', scope: id });
+    expect(parsePosterCallback(encodePosterMake(id, 'brand'))).toEqual({ kind: 'make', scope: id, purpose: 'brand' });
+    expect(Buffer.byteLength(encodePosterMake(id, 'education'))).toBeLessThanOrEqual(64);
+  });
+
+  it('rejects anything else, including approval buttons and path tricks', () => {
+    for (const bad of [undefined, '', 'ap:abc:y', 'pg:o:z', 'pg:o:', 'pt:', 'pt:../x', 'pg:a b:l', `pt:${'x'.repeat(41)}`]) expect(parsePosterCallback(bad as string | undefined), String(bad)).toBeNull();
+    expect(() => encodePosterPick('bad scope')).toThrow();
+  });
+});

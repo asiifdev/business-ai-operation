@@ -34,6 +34,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (pathname.startsWith('/api/') && !resolved && !PUBLIC_API.some((re) => re.test(pathname))) {
     return Response.json({ ok: false, error: { code: 'unauthorized', message: 'Sign in required' } }, { status: 401 });
   }
+  // A temporary password must be replaced first: until then only the profile page, its endpoint and sign-out are open.
+  if (resolved?.user.mustChangePassword) {
+    const open = pathname === '/app/settings/profil' || pathname === '/api/profile/password' || PUBLIC_API.some((re) => re.test(pathname));
+    if (pathname.startsWith('/app') && !open) return context.redirect('/app/settings/profil');
+    if (pathname.startsWith('/api/') && !open) return Response.json({ ok: false, error: { code: 'forbidden', message: 'Change your password first' } }, { status: 403 });
+  }
   if (resolved && (pathname === '/login' || pathname === '/register')) return context.redirect('/app');
 
   const locale = pickLocale({

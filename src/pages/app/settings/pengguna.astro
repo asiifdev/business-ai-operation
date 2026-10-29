@@ -1,0 +1,13 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { UsersPage } from '../../../components/settings/UsersPage';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+if (!can(user.role, 'user.read')) return Astro.redirect('/app');
+---
+
+<AppShell title="Pengguna" current="users">
+  <UsersPage client:load currentUserId={user.id} isOwner={user.role === 'owner'} />
+</AppShell>

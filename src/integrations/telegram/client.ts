@@ -123,6 +123,17 @@ export class TelegramClient {
     return this.call<{ message_id: number }>('sendDocument', undefined, form);
   }
 
+  /** A picture shown inline. Telegram takes JPEG or PNG here, so callers send a JPEG. */
+  async sendPhoto(input: { chatId: number; bytes: Uint8Array; filename: string; caption?: string; parseMode?: 'HTML' }) {
+    if (input.caption && input.caption.length > MAX_CAPTION + 24) throw new TelegramError('bad_request', 'Caption is limited to 1024 characters');
+    const form = new FormData();
+    form.append('chat_id', String(input.chatId));
+    if (input.caption) form.append('caption', input.caption);
+    if (input.parseMode) form.append('parse_mode', input.parseMode);
+    form.append('photo', new Blob([input.bytes as BlobPart], { type: 'image/jpeg' }), input.filename);
+    return this.call<{ message_id: number }>('sendPhoto', undefined, form);
+  }
+
   /** A voice note: OGG/Opus bytes, shown with a play button. */
   async sendVoice(input: { chatId: number; bytes: Uint8Array; durationSeconds?: number }) {
     const form = new FormData();
