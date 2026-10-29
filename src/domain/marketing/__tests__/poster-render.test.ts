@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { firstHex, fit, logoCorner, measure, renderPoster, wrap } from '../poster-render';
-import { copyWriterInstructions, fallbackCopy, priceLine } from '../rules';
+import { copyWriterInstructions, fallbackCopy, fallbackImagePrompt, LAYOUTS, posterCopySchema, priceLine, promptWriterInstructions, spaceFor } from '../rules';
 
 const require = createRequire(import.meta.url);
 const bold = fontkit.openSync(require.resolve('@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-700-normal.woff'));
@@ -124,5 +124,97 @@ describe('D-067 poster copy rules', () => {
     expect(copyWriterInstructions('id', false)).toMatch(/Jangan menulis harga/);
     expect(copyWriterInstructions('en', true)).toMatch(/Never write a price/);
     expect(copyWriterInstructions('en', true)).toMatch(/about the company/);
+  });
+});
+
+describe('D-068 poster looks', () => {
+  const text = { headline: 'Rental jadi rapi', subheadline: 'Stok dan jadwal dalam satu aplikasi.', cta: 'Coba sekarang' };
+  const draw = async (layout: (typeof LAYOUTS)[number], over: Record<string, unknown> = {}) =>
+    reader(await renderPoster({ background: new Uint8Array(await pale()), logo: null, text, priceLine: null, layout, textPosition: 'bottom', corner: 'top_left', accent: '#1F8A70', ...over }));
+  const count = (r: Awaited<ReturnType<typeof reader>>, test: (p: number[]) => boolean, x0: number, y0: number, x1: number, y1: number) => {
+    let n = 0;
+    for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) if (test(r.at(x, y))) n++;
+    return n;
+  };
+  const isWhite = ([r, g, b]: number[]) => r > 235 && g > 235 && b > 235;
+  const isDarkText = ([r, g, b]: number[]) => r < 70 && g < 80 && b < 110;
+
+  it('offers five looks and every one keeps the picture size', async () => {
+    expect(LAYOUTS).toEqual(['gradient', 'center', 'card', 'band', 'side']);
+    for (const layout of LAYOUTS) expect((await draw(layout)).info, layout).toMatchObject({ width: 800, height: 1000 });
+  });
+
+  it('centre: veils the whole picture and puts white words in the middle', async () => {
+    const r = await draw('center');
+    expect(brightness(r.at(20, 20))).toBeLessThan(140); // corners are veiled, unlike the pale picture
+    expect(brightness(r.at(780, 980))).toBeLessThan(140);
+    expect(count(r, isWhite, 60, 380, 740, 620)).toBeGreaterThan(150); // the headline sits about mid-height
+  });
+
+  it('card: a light card carries dark words, and the picture stays visible around it', async () => {
+    const r = await draw('card', { background: new Uint8Array(await sharp({ create: { width: 800, height: 1000, channels: 3, background: '#2A4A6B' } }).webp().toBuffer()) });
+    expect(brightness(r.at(400, 20))).toBeLessThan(80); // untouched dark picture above the card
+    expect(count(r, (p) => brightness(p) > 235, 60, 700, 740, 960)).toBeGreaterThan(300); // the card itself is light
+    expect(count(r, isDarkText, 60, 700, 740, 960)).toBeGreaterThan(80); // and its words are dark
+  });
+
+  it('band: a solid strip in a darkened brand colour, flush with the chosen edge', async () => {
+    const bottom = await draw('band');
+    const [r, g, b] = bottom.at(10, 995);
+    expect(g).toBeGreaterThan(r + 20); // a deep green, from #1F8A70 darkened
+    expect(g).toBeLessThan(130);
+    expect(brightness(bottom.at(10, 20))).toBeGreaterThan(215); // the top is the untouched picture
+    const top = await draw('band', { textPosition: 'top' });
+    expect(top.at(10, 4)[1]).toBeGreaterThan(top.at(10, 4)[0] + 20);
+    expect(brightness(top.at(10, 995))).toBeGreaterThan(215);
+  });
+
+  it('side: a dark panel on the left fading out, the right stays as it was', async () => {
+    const r = await draw('side');
+    expect(brightness(r.at(5, 500))).toBeLessThan(70);
+    expect(brightness(r.at(790, 500))).toBeGreaterThan(215);
+    expect(count(r, isWhite, 40, 300, 460, 700)).toBeGreaterThan(150);
+  });
+
+  it('puts the logo where it cannot meet the words for each look', () => {
+    expect(logoCorner('bottom_left', 'bottom', 'side')).toBe('bottom_right');
+    expect(logoCorner('top_left', 'bottom', 'side')).toBe('top_right');
+    expect(logoCorner('bottom_right', 'bottom', 'center')).toBe('bottom_right');
+    expect(logoCorner('bottom_right', 'bottom', 'card')).toBe('top_right');
+    expect(logoCorner('top_left', 'top', 'band')).toBe('bottom_left');
+  });
+
+  it('draws the logo for every look', async () => {
+    for (const layout of LAYOUTS) {
+      const r = await reader(await renderPoster({ background: new Uint8Array(await pale()), logo: new Uint8Array(await logo()), text, priceLine: null, layout, textPosition: 'bottom', corner: 'top_right' }));
+      let red = 0;
+      for (let y = 10; y < 180; y += 3) for (let x = 520; x < 800; x += 3) if (r.at(x, y)[0] > 200 && r.at(x, y)[1] < 60) red++;
+      expect(red, layout).toBeGreaterThan(10);
+    }
+  });
+
+  it('keeps long words and many lines inside the picture in every look', async () => {
+    for (const layout of LAYOUTS) {
+      const out = await renderPoster({ background: new Uint8Array(await pale()), logo: null, text: { headline: 'Superkalifragilistikekspialidosiusuperpanjang '.repeat(3), subheadline: 'kata '.repeat(60), cta: 'Ajakan yang sangat panjang sekali untuk tombol' }, priceLine: 'Mulai dari Rp 1.450.000.000 per bulan untuk semua paket', layout, textPosition: 'top', corner: 'bottom_right' });
+      expect((await sharp(out).metadata()).height, layout).toBe(1000);
+    }
+  });
+
+  it('tells the model which part to keep calm for each look', () => {
+    expect(spaceFor('gradient', 'top')).toBe('top');
+    expect(spaceFor('card', 'bottom')).toBe('bottom');
+    expect(spaceFor('band', 'top')).toBe('top');
+    expect(spaceFor('center', 'bottom')).toBe('center');
+    expect(spaceFor('side', 'top')).toBe('left');
+    expect(promptWriterInstructions('left')).toMatch(/left 60%/);
+    expect(promptWriterInstructions('center')).toMatch(/whole picture soft/);
+    expect(promptWriterInstructions('top')).toMatch(/top 40%/);
+    expect(fallbackImagePrompt({ name: 'A', packages: [] }, { brandName: 'B' }, 'promo', null, 'left')).toMatch(/left 60%/);
+    for (const space of ['top', 'bottom', 'left', 'center'] as const) expect(promptWriterInstructions(space)).toMatch(/No text, letters/);
+  });
+
+  it('treats a poster saved before the looks existed as the fade', () => {
+    expect(posterCopySchema.parse({ headline: 'Halo', subheadline: null, cta: null, showPrice: false, textPosition: 'bottom', logo: true, corner: 'bottom_right' }).layout).toBe('gradient');
+    expect(posterCopySchema.safeParse({ headline: 'Halo', layout: 'spiral' }).success).toBe(false);
   });
 });

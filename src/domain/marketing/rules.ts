@@ -32,12 +32,26 @@ export type Corner = (typeof CORNERS)[number];
 export const TEXT_POSITIONS = ['top', 'bottom'] as const;
 export type TextPosition = (typeof TEXT_POSITIONS)[number];
 
+/**
+ * Poster looks (D-068). `gradient`: dark fade at the top or bottom. `center`: a dark veil with the words in the middle.
+ * `card`: a light card carrying the words. `band`: a solid strip in the brand colour. `side`: a dark panel on the left.
+ */
+export const LAYOUTS = ['gradient', 'center', 'card', 'band', 'side'] as const;
+export type Layout = (typeof LAYOUTS)[number];
+
+/** Which part of the picture the model must keep calm for the words (D-068). */
+export type PromptSpace = TextPosition | 'center' | 'left';
+export function spaceFor(layout: Layout, position: TextPosition): PromptSpace {
+  return layout === 'center' ? 'center' : layout === 'side' ? 'left' : position;
+}
+
 /** What a poster says and how it is laid out (D-067). The text is drawn by code, so it is exactly what is stored here. */
 export const posterCopySchema = z.object({
   headline: z.string().trim().min(1).max(70),
   subheadline: z.string().trim().max(160).nullish().transform((v) => v || null),
   cta: z.string().trim().max(30).nullish().transform((v) => v || null),
   showPrice: z.boolean().default(false),
+  layout: z.enum(LAYOUTS).default('gradient'),
   textPosition: z.enum(TEXT_POSITIONS).default('bottom'),
   logo: z.boolean().default(true),
   corner: z.enum(CORNERS).default('bottom_right'),
@@ -47,6 +61,7 @@ export type PosterCopy = z.infer<typeof posterCopySchema>;
 export const generateSchema = z.object({
   /** Draw a headline, subheadline and call to action on the picture (D-067). On by default: a picture alone cannot be posted. */
   withText: z.boolean().default(true),
+  layout: z.enum(LAYOUTS).default('gradient'),
   textPosition: z.enum(TEXT_POSITIONS).default('bottom'),
   /** Add the cheapest official package price as a line of text. Only for a product, never made up by a model. */
   showPrice: z.boolean().default(false),
@@ -109,15 +124,19 @@ const PURPOSE_HINT: Record<Purpose, string> = {
  * Rules every image prompt carries. Text inside images is unreliable (BR-M10-05), and brands must not be invented, so the
  * picture has no writing and no logo at all: the headline, the button and the real logo are drawn by code afterwards (D-067).
  */
-const imageRules = (space: TextPosition | null) =>
+const imageRules = (space: PromptSpace | null) =>
   `No text, letters, numbers, logos, watermarks or real brand marks anywhere in the image. No people who look like real individuals. ${
-    space
-      ? `Keep the ${space === 'top' ? 'top' : 'bottom'} 40% of the picture calm, simple and low in detail, like a soft out-of-focus background, because a headline and a button are placed there afterwards. Put the main subject in the other part.`
-      : 'Leave a calm, uncluttered area in each corner and along the bottom edge: the real logo is added afterwards.'
+    space === 'center'
+      ? 'Keep the whole picture soft, evenly toned and low in detail, like a gentle out-of-focus backdrop, because a dark veil and a centered headline are placed over it afterwards. Any subject should be simple and not need to be seen clearly.'
+      : space === 'left'
+        ? 'Keep the left 60% of the picture calm, simple and low in detail, like a soft out-of-focus background, because a headline and a button are placed there afterwards. Put the main subject on the right.'
+        : space
+          ? `Keep the ${space === 'top' ? 'top' : 'bottom'} 40% of the picture calm, simple and low in detail, like a soft out-of-focus background, because a headline and a button are placed there afterwards. Put the main subject in the other part.`
+          : 'Leave a calm, uncluttered area in each corner and along the bottom edge: the real logo is added afterwards.'
   }`;
 
 /** The prompt used when the model cannot write one: built from the facts alone, so the feature keeps working. */
-export function fallbackImagePrompt(product: ProductFacts, brand: BrandFacts, purpose: Purpose, direction?: string | null, space: TextPosition | null = null): string {
+export function fallbackImagePrompt(product: ProductFacts, brand: BrandFacts, purpose: Purpose, direction?: string | null, space: PromptSpace | null = null): string {
   return [
     product.company ? `A marketing visual for the company ${brand.brandName}, for ${PURPOSE_HINT[purpose]}.` : `A marketing visual for a software product called "${product.name}" by ${brand.brandName}, for ${PURPOSE_HINT[purpose]}.`,
     (product.offerings ?? []).length ? `What the company offers: ${(product.offerings ?? []).map((o) => o.name).join(', ')}.` : null,
@@ -133,7 +152,7 @@ export function fallbackImagePrompt(product: ProductFacts, brand: BrandFacts, pu
 }
 
 /** Instructions for the model that turns the facts into one image prompt. Its answer is the prompt and nothing else. */
-export function promptWriterInstructions(space: TextPosition | null = null): string {
+export function promptWriterInstructions(space: PromptSpace | null = null): string {
   return [
     'You write one prompt for an image generator, in English, 60 to 120 words, describing a marketing visual (composition, subject, style, lighting, colours).',
     'Use ONLY facts from the data given. Do not invent features, prices, numbers, customers, awards or claims.',

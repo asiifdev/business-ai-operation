@@ -2,6 +2,7 @@ import type { MessageKey } from './i18n';
 
 /** Plain-language label of each audit action. An action nobody has labelled yet falls back to its code, so it is never blank. */
 export const AUDIT_LABEL: Record<string, MessageKey> = {
+  'marketing_asset.text_edited': 'auditMarketingAssetTextEditedX',
   'brand_logo.set': 'auditBrandLogoSetX',
   'brand_logo.removed': 'auditBrandLogoRemovedX',
   'brand_kit.saved': 'auditBrandKitSavedX',

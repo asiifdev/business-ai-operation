@@ -469,4 +469,29 @@ describe('M10 marketing studio', () => {
     expect(product.posterCopy).toMatchObject({ showPrice: true });
     await updatePosterCopy(s.o.ownerCtx, product.id, { ...COPY, showPrice: true }); // renders with "Mulai dari Rp 150.000"
   });
+
+  it('makes the poster in the chosen look, tells the model where to leave room, and lets the look be changed later without the model', async () => {
+    const s = await seed();
+    const provider = await posterProvider();
+    const r = await generateAssets(s.o.ownerCtx, { productId: s.productId, purpose: 'launch', layout: 'side' }, provider);
+    if (!r.ok) throw new Error('failed');
+    expect(r.assets[0].posterCopy).toMatchObject({ layout: 'side' });
+    expect(JSON.stringify(provider.chatCalls[0].messages)).toMatch(/left 60%/);
+
+    const asset = r.assets[0];
+    for (const layout of ['center', 'card', 'band', 'gradient'] as const) {
+      const updated = await updatePosterCopy(s.o.ownerCtx, asset.id, { ...(asset.posterCopy as object), layout } as never);
+      expect(updated.posterCopy).toMatchObject({ layout });
+    }
+    expect(store.keys()).toHaveLength(2); // always one poster file and its background, however often the look changes
+  });
+
+  it('a revision keeps the look of its parent', async () => {
+    const s = await seed();
+    const parent = await generateAssets(s.o.ownerCtx, { productId: s.productId, purpose: 'launch', layout: 'card', textPosition: 'top' }, await posterProvider());
+    if (!parent.ok) throw new Error('setup');
+    const rev = await reviseAsset(s.o.ownerCtx, parent.assets[0].id, { instruction: 'lebih terang' }, new FakeProvider({ image: [await realPicture()] }));
+    if (!rev.ok) throw new Error('revision failed');
+    expect(rev.assets[0].posterCopy).toMatchObject({ layout: 'card', textPosition: 'top' });
+  });
 });

@@ -31,9 +31,13 @@ type Outcome = { ok: true } | { ok: false; kind: string; message: string };
 const PURPOSES = ['launch', 'promo', 'education', 'release', 'brand'] as const;
 const PURPOSE_LABEL: Record<(typeof PURPOSES)[number], MessageKey> = { launch: 'mkPurposeLaunch', promo: 'mkPurposePromo', education: 'mkPurposeEducation', release: 'mkPurposeRelease', brand: 'mkPurposeBrand' };
 const CORNER_LABEL = { bottom_right: 'mkCornerBottomRight', bottom_left: 'mkCornerBottomLeft', top_right: 'mkCornerTopRight', top_left: 'mkCornerTopLeft' } as const satisfies Record<string, MessageKey>;
+const LAYOUT_LABEL = { gradient: 'mkLayoutGradient', center: 'mkLayoutCenter', card: 'mkLayoutCard', band: 'mkLayoutBand', side: 'mkLayoutSide' } as const satisfies Record<string, MessageKey>;
+/** Looks that place the words themselves; the top or bottom choice only matters for the others. */
+const PLACES_ITSELF = new Set<string>(['center', 'side']);
+const layoutOptions = (t: (k: MessageKey) => string) => (Object.keys(LAYOUT_LABEL) as Array<keyof typeof LAYOUT_LABEL>).map((k) => ({ value: k, label: t(LAYOUT_LABEL[k]) }));
 const COMPANY = 'company';
 
-type PosterCopy = { headline: string; subheadline: string | null; cta: string | null; showPrice: boolean; textPosition: 'top' | 'bottom'; logo: boolean; corner: keyof typeof CORNER_LABEL };
+type PosterCopy = { headline: string; subheadline: string | null; cta: string | null; showPrice: boolean; layout: keyof typeof LAYOUT_LABEL; textPosition: 'top' | 'bottom'; logo: boolean; corner: keyof typeof CORNER_LABEL };
 const ASPECT_LABEL = { square: 'mkAspectSquare', portrait: 'mkAspectPortrait', story: 'mkAspectStory', wide: 'mkAspectWide' } as const satisfies Record<string, MessageKey>;
 
 /** Brand kit, image maker and gallery in one page (BRD-M10). No video or voice anywhere (BR-M10-10). */
@@ -203,6 +207,7 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
   const [productId, setProductId] = useState('');
   const [purpose, setPurpose] = useState<(typeof PURPOSES)[number]>('launch');
   const [withText, setWithText] = useState(true);
+  const [layout, setLayout] = useState<keyof typeof LAYOUT_LABEL>('gradient');
   const [textPosition, setTextPosition] = useState<'top' | 'bottom'>('bottom');
   const [showPrice, setShowPrice] = useState(false);
   const [useLogo, setUseLogo] = useState(true);
@@ -224,7 +229,7 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
     setError(null);
     setRefused(null);
     try {
-      const result = await api<Outcome>('POST', '/api/marketing/assets', { productId: productId === COMPANY ? null : productId, purpose, aspect, variants: Number(variants), direction, logo: useLogo, corner, withText, textPosition, showPrice: showPrice && !company });
+      const result = await api<Outcome>('POST', '/api/marketing/assets', { productId: productId === COMPANY ? null : productId, purpose, aspect, variants: Number(variants), direction, logo: useLogo, corner, withText, layout, textPosition, showPrice: showPrice && !company });
       if (result.ok) onDone();
       else setRefused(outcomeMessage(t, result));
     } catch (err) {
@@ -262,9 +267,14 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
               <p className="m-0 text-sm text-muted">{t('mkWithTextHelp')}</p>
               {withText && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField label={t('mkTextPosition')}>
-                    <SelectMenu value={textPosition} onChange={(v) => setTextPosition(v as typeof textPosition)} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
+                  <FormField label={t('mkLayout')}>
+                    <SelectMenu value={layout} onChange={(v) => setLayout(v as typeof layout)} searchable={false} options={layoutOptions(t)} />
                   </FormField>
+                  {!PLACES_ITSELF.has(layout) && (
+                    <FormField label={t('mkTextPosition')}>
+                      <SelectMenu value={textPosition} onChange={(v) => setTextPosition(v as typeof textPosition)} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
+                    </FormField>
+                  )}
                   {!company && productId && (
                     <div className="flex flex-col justify-end gap-1">
                       <Toggle label={t('mkShowPrice')} checked={showPrice} onChange={setShowPrice} />
@@ -393,7 +403,9 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
 /** The words on a poster: edited here and drawn again from the saved background, so no AI is used and nothing is charged (D-067). */
 function PosterTextEditor({ asset, onApplied }: { asset: Asset; onApplied: () => void }) {
   const t = useT();
-  const start = asset.posterCopy as unknown as PosterCopy;
+  // Posters made before the looks existed have no `layout`: they were the fade.
+  const stored = asset.posterCopy as unknown as PosterCopy;
+  const start: PosterCopy = { ...stored, layout: stored.layout ?? 'gradient' };
   const [copy, setCopy] = useState<PosterCopy>(start);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -425,10 +437,15 @@ function PosterTextEditor({ asset, onApplied }: { asset: Asset; onApplied: () =>
       <FormField label={t('mkCta')}>
         <TextInput value={copy.cta ?? ''} onChange={(e) => setCopy({ ...copy, cta: e.currentTarget.value })} maxLength={30} autoComplete="off" />
       </FormField>
+      <FormField label={t('mkLayout')}>
+        <SelectMenu value={copy.layout} onChange={(v) => setCopy({ ...copy, layout: v as PosterCopy['layout'] })} searchable={false} options={layoutOptions(t)} />
+      </FormField>
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField label={t('mkTextPosition')}>
-          <SelectMenu value={copy.textPosition} onChange={(v) => setCopy({ ...copy, textPosition: v as PosterCopy['textPosition'] })} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
-        </FormField>
+        {!PLACES_ITSELF.has(copy.layout) && (
+          <FormField label={t('mkTextPosition')}>
+            <SelectMenu value={copy.textPosition} onChange={(v) => setCopy({ ...copy, textPosition: v as PosterCopy['textPosition'] })} searchable={false} options={[{ value: 'bottom', label: t('mkTextBottom') }, { value: 'top', label: t('mkTextTop') }]} />
+          </FormField>
+        )}
         <FormField label={t('mkCorner')}>
           <SelectMenu value={copy.corner} onChange={(v) => setCopy({ ...copy, corner: v as PosterCopy['corner'] })} searchable={false} options={(Object.keys(CORNER_LABEL) as Array<keyof typeof CORNER_LABEL>).map((k) => ({ value: k, label: t(CORNER_LABEL[k]) }))} />
         </FormField>

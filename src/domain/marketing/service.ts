@@ -42,7 +42,8 @@ import {
   type BrandFacts,
   type Corner,
   type PosterCopy,
-  type TextPosition,
+  type PromptSpace,
+  spaceFor,
   type Purpose,
   type ProductFacts,
 } from './rules';
@@ -151,7 +152,7 @@ export async function imageQuotaStatus(ctx: Ctx, now: Date = ctx.clock.now()) {
 type Facts = { product: ProductFacts; brand: BrandFacts; locale: 'id' | 'en' };
 
 /** The image prompt: written by the model from the facts, or built from the facts alone if the model cannot (BR-M10-01). */
-async function writePrompt(ctx: Ctx, provider: AiProvider, facts: Facts, purpose: Purpose, direction: string | null | undefined, space: TextPosition | null) {
+async function writePrompt(ctx: Ctx, provider: AiProvider, facts: Facts, purpose: Purpose, direction: string | null | undefined, space: PromptSpace | null) {
   const fallback = fallbackImagePrompt(facts.product, facts.brand, purpose, direction, space);
   const data = `${factsText(facts.product, facts.brand)}\nTujuan: ${purpose}`;
   const out = await chatOnce({
@@ -219,7 +220,7 @@ const priceLineOf = (facts: Facts, copy: PosterCopy) => (copy.showPrice && !fact
 async function composePoster(ctx: Ctx, facts: Facts, productId: string | null, background: Uint8Array, copy: PosterCopy): Promise<Uint8Array> {
   const logo = copy.logo ? await resolveLogo(ctx, productId) : null;
   try {
-    return await renderPoster({ background, logo: logo?.bytes ?? null, text: { headline: copy.headline, subheadline: copy.subheadline, cta: copy.cta }, priceLine: priceLineOf(facts, copy), textPosition: copy.textPosition, corner: copy.corner, accent: firstHex(facts.brand.colors) });
+    return await renderPoster({ background, logo: logo?.bytes ?? null, text: { headline: copy.headline, subheadline: copy.subheadline, cta: copy.cta }, priceLine: priceLineOf(facts, copy), layout: copy.layout, textPosition: copy.textPosition, corner: copy.corner, accent: firstHex(facts.brand.colors) });
   } catch (err) {
     console.error('poster text could not be drawn', err instanceof Error ? err.message : err);
     return logo ? await applyLogo(background, logo.bytes, copy.corner).catch(() => background) : background;
@@ -289,10 +290,10 @@ export async function generateAssets(ctx: Ctx, raw: z.input<typeof generateSchem
   if (input.variants > quota.remaining) return quotaRefusal(quota);
 
   const facts = await loadFacts(ctx, input.productId ?? null);
-  const space = input.withText ? input.textPosition : null;
+  const space = input.withText ? spaceFor(input.layout, input.textPosition) : null;
   const prompt = await writePrompt(ctx, provider, facts, input.purpose, input.direction, space);
   const text = input.withText ? await writeCopy(ctx, provider, facts, input.purpose) : null;
-  const copy: PosterCopy | null = text ? { ...text, showPrice: input.showPrice, textPosition: input.textPosition, logo: input.logo, corner: input.corner } : null;
+  const copy: PosterCopy | null = text ? { ...text, showPrice: input.showPrice, layout: input.layout, textPosition: input.textPosition, logo: input.logo, corner: input.corner } : null;
   return render(ctx, provider, facts, { productId: input.productId ?? null, purpose: input.purpose, prompt, parentAssetId: null, variants: input.variants, size: ASPECTS[input.aspect], copy, plainLogo: input.logo ? input.corner : null });
 }
 
