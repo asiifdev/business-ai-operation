@@ -11,7 +11,7 @@ import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
+import { Button, buttonClasses } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
@@ -114,6 +114,12 @@ export function LeadDetail({ id, role }: { id: string; role: Role }) {
               </div>
             </form>
           )}
+        </Panel>
+      )}
+
+      {!closed && isManager && (
+        <Panel aria-label={t('docCreateProposal')} className="flex flex-wrap items-center gap-3">
+          <a href={`/app/dokumen/baru?leadId=${id}`} className={buttonClasses('secondary', 'sm')}>{t('docCreateProposal')}</a>
         </Panel>
       )}
 

@@ -92,6 +92,7 @@ export function MeetingDetail({ id, timezone }: { id: string; timezone: string }
           </div>
           <p className="m-0 max-w-prose text-sm text-muted">{t('mtMinutesHelp')}</p>
           <div className="max-w-prose text-ink whitespace-pre-line [overflow-wrap:anywhere]">{m.minutes.narrative}</div>
+          <a href={`/app/dokumen/${m.minutes.documentId}`} className="w-fit text-sm text-accent underline underline-offset-4">{t('docOpenMinutes')}</a>
         </Panel>
       )}
 

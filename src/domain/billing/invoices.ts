@@ -131,7 +131,7 @@ export function formatInvoiceNumber(format: string, year: number, value: number)
 }
 
 /** Next number for (organization, scope). One statement, so concurrent senders get different numbers (BR-M03-05). */
-async function nextNumber(tx: Tx, orgId: string, scope: string): Promise<number> {
+export async function nextNumber(tx: Tx, orgId: string, scope: string): Promise<number> {
   const [row] = await tx
     .insert(numberCounters)
     .values({ orgId, scope, lastValue: 1 })

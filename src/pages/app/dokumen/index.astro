@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { DocumentsPage } from '../../../components/documents/DocumentsPage';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const canWrite = can(Astro.locals.user!.role, 'document.write');
+---
+
+<AppShell title="Dokumen" current="documents">
+  <DocumentsPage client:load canWrite={canWrite} />
+</AppShell>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, auditLog, users } from '../../db/schema';
 import { getAiOverview } from '../../domain/ai/service';
+import { createDocument, listDocuments } from '../../domain/documents/service';
 import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
@@ -14,12 +15,15 @@ import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../d
 import { formatRupiah } from '../../lib/format';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
+import { finalizeDocumentTool } from './actions';
 import { ToolRegistry, defineTool } from './registry';
 
 export { formatUsd };
 
 /** Entity types the audit trail keeps for the Owner only (PRD §3, `audit.read_financial`). */
 const FINANCIAL_ENTITIES = ['invoice', 'payment', 'subscription'];
+
+const documentKindLabel = { proposal: 'proposal', quotation: 'quotation', minutes: 'notulen' } as const;
 
 const who = (actor: string) => (actor.startsWith('ai:') ? 'AI' : actor.startsWith('system:') ? 'sistem' : 'pengguna');
 
@@ -408,6 +412,47 @@ export function buildAssistantRegistry(): ToolRegistry {
       },
     }),
   );
+
+  registry.register(
+    defineTool({
+      name: 'list_documents',
+      description: 'Lists proposals, quotations and meeting minutes (latest version of each), with status, number, client or lead, and total. Filter by kind or status.',
+      tier: 'read',
+      permission: 'document.read',
+      args: z.object({ kind: z.enum(['proposal', 'quotation', 'minutes']).optional(), status: z.enum(['draft', 'final']).optional(), clientId: z.string().min(1).max(40).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listDocuments(ctx, args);
+        return {
+          jumlah: rows.length,
+          dokumen: rows.slice(0, 30).map((d) => ({ id: d.id, jenis: documentKindLabel[d.kind], status: d.status === 'final' ? 'final' : 'draf', nomor: d.number ?? 'belum bernomor', versi: d.version, judul: d.title, untuk: d.clientName ?? d.leadName, total: d.kind === 'minutes' ? null : money(d.total), berlakuSampai: d.validUntil, drafAI: d.isAiDraft })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'draft_proposal',
+      description: 'Prepares a DRAFT proposal or quotation for a client or lead from official packages (ids from get_product_packages) and quantities. Prices come from the packages, never from you: do not state a price. It stays a draft until a person reviews and finalizes it.',
+      tier: 'draft',
+      permission: 'document.write',
+      args: z
+        .object({
+          kind: z.enum(['proposal', 'quotation']).default('proposal'),
+          title: z.string().trim().min(2).max(200),
+          clientId: z.string().min(1).max(40).optional(),
+          leadId: z.string().min(1).max(40).optional(),
+          items: z.array(z.object({ packageId: z.string().min(1).max(40), quantity: z.number().int().min(1).max(10_000).default(1) })).min(1).max(20),
+        })
+        .refine((a) => a.clientId || a.leadId, { message: 'clientId or leadId' }),
+      run: async (ctx, args) => {
+        const created = await createDocument(ctx, args);
+        return { id: created.id, status: 'draf', total: money(created.total), catatan: 'Draf dibuat dengan harga dari paket resmi. Narasi dan finalisasi dilakukan orang di halaman Dokumen.' };
+      },
+    }),
+  );
+
+  registry.register(finalizeDocumentTool);
 
   registry.register(
     defineTool({

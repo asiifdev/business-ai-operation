@@ -1,0 +1,13 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { DocumentDetail } from '../../../components/documents/DocumentDetail';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const { id } = Astro.params;
+const role = Astro.locals.user!.role;
+---
+
+<AppShell title="Dokumen" current="documents">
+  <DocumentDetail client:load id={id!} canWrite={can(role, 'document.write')} canFinalize={can(role, 'document.finalize')} />
+</AppShell>

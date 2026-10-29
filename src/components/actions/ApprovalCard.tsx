@@ -10,7 +10,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 
-const TOOL_LABEL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent' };
+const TOOL_LABEL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument' };
 
 /**
  * One risky action waiting for a person (BR-M08-04): what it is, the record it touches, the exact arguments that will

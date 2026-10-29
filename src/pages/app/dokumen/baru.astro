@@ -1,0 +1,14 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { DocumentForm } from '../../../components/documents/DocumentForm';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+if (!can(Astro.locals.user!.role, 'document.write')) return Astro.redirect('/app/dokumen'); // drafts are written by Owner and Admin
+const presetLeadId = Astro.url.searchParams.get('leadId') ?? undefined;
+const presetClientId = Astro.url.searchParams.get('clientId') ?? undefined;
+---
+
+<AppShell title="Dokumen baru" current="documents">
+  <DocumentForm client:load presetLeadId={presetLeadId} presetClientId={presetClientId} />
+</AppShell>

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { getFinding } from '../../domain/action-center/findings';
 import type { FindingRule } from '../../domain/action-center/facts';
 import { markInvoiceSent } from '../../domain/billing/invoices';
+import { finalizeDocument } from '../../domain/documents/service';
 import { formatRupiah } from '../../lib/format';
 import { ToolRegistry, defineTool } from './registry';
 
@@ -17,6 +18,20 @@ const ruleLabel: Record<FindingRule, string> = {
   task_late: 'tugas terlambat',
   lead_stagnant: 'lead stagnan',
 };
+
+/**
+ * BR-M06-03: finalizing a document is an `act` tool. In the assistant it becomes a pending approval; once approved
+ * the document is numbered and frozen. Nothing is sent to the client.
+ */
+export const finalizeDocumentTool = defineTool({
+  name: 'finalize_document',
+  description: 'Proposes to FINALIZE a draft proposal, quotation or minutes: it gets its number and can never be edited again (a revision is a new version). It never runs by itself: a person must approve it first. Nothing is sent to the client.',
+  tier: 'act',
+  permission: 'document.finalize',
+  args: z.object({ documentId: z.string().min(1).max(40) }),
+  execute: async (ctx, args) => finalizeDocument(ctx, args.documentId),
+  describe: () => 'Finalkan dokumen ini: dokumen mendapat nomor dan tidak dapat diubah lagi (revisi menjadi versi baru). Tidak ada pesan yang dikirim ke klien.',
+});
 
 export interface ActionFinding {
   id: string;
@@ -96,6 +111,9 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
       }),
     );
   }
+
+  // The catalogue the approval decision looks tools up in; a finding's own card never proposes it.
+  if (!finding) registry.register(finalizeDocumentTool);
 
   return registry;
 }

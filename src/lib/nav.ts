@@ -1,7 +1,7 @@
 import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
-export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
+export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
 export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
@@ -38,6 +38,7 @@ export const NAV: readonly NavItem[] = [
   { id: 'pipeline', group: 'workspace', href: '/app/pipeline', label: 'navPipeline', icon: 'pipeline' },
   { id: 'tasks', group: 'workspace', href: '/app/task', label: 'navTasks', icon: 'tasks' },
   { id: 'meetings', group: 'workspace', href: '/app/rapat', label: 'navMeetings', icon: 'mic' },
+  { id: 'documents', group: 'workspace', href: '/app/dokumen', label: 'navDocuments', icon: 'briefing' },
   { id: 'briefing', group: 'intelligence', href: '/app/briefing', label: 'navBriefing', icon: 'briefing', roles: ['owner', 'admin'] },
   { id: 'invoices', group: 'billing', href: '/app/invoice', label: 'navInvoices', icon: 'invoice', roles: ['owner', 'admin'] },
   { id: 'subscriptions', group: 'billing', href: '/app/langganan', label: 'navSubscriptions', icon: 'repeat', roles: ['owner', 'admin'] },

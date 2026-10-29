@@ -22,7 +22,7 @@ const RULE: Record<FindingRule, MessageKey> = {
   lead_stagnant: 'ruleLeadStagnant',
 };
 
-const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent' };
+const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument' };
 
 /** A link into the web app, or nothing when the app address is unknown. */
 const appLink = (appUrl: string | undefined, path: string | null, label: string) =>
