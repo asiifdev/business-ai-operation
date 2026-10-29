@@ -7,7 +7,8 @@ import { createConnection } from '../../connections/service';
 import { DomainError } from '../../errors';
 import { createProduct } from '../../portfolio/products';
 import { getSetupProfile, listConnectionRepos, saveSetupProfile } from '../profiles';
-import { DEFAULT_SETUP_STEPS } from '../steps';
+import { createFlow } from '../../flows/service';
+import { TEMPLATES } from '../../flows/templates';
 
 afterAll(async () => {
   await pg.end();
@@ -28,21 +29,36 @@ describe('M17 product setup profile', () => {
     const w = await withConnections();
     const empty = await getSetupProfile(w.o.ownerCtx, w.product.id);
     expect(empty.profile).toBeNull();
-    expect(empty.defaultSteps).toEqual(DEFAULT_SETUP_STEPS);
+    expect(empty.defaultPortRange).toEqual({ start: 6000, end: 6999 });
+    expect(empty.flows).toEqual([]);
     expect(JSON.stringify(empty.connections)).not.toContain('rahasia');
     const saved = await saveSetupProfile(w.o.ownerCtx, w.product.id, { githubConnectionId: w.gh.id, repo: 'asiifdev/inventory-app-cursor', defaultBranch: 'demo-main', mode: 'shared_branch', folderPattern: '{produk}-{klien}', serverConnectionId: w.ssh.id, rulesNotes: 'Satu branch untuk beberapa klien.' });
     expect(saved).toMatchObject({ repo: 'asiifdev/inventory-app-cursor', defaultBranch: 'demo-main', mode: 'shared_branch', isAiDraft: false });
-    expect(saved.steps).toEqual(DEFAULT_SETUP_STEPS);
     expect((await getSetupProfile(w.o.ownerCtx, w.product.id)).profile?.rulesNotes).toBe('Satu branch untuk beberapa klien.');
   });
 
-  it('saving again replaces it (one profile per product), and keeps the chosen steps in the catalogue', async () => {
+  it('saving again replaces it: one profile per product', async () => {
     const w = await withConnections();
     await saveSetupProfile(w.o.ownerCtx, w.product.id, { repo: 'a/b' });
-    const again = await saveSetupProfile(w.o.ownerCtx, w.product.id, { repo: 'a/c', steps: [{ key: 'git_clone' }, { key: 'git_clone' }, { key: 'verify_http' }] });
-    expect(again.repo).toBe('a/c');
-    expect(again.steps).toEqual(['git_clone', 'verify_http']);
-    await expect(saveSetupProfile(w.o.ownerCtx, w.product.id, { steps: [{ key: 'rm_rf' as never }] })).rejects.toThrow();
+    const again = await saveSetupProfile(w.o.ownerCtx, w.product.id, { repo: 'a/c', portRangeStart: 6100, portRangeEnd: 6200 });
+    expect(again).toMatchObject({ repo: 'a/c', portRangeStart: 6100, portRangeEnd: 6200 });
+    await expect(saveSetupProfile(w.o.ownerCtx, w.product.id, { portRangeStart: 6300, portRangeEnd: 6200 })).rejects.toThrow();
+    await expect(saveSetupProfile(w.o.ownerCtx, w.product.id, { portRangeStart: 80, portRangeEnd: 90 })).rejects.toThrow(); // below 1024
+  });
+
+  it('picks flows of the right kind from this organization only', async () => {
+    const w = await withConnections();
+    const setup = TEMPLATES.find((t) => t.kind === 'setup')!;
+    const update = TEMPLATES.find((t) => t.kind === 'update')!;
+    const sf = await createFlow(w.o.ownerCtx, { name: 'Setup', kind: 'setup', definition: setup.build() });
+    const uf = await createFlow(w.o.ownerCtx, { name: 'Update', kind: 'update', definition: update.build() });
+    const saved = await saveSetupProfile(w.o.ownerCtx, w.product.id, { setupFlowId: sf.id, updateFlowId: uf.id });
+    expect(saved).toMatchObject({ setupFlowId: sf.id, updateFlowId: uf.id });
+    expect((await getSetupProfile(w.o.staffCtx, w.product.id)).flows.map((f) => f.name)).toEqual(['Setup', 'Update']);
+    expect(await code(saveSetupProfile(w.o.ownerCtx, w.product.id, { setupFlowId: uf.id }))).toBe('validation'); // an update flow cannot be the setup flow
+    const other = await withConnections();
+    const foreign = await createFlow(other.o.ownerCtx, { name: 'Foreign', kind: 'setup', definition: setup.build() });
+    expect(await code(saveSetupProfile(w.o.ownerCtx, w.product.id, { setupFlowId: foreign.id }))).toBe('not_found');
   });
 
   it.each([

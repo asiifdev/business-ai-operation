@@ -89,6 +89,7 @@ export const deployments = pgTable(
     branch: text('branch'),
     serverConnectionId: text('server_connection_id'),
     appPath: text('app_path'),
+    appPort: integer('app_port'),
     deployedCommit: text('deployed_commit'),
     latestCommit: text('latest_commit'),
     behindBy: integer('behind_by'),
@@ -105,6 +106,7 @@ export const deployments = pgTable(
     foreignKey({ columns: [t.orgId, t.productId], foreignColumns: [products.orgId, products.id], name: 'fk_deployments_product' }),
     foreignKey({ columns: [t.orgId, t.clientId], foreignColumns: [clients.orgId, clients.id], name: 'fk_deployments_client' }),
     unique('uq_deployments_slot').on(t.productId, t.clientId, t.environment),
+    uniqueIndex('uq_deployments_server_port').on(t.serverConnectionId, t.appPort).where(sql`${t.serverConnectionId} is not null and ${t.appPort} is not null`),
     index('idx_deployments_client').on(t.orgId, t.clientId),
   ],
 );

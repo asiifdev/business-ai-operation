@@ -37,7 +37,8 @@ export class SshError extends Error {
 
 export interface SshSession {
   fingerprint: string;
-  exec(command: string, opts?: { timeoutMs?: number; maxBytes?: number }): Promise<{ code: number | null; stdout: string; stderr: string; truncated: boolean }>;
+  /** `stdin` is written and closed: scripts and secrets travel here, never in the command line (where `ps` would show them). */
+  exec(command: string, opts?: { timeoutMs?: number; maxBytes?: number; stdin?: string }): Promise<{ code: number | null; stdout: string; stderr: string; truncated: boolean }>;
   close(): void;
 }
 
@@ -108,6 +109,8 @@ export function sshConnect(cfg: SshConfig, secret: SshSecret, pinned: string | n
                   if (timer) clearTimeout(timer);
                   res({ code, stdout: stdout.slice(0, limit), stderr: stderr.slice(0, limit), truncated });
                 });
+                if (o.stdin !== undefined) stream.end(o.stdin);
+                else stream.end();
                 if (o.timeoutMs) {
                   timer = setTimeout(() => {
                     stream.close();

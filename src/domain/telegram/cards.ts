@@ -24,7 +24,7 @@ const RULE: Record<FindingRule, MessageKey> = {
   deployment_down: 'ruleDeploymentDown',
 };
 
-const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument' };
+const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun' };
 
 /** A link into the web app, or nothing when the app address is unknown. */
 const appLink = (appUrl: string | undefined, path: string | null, label: string) =>

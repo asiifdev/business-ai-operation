@@ -1,3 +1,5 @@
+import { enqueueJob } from '../domain/jobs/queue';
+import { executeRun, RunBusy } from '../domain/flows/engine';
 import { markMeetingFailedIfStuck, processMeeting } from './meeting-process';
 import { ensureWorker, PermanentJobError, type JobHandler, type JobType } from './worker';
 
@@ -6,6 +8,19 @@ import { ensureWorker, PermanentJobError, type JobHandler, type JobType } from '
  * the page never shows "processing" forever.
  */
 export const JOB_HANDLERS: Record<JobType, JobHandler> = {
+  // A flow run (D-061). Busy (another worker, or one of its servers is in use) is not an error: it waits and tries again.
+  'flow.run': async (payload, job) => {
+    const runId = String(payload.runId ?? '');
+    try {
+      return { outcome: await executeRun(runId) };
+    } catch (err) {
+      if (err instanceof RunBusy) {
+        await enqueueJob((await import('../db/client')).db, { orgId: job.orgId ?? '', type: 'flow.run', payload: { runId }, runAfter: new Date(Date.now() + 15_000) });
+        return { outcome: 'busy' };
+      }
+      throw err;
+    }
+  },
   'meeting.process': async (payload, job) => {
     try {
       return await processMeeting(payload);

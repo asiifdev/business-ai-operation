@@ -62,6 +62,10 @@ export const PERMISSIONS = {
   'setup.read': ALL,
   'setup.write': MANAGERS,
   'setup.run': MANAGERS,
+  // Deploy flows (M17, D-061): managers draw and run them; only the Owner may save one with a free command node (BR-M17-18)
+  'flow.read': ALL,
+  'flow.write': MANAGERS,
+  'flow.command': OWNER,
   // Telegram
   'telegram.link_self': ALL,
 } as const satisfies Record<string, readonly Role[]>;

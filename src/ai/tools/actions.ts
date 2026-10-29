@@ -3,6 +3,7 @@ import { getFinding } from '../../domain/action-center/findings';
 import type { FindingRule } from '../../domain/action-center/facts';
 import { markInvoiceSent } from '../../domain/billing/invoices';
 import { finalizeDocument } from '../../domain/documents/service';
+import { startRun } from '../../domain/flows/service';
 import { formatRupiah } from '../../lib/format';
 import { ToolRegistry, defineTool } from './registry';
 
@@ -33,6 +34,20 @@ export const finalizeDocumentTool = defineTool({
   args: z.object({ documentId: z.string().min(1).max(40) }),
   execute: async (ctx, args) => finalizeDocument(ctx, args.documentId),
   describe: () => 'Finalkan dokumen ini: dokumen mendapat nomor dan tidak dapat diubah lagi (revisi menjadi versi baru). Tidak ada pesan yang dikirim ke klien.',
+});
+
+/**
+ * D-061: running a deploy flow is an `act` tool. The plan (the flow version, its parameters, its connections) was fixed and
+ * hashed when it was proposed; approving it starts exactly that run, and the hash is worked out again before it starts.
+ */
+export const startFlowRunTool = defineTool({
+  name: 'start_flow_run',
+  description: 'Proposes to RUN a planned deploy flow on the organization\'s own servers. The plan (flow version, parameters, connections) is already fixed. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'setup.run',
+  args: z.object({ runId: z.string().min(1).max(40), planHash: z.string().regex(/^[0-9a-f]{64}$/) }),
+  execute: async (ctx, args) => startRun(ctx, args.runId, args.planHash),
+  describe: () => 'Jalankan flow deploy yang sudah direncanakan: persis sesuai rencana yang ditampilkan (versi flow, parameter, dan koneksi). Langkah yang mengubah server berjalan satu per satu dengan progres yang terlihat.',
 });
 
 export interface ActionFinding {
@@ -115,7 +130,10 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
   }
 
   // The catalogue the approval decision looks tools up in; a finding's own card never proposes it.
-  if (!finding) registry.register(finalizeDocumentTool);
+  if (!finding) {
+    registry.register(finalizeDocumentTool);
+    registry.register(startFlowRunTool);
+  }
 
   return registry;
 }

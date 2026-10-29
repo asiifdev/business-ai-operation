@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { RunView } from '../../../components/flows/RunView';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const { id } = Astro.params;
+---
+
+<AppShell title="Eksekusi setup" current="runs">
+  <RunView client:only="react" id={id!} canRun={can(Astro.locals.user!.role, 'setup.run')} />
+</AppShell>

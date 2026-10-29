@@ -64,6 +64,21 @@ const aapanelInput = z.object({
 export const connectionSchema = z.discriminatedUnion('kind', [githubInput, sshInput, aapanelInput]);
 export type ConnectionInput = z.input<typeof connectionSchema>;
 
+/**
+ * Keeps only the secrets the login method actually uses (data minimisation): a password left over from an earlier method must
+ * not stay in the vault, and must not be hinted at on screen. The hint shows the end of a password only; for a key it is just
+ * dots (the end of a key says nothing and reveals nothing).
+ */
+export function pruneSshSecret(method: AuthMethod, secret: Record<string, string>): { secret: Record<string, string>; hint: string } {
+  const keep: Record<string, string> = {};
+  if (method !== 'private_key' && secret.password) keep.password = secret.password;
+  if (method !== 'password') {
+    if (secret.privateKey) keep.privateKey = secret.privateKey;
+    if (secret.passphrase) keep.passphrase = secret.passphrase;
+  }
+  return { secret: keep, hint: keep.password ? secretHint(keep.password) : '••••' };
+}
+
 /** Tidies a pasted key and proves it can be used with its passphrase, before anything is stored (BR-M17-08). */
 function acceptPrivateKey(raw: string, passphrase: string | undefined): string {
   const key = normalizePrivateKey(raw);
@@ -130,11 +145,11 @@ export async function createConnection(ctx: Ctx, raw: ConnectionInput): Promise<
   } else if (input.kind === 'ssh') {
     await assertPublicHost(input.host);
     config = { host: input.host, port: input.port, username: input.username, authMethod: input.authMethod };
-    secret = {};
-    if (input.password) secret.password = input.password;
-    if (input.privateKey) secret.privateKey = acceptPrivateKey(input.privateKey, input.passphrase);
-    if (input.passphrase) secret.passphrase = input.passphrase;
-    hint = input.password ? secretHint(input.password) : '••••';
+    const given: Record<string, string> = {};
+    if (input.password) given.password = input.password;
+    if (input.privateKey) given.privateKey = acceptPrivateKey(input.privateKey, input.passphrase);
+    if (input.passphrase) given.passphrase = input.passphrase;
+    ({ secret, hint } = pruneSshSecret(input.authMethod, given));
   } else {
     await assertPublicHost(new URL(input.url).hostname);
     config = { url: input.url, tlsInsecure: input.tlsInsecure };
@@ -194,6 +209,7 @@ export async function updateConnection(ctx: Ctx, id: string, raw: z.input<typeof
   const config = { ...before.config } as Record<string, unknown>;
   let secret = before.secretCiphertext ? decryptSecret(before.secretCiphertext, ctx.orgId, id, before.secretKeyVersion ?? undefined) : null;
   let moved = false;
+  let pruneChanged = false;
   let hint = before.secretHint;
   if (before.kind === 'ssh') {
     for (const k of ['host', 'port', 'username', 'authMethod'] as const) {
@@ -212,6 +228,10 @@ export async function updateConnection(ctx: Ctx, id: string, raw: z.input<typeof
     }
     const method = config.authMethod as AuthMethod;
     if ((method !== 'private_key' && !secret?.password) || (method !== 'password' && !secret?.privateKey)) throw new DomainError('validation', 'secret does not match the login method');
+    const pruned = pruneSshSecret(method, secret ?? {});
+    if (Object.keys(pruned.secret).length !== Object.keys(secret ?? {}).length) pruneChanged = true;
+    secret = pruned.secret;
+    hint = pruned.hint;
   } else if (before.kind === 'aapanel') {
     if (p.url && p.url !== config.url) {
       await assertPublicHost(new URL(p.url).hostname);
@@ -226,7 +246,7 @@ export async function updateConnection(ctx: Ctx, id: string, raw: z.input<typeof
     }
   }
   // Seal again only when a secret was actually replaced: a rename must not rewrite the stored secret.
-  const secretChanged = Boolean(p.password || p.privateKey || p.passphrase !== undefined || p.apiKey);
+  const secretChanged = Boolean(p.password || p.privateKey || p.passphrase !== undefined || p.apiKey) || pruneChanged;
   const enc = secretChanged && secret && before.kind !== 'github' ? encryptSecret(secret, ctx.orgId, id) : null;
   try {
     await db.transaction(async (tx) => {
@@ -360,11 +380,11 @@ export async function autoLinkVerifiedInstallation(ctx: Ctx, verification: strin
 
 /**
  * Re-seals every secret that is not under the current key (`pnpm connections:rotate`). Safe to run again and again: rows
- * already on the current version are skipped, and each row changes in its own transaction.
+ * already on the current version are skipped, and each row changes in its own transaction. `only.orgId` limits it to one organization.
  */
-export async function rotateConnectionSecrets(): Promise<{ rotated: number; skipped: number }> {
+export async function rotateConnectionSecrets(only: { orgId?: string } = {}): Promise<{ rotated: number; skipped: number }> {
   const current = currentKeyVersion();
-  const rows = await db.select({ id: connections.id, orgId: connections.orgId, ciphertext: connections.secretCiphertext, version: connections.secretKeyVersion }).from(connections);
+  const rows = await db.select({ id: connections.id, orgId: connections.orgId, ciphertext: connections.secretCiphertext, version: connections.secretKeyVersion }).from(connections).where(only.orgId ? eq(connections.orgId, only.orgId) : undefined);
   let rotated = 0;
   let skipped = 0;
   for (const r of rows) {

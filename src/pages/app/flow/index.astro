@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { FlowsPage } from '../../../components/flows/FlowsPage';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const canWrite = can(Astro.locals.user!.role, 'flow.write');
+---
+
+<AppShell title="Flow deploy" current="flows">
+  <FlowsPage client:only="react" canWrite={canWrite} />
+</AppShell>

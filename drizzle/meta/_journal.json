@@ -92,6 +92,13 @@
       "when": 1793238505353,
       "tag": "0012_magenta_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793257834026,
+      "tag": "0013_sharp_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

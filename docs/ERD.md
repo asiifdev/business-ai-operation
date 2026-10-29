@@ -322,6 +322,17 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); persetujuan memakai `approvals` yang sudah ada (tool `start_client_setup`, `update_deployment_code`).
 
+> **Revisi D-061 (flow deploy, ✅ disetujui owner 2026-10-29, D-062; menggantikan usulan D-060; migrasi `0013`):**
+> - Enum baru `flow_kind`: `setup` · `update`.
+> - **`flows`**: `id`, `org_id`, `name`, `kind flow_kind`, `description N`, `product_id N` (ref, cakupan opsional), `current_version integer`, `archived_at N`, `created_by`, timestamps. `UNIQUE (org_id, id)`, `UNIQUE (org_id, lower(name)) WHERE archived_at IS NULL`.
+> - **`flow_versions`** (tidak dapat diubah): `id`, `org_id`, `flow_id` (ref), `version integer`, `definition jsonb` (`slots`, `params`, `nodes`, `edges`), `has_command_node boolean` (menurunkan hak ubah, BR-M17-18), `created_by`, `created_at`. `UNIQUE (flow_id, version)`. **Pemicu** menolak `UPDATE` dan `DELETE` (seperti dokumen final).
+> - **`playbook_runs`**: tambah `flow_version_id` (ref), `bindings jsonb` (slot ke id koneksi), `plan_hash text N`, `secrets_ciphertext text N` dan `secrets_key_version smallint N` (rahasia run, **NULL setelah run `done`, `failed` permanen, atau `cancelled`**; tidak pernah dikembalikan API). `server_connection_id` menjadi **nullable** dan indeks unik "satu run `running` per server" **dihapus**: pengecualian bersama diganti kunci advisory per koneksi terikat (BR-M17-15). Ini menggantikan usulan `panel_connection_id` (tujuannya sama, kini umum lewat `bindings`).
+> - **`playbook_steps`** menjadi catatan eksekusi simpul: `step_key` berisi **id simpul**, tambah `tool text` dan `outputs jsonb` (keluaran non-rahasia, sumber variabel simpul berikutnya); `position` = urutan topologi.
+> - **`product_setups`**: tambah `setup_flow_id N` dan `update_flow_id N` (ref `flows`), `port_range_start integer N` dan `port_range_end integer N` (bawaan 6000 dan 6999 di kode, `CHECK start <= end`); kolom `steps` tidak dipakai lagi (dihapus di migrasi berikutnya setelah data dipindahkan).
+> - **`deployments`**: tambah `app_port integer N`; `UNIQUE (server_connection_id, app_port)` bila keduanya ada.
+> - Migrasi `0013` memuat semua di atas; tabel menjadi **40**.
+
+
 ## 4. Pengelompokan berkas skema
 
 | Berkas | Tabel |

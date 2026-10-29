@@ -1,0 +1,11 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { RunPlanner } from '../../../components/flows/RunPlanner';
+
+export const prerender = false;
+const clean = (v: string | null) => (v && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : null);
+---
+
+<AppShell title="Setup baru" current="runs">
+  <RunPlanner client:only="react" initialFlowId={clean(Astro.url.searchParams.get('flowId'))} initialProductId={clean(Astro.url.searchParams.get('productId'))} />
+</AppShell>

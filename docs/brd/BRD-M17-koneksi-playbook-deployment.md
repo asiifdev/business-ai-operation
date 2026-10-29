@@ -143,3 +143,25 @@ Owner menyetujui BRD ini beserta saran berikut (`docs/DECISIONS.md` D-054):
 | `brd/BRD-M14` | Antarmuka berpusat pada asisten, komponen progres, pembaruan tampilan menyeluruh |
 | `PRD.md`, `ERD.md` | Spesifikasi dan skema modul ini (tahap berikutnya, setelah BRD disetujui) |
 | `docs/DECISIONS.md` | Keputusan jenis koneksi, enkripsi rahasia, dan batas eksekusi |
+
+## 13. Amandemen D-061: flow deploy buatan pengguna (✅ disetujui owner 2026-10-29)
+
+Arah dan keputusan owner 2026-10-29 tercatat di `docs/DECISIONS.md` D-061. Bagian ini mengubah cara §3 (poin 3) dan §4 dikerjakan: **playbook bukan runtime tertanam, melainkan flow yang disusun pengguna sebagai diagram** (simpul dan garis, seperti n8n). Alur Laravel + pm2 (D-060) menjadi **template flow bawaan**.
+
+**Konsep.** *Flow* = diagram milik organisasi, berjenis `setup` atau `update`. *Simpul* = satu **alat** dari katalog di kode, milik satu jenis koneksi (aaPanel: buat database, buat situs, buat reverse proxy, daftar situs; SSH: clone, perbarui, tulis berkas, pm2, jalankan perintah; GitHub: daftar repo, ujung branch; Orbyte: alokasi port, hasilkan rahasia, render templat, rekam deployment, cek HTTP). *Slot koneksi* = peran bernama pada flow (`server`, `panel`, `github`) yang diikat ke koneksi nyata saat dijalankan, sehingga satu flow dipakai ulang untuk banyak produk dan klien. *Variabel* = keluaran satu simpul yang dipakai simpul lain; nilai rahasia bertanda dan disamarkan.
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-M17-17 | Jenis simpul hanya dari **katalog di kode**; pengguna dan AI tidak dapat menambah jenis simpul. Tiap alat punya skema masukan (Zod), keluaran, dan tingkat (`read` atau `change`) | Final (D-061) |
+| BR-M17-18 | Simpul **perintah SSH** (skrip buatan manusia) dan **tulis berkas bebas** (`ssh.write_file`, D-063: menulis ke path mana saja sama dengan menjalankan kode) hanya dapat dibuat atau diubah **Pemilik**; semua variabel yang disisipkan ke skrip **dikutip otomatis** sebagai nilai literal, tidak dapat menjadi perintah. **AI tidak pernah** menulis atau mengubahnya | Final (D-061) |
+| BR-M17-19 | **Pemilik dan Admin** membuat dan mengubah flow tanpa simpul perintah bebas; Staf hanya melihat. Tiap perubahan membuat **versi baru yang tidak dapat diubah** dan tercatat di audit | Final (D-061) |
+| BR-M17-20 | Run memakai **snapshot versi** flow yang disetujui; mengubah flow sesudahnya tidak memengaruhi run yang berjalan atau menunggu | Usulan |
+| BR-M17-21 | **Persetujuan atas rencana lengkap:** server menyelesaikan flow dan parameter menjadi daftar simpul `change` berikut argumen non-rahasia yang sudah diselesaikan; yang disetujui ditandai dengan hash rencana, dan sebelum jalan hash dihitung ulang dan harus sama | Final (CR-08) |
+| BR-M17-22 | Flow divalidasi sebelum disimpan dan sebelum dijalankan: tanpa siklus, tiap variabel punya sumber, tiap slot terikat ke koneksi berjenis benar yang pernah lolos tes, dan alat yang belum terbukti pada jenis koneksi itu ditolak | Usulan |
+| BR-M17-23 | Eksekusi berurutan menurut urutan topologi diagram; tiap simpul berjalan sekali (status `done` tidak diulang saat dilanjutkan); simpul gagal menghentikan run dan menunggu keputusan (coba lagi atau batalkan); **rollback manual** (D-054). Cabang paralel ditunda ⚠️ | Usulan |
+| BR-M17-24 | **Rahasia run** (kata sandi database, kunci Reverb, `APP_KEY`) dihasilkan kode, dienkripsi selama run dan **dihapus** saat run selesai, gagal permanen, atau dibatalkan; tidak ke model, tidak di log, tidak tampil di UI (D-060 butir 4) ✅ disetujui eksplisit 2026-10-29 | Final (D-062) |
+| BR-M17-25 | **Penghapusan oleh alat hanya untuk objek yang dibuat run itu sendiri** (mis. database yang dibuat simpul sebelumnya dalam run yang sama); tidak ada alat yang menghapus berdasarkan pencarian bebas | Final (arahan owner 2026-10-29) |
+| BR-M17-26 | Port aplikasi = tertinggi terpakai di rentang yang ditetapkan + 1 (bawaan 6000-6999), dibaca dari target proxy aaPanel, port yang mendengarkan di server, dan deployment tercatat, lalu diperiksa kosong sebelum dipakai (D-060 butir 3) | Final (jawaban owner) |
+| BR-M17-27 | Peran AI: memilih flow, menanyakan parameter yang kurang, dan mengajukan run; boleh mengusulkan **draf flow** (ditandai "dibantu AI", wajib ditinjau dan disimpan manusia) hanya dari simpul di katalog | Final (D-061) |
+
+**Kriteria penerimaan tambahan:** satu flow dipakai untuk dua produk dengan koneksi berbeda; simpul perintah ditolak untuk Admin dan untuk AI; variabel berisi `;`, `$()`, `` ` `` dan spasi tidak dapat keluar dari kutipan; ubah flow setelah persetujuan tidak mengubah run; run dilanjutkan setelah proses dimatikan tanpa mengulang simpul selesai dan tanpa kehilangan rahasia run; rahasia run hilang dari database setelah run selesai; progres tampil langsung di diagram.

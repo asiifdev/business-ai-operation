@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, auditLog, users } from '../../db/schema';
 import { getAiOverview } from '../../domain/ai/service';
+import { listConnections } from '../../domain/connections/service';
 import { createDocument, listDocuments } from '../../domain/documents/service';
+import { getFlow, getRun, listFlows, listRuns, planRun } from '../../domain/flows/service';
 import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
@@ -453,6 +455,96 @@ export function buildAssistantRegistry(): ToolRegistry {
   );
 
   registry.register(finalizeDocumentTool);
+
+  registry.register(
+    defineTool({
+      name: 'list_connections',
+      description: 'Lists the organization\'s connections (GitHub, SSH servers, aaPanel) with their kind, name and whether the last test passed. Never any secret. Use the ids to bind the slots of a flow.',
+      tier: 'read',
+      permission: 'connection.read',
+      args: z.object({ kind: z.enum(['github', 'ssh', 'aapanel']).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listConnections(ctx, args);
+        return { jumlah: rows.length, koneksi: rows.map((c) => ({ id: c.id, jenis: c.kind, nama: c.name, tesTerakhir: c.testStatus === 'ok' ? 'berhasil' : c.testStatus === 'failed' ? 'gagal' : 'belum dites', sidikJariDikunci: c.kind === 'ssh' ? Boolean(c.hostKeyFingerprint) : undefined })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_flows',
+      description: 'Lists the deploy flows of the organization (setup of a new client, code update), with their kind and number of steps.',
+      tier: 'read',
+      permission: 'flow.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const rows = await listFlows(ctx);
+        return { jumlah: rows.length, flow: rows.map((f) => ({ id: f.id, nama: f.name, jenis: f.kind === 'setup' ? 'setup klien baru' : 'pembaruan kode', jumlahLangkah: f.nodeCount, versi: f.currentVersion, adaPerintahBebas: f.hasCommandNode })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_flow',
+      description: 'Shows one deploy flow: the connection slots it needs, the parameters to fill in (name, pattern, default) and its steps in order. Use it to know what to ask the person before planning a run.',
+      tier: 'read',
+      permission: 'flow.read',
+      args: z.object({ flowId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const f = await getFlow(ctx, args.flowId);
+        return { nama: f.flow.name, jenis: f.flow.kind, versi: f.version, slotKoneksi: f.definition.slots.map((s) => ({ nama: s.name, jenis: s.kind })), parameter: f.definition.params.map((p) => ({ nama: p.name, label: p.label ?? p.name, tipe: p.type, wajib: p.required, bawaan: p.default ?? null, pola: p.pattern })), langkah: f.definition.nodes.map((n) => ({ id: n.id, alat: n.tool, label: n.label ?? n.id })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'plan_flow_run',
+      description: 'Plans a run of a deploy flow for a product and asks for approval. It changes NOTHING on any server: it only creates the plan and a pending approval that a person must approve. Ask the person for every parameter and which connection fills each slot; never invent a value. Product id from list_products.',
+      tier: 'draft',
+      permission: 'setup.run',
+      args: z.object({
+        flowId: z.string().min(1).max(40),
+        productId: z.string().min(1).max(40),
+        params: z.record(z.string(), z.union([z.string().max(500), z.number(), z.boolean()])).default({}),
+        bindings: z.record(z.string(), z.string().min(1).max(40)).default({}),
+      }),
+      run: async (ctx, args) => {
+        const plan = await planRun(ctx, args);
+        return { runId: plan.runId, persetujuanId: plan.approvalId, langkahYangMengubah: plan.changes.map((c) => c.label ?? c.tool), catatan: 'Rencana dibuat dan menunggu persetujuan manusia di Action Center atau halaman run. Belum ada yang dijalankan.' };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_setup_runs',
+      description: 'Lists recent runs of deploy flows with their status (waiting for approval, running, paused on an error, done, cancelled).',
+      tier: 'read',
+      permission: 'setup.read',
+      args: z.object({ flowId: z.string().min(1).max(40).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listRuns(ctx, args);
+        const label = { planned: 'direncanakan', awaiting_approval: 'menunggu persetujuan', running: 'berjalan', paused: 'berhenti karena galat', done: 'selesai', failed: 'gagal', cancelled: 'dibatalkan' } as const;
+        return { jumlah: rows.length, run: rows.slice(0, 20).map((r) => ({ id: r.id, status: label[r.status], untuk: r.domain || null, galat: r.error })) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_setup_run',
+      description: 'Shows one run of a deploy flow: its status and, step by step, what is pending, running, done or failed (with the reason). Use it to answer "how far is it".',
+      tier: 'read',
+      permission: 'setup.read',
+      args: z.object({ runId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const r = await getRun(ctx, args.runId);
+        return { status: r.status, galat: r.error, langkah: r.steps.map((s) => ({ langkah: s.node, alat: s.tool, status: s.status, galat: s.error })) };
+      },
+    }),
+  );
 
   registry.register(
     defineTool({

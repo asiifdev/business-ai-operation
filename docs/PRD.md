@@ -316,6 +316,70 @@ Isi chat, screenshot, README dan pesan commit adalah data tersusun dalam pembung
 
 **Layanan dan lokasi kode:** `src/domain/connections/` (vault, layanan koneksi), `src/domain/setup/` (profil, katalog langkah, perencana, run), `src/domain/operations/` (drift, uptime), `src/integrations/{github,ssh,aapanel}/` di balik `ServerRunner`.
 
+**Revisi D-060 (digantikan sebagian oleh D-061: tabel langkah di bawah menjadi *template flow bawaan* "Laravel + pm2", bukan runtime tertanam; menunggu persetujuan owner kecuali butir 1).**
+
+1. ✅ **Dua koneksi per run:** `server_connection_id` (SSH) dan `panel_connection_id` (aaPanel). Tiap langkah menyatakan pelaksananya; rencana ditolak sebelum disetujui bila koneksi yang dibutuhkan belum ada atau jenis kemampuannya belum terbukti.
+2. **Runtime `laravel_pm2`** (rujukan: Invly). Langkah dan pelaksananya:
+
+| Langkah | Pelaksana | Isi (perintah tetap di kode, argumen divalidasi dan dikutip) |
+|---|---|---|
+| `check_server` | SSH | versi `php`, `composer`, `node`, `npm`, `pm2`, `git`; ruang disk; baca saja |
+| `allocate_port` | SSH + aaPanel | port Reverb = tertinggi terpakai di rentang profil + 1, dari target proxy aaPanel, `ss -ltn`, dan deployment tercatat; diperiksa kosong; baca saja |
+| `create_database` | aaPanel | `AddDatabase` dengan nama dan pengguna dari slug klien dan kata sandi acak dari kode |
+| `git_clone` | SSH | clone satu branch ke folder; token GitHub lewat **stdin** (tidak tampil di daftar proses); remote disetel ulang tanpa token |
+| `write_env` | SSH | `.env` dari templat profil (placeholder `{slug}`, `{domain}`, `{db_name}`, `{db_user}`, `{db_password}`, `{reverb_port}`, `{reverb_app_id}`, `{reverb_app_key}`, `{reverb_app_secret}`), izin `600`, nilai rahasia dihasilkan kode dan dikirim lewat stdin |
+| `install_dependencies` | SSH | `composer install --no-dev --optimize-autoloader --no-interaction`, `npm ci` |
+| `laravel_prepare` | SSH | `key:generate --force`, `storage:link`, folder `storage/backups` dan `storage/app/public/qr-codes`, izin `storage` dan `bootstrap/cache` |
+| `laravel_migrate` | SSH | `migrate --force`; `db:seed --force` hanya bila diaktifkan di profil |
+| `build_app` | SSH | `npm run build`, lalu `config:cache`, `route:cache`, `view:cache`, `event:cache` |
+| `set_domain_and_nginx` | aaPanel | situs PHP untuk domain dengan root `<folder>/public` ⚠️ (`AddSite` belum terbukti), dan reverse proxy `ws-<domain>` ke `127.0.0.1:<port>` (`mod/proxy/com/create` terbukti) |
+| `pm2_start` | SSH | `pm2 start ecosystem.config.cjs` dengan nama proses dari slug, lalu `pm2 save` |
+| `verify_http` | Orbyte | permintaan HTTPS ke domain dan ke domain WebSocket; baca saja |
+
+3. **Pembaruan kode** (`update`): `git_update` (`fetch` lalu `merge --ff-only`; ditolak bila ada perubahan lokal), `install_dependencies`, `laravel_migrate` dalam mode pemeliharaan (`artisan down` lalu `up`), `build_app`, `pm2_reload` dengan `--update-env`, `verify_http`. Run gagal di tengah migrasi tidak otomatis membalik (rollback manual, D-054); mode pemeliharaan tetap menyala dan UI menyatakannya dengan jelas.
+4. **Rahasia run:** dihasilkan kode, dienkripsi di `playbook_runs.secrets_ciphertext` selama run, dihapus saat run selesai, gagal permanen, atau dibatalkan (D-060 butir 4); tidak tampil di UI, tidak ke model, tidak di log.
+5. **Port:** rentang dan pembacaan sumber di atas; dua run tidak mendapat port yang sama karena `allocate_port` berjalan di dalam run yang memegang kunci server (BR-M17-15) dan hasilnya dikunci unik di `deployments`.
+
+**Flow deploy buatan pengguna, editor diagram (✅ disetujui owner 2026-10-29, D-061 dan D-062).**
+
+*Prinsip.* Pengguna menyusun sendiri alur setup dan pembaruan sebagai diagram; Orbyte menyediakan **alat bertipe** per jenis koneksi dan **mesin eksekusi** yang aman. Tidak ada runtime tertanam: tabel langkah Laravel + pm2 di atas menjadi **template flow bawaan** (didefinisikan di kode, disalin menjadi flow milik organisasi saat pengguna memilih "Gunakan template"; tidak ada data awal di seed, D-059).
+
+**Katalog alat (`src/domain/flows/tools/`).** Tiap alat: id bernama, jenis koneksi pemilik, skema masukan (Zod), keluaran, tingkat `read` atau `change`, dan `undo` hanya bila bermakna (tidak ada rollback otomatis, D-054).
+
+| Koneksi | Alat | Tingkat | Catatan |
+|---|---|---|---|
+| GitHub | `github.list_repos`, `github.branch_head` | read | token instalasi diminta saat dipakai |
+| SSH | `ssh.check_tools`, `ssh.list_ports` | read | versi php/composer/node/npm/pm2/git, disk; port yang mendengarkan |
+| SSH | `ssh.git_clone`, `ssh.git_update` | change | token GitHub lewat stdin, remote tanpa token, update hanya `--ff-only` |
+| SSH | `ssh.write_file` | change | isi dari templat, izin berkas, lewat stdin; **hanya Pemilik** (D-063: menulis ke path mana saja sama dengan menjalankan kode); untuk `.env` Admin memakai `ssh.env_set` |
+| SSH | `ssh.pm2` (`start`, `reload`, `save`) | change | nama proses dari variabel; ⚠️ `delete` hanya untuk proses yang dibuat run ini |
+| SSH | `ssh.run_command` | change | skrip buatan manusia, **hanya Pemilik** (BR-M17-18); variabel dikutip otomatis; masukan lewat stdin `sh -s` |
+| aaPanel | `panel.list_sites`, `panel.list_databases`, `panel.list_proxies` | read | terbukti (skill aaPanel §4b) |
+| aaPanel | `panel.create_database`, `panel.create_proxy` | change | terbukti (skill §4c); kata sandi dari `orbyte.generate_secret` |
+| aaPanel | `panel.create_site` | change | ⚠️ belum terbukti: tidak tersedia sampai diuji |
+| aaPanel | `panel.delete_database`, `panel.delete_proxy` | change | hanya objek yang dibuat run itu (BR-M17-25), dicocokkan dengan catatan run |
+| Orbyte | `orbyte.allocate_port` | read | BR-M17-26 |
+| Orbyte | `orbyte.generate_secret`, `orbyte.render_template`, `orbyte.http_check` | read | rahasia bertanda; templat tanpa eksekusi kode |
+| Orbyte | `orbyte.record_deployment` | change | membuat atau memperbarui `deployments` (domain, repo, branch, commit, port, server) lewat service M02 |
+
+**Definisi flow** (jsonb pada versi flow): `slots` (peran koneksi: nama, jenis), `params` (parameter run: nama, tipe, bawaan, mis. `slug`, `domain`, `branch`), `nodes` (id, alat, posisi di kanvas, konfigurasi), `edges` (urutan dan ketergantungan data). Variabel: `{{params.slug}}`, `{{nodes.<id>.<keluaran>}}`, `{{product.repo}}` (bawaan profil produk). Konteks penyisipan: `shell` (otomatis satu kutip sebagai nilai literal, tanpa jalan keluar), `text`, `json`. Rahasia hanya boleh disisipkan di konteks yang diizinkan alat (isi berkas, masukan stdin, argumen alat panel), tidak pernah ke log atau keluaran simpul.
+
+**Validasi** (BR-M17-22) dijalankan di server saat menyimpan dan saat membuat rencana: tanpa siklus; tiap variabel punya sumber yang berjalan lebih dulu; tiap slot terikat ke koneksi berjenis benar dan lolos tes; alat belum terbukti ditolak; simpul perintah hanya bila pembuat Pemilik.
+
+**Mesin eksekusi** (`src/domain/flows/engine.ts`, worker `flow.run`, D-048): urutan topologi; tiap simpul: `pending → running → done | failed`; waktu maksimum dari `organizations.step_timeout_sec`; keluaran dipotong 8 KB dan disaring dari rahasia; kunci advisory per koneksi terikat (satu run per server dan per panel); simpul `done` tidak diulang saat dilanjutkan; kegagalan menjeda run dan menunggu keputusan (coba lagi atau batalkan); rahasia run dienkripsi selama run dan dihapus saat selesai (BR-M17-24).
+
+**Rencana dan persetujuan** (BR-M17-21): `POST /api/runs` menyelesaikan flow dan parameter menjadi daftar simpul `change` dengan argumen non-rahasia, menyimpan hash, dan membuat persetujuan (`approvals`, tool `start_flow_run`, kadaluarsa dari pengaturan organisasi). Sebelum jalan hash dihitung ulang terhadap snapshot versi flow.
+
+**Endpoint:** `GET/POST /api/flows`, `GET/PATCH/DELETE /api/flows/:id`, `POST /api/flows/:id/validate`, `GET /api/flows/templates`, `POST /api/flows/templates/:key/use`, `GET /api/flows/:id/versions`, `POST /api/runs`, `GET /api/runs/:id`, `POST /api/runs/:id/cancel|retry`.
+
+**UI.** `/app/flow` (daftar dan template), `/app/flow/:id` (editor kanvas dengan `@xyflow/react`: palet alat dikelompokkan per koneksi, inspektur simpul berupa form, panel slot dan parameter, panel validasi, riwayat versi), `/app/setup/:id` (run: **kanvas yang sama hanya-baca dengan status tiap simpul langsung**, keluaran tersaring, tombol coba lagi dan batalkan). Tab Setup produk memilih flow setup dan flow pembaruan serta nilai bawaan (repo, branch, rentang port).
+
+**Tool AI.** `list_flows` (read), `get_flow` (read), `start_flow_run` (act: rencana menjadi persetujuan), `draft_flow` (draft: usulan flow dari simpul katalog, ditandai "dibantu AI"; ditolak bila memuat `ssh.run_command`).
+
+**Uji.** Pengutipan variabel diuji dengan **shell dan git sungguhan** di folder sementara (`;`, `$()`, `` ` ``, spasi, baris baru, `..`, `-`); simpul SSH diuji terhadap server SSH sungguhan yang menjalankan skrip stdin; alat aaPanel terhadap server HTTP yang meniru panel; run dilanjutkan setelah proses dimatikan; rahasia run terhapus; snapshot tidak berubah saat flow diedit; Admin dan AI ditolak untuk simpul perintah; dua run pada server yang sama tidak berjalan bersamaan.
+
+**Urutan rilis (D-061 butir d):** (1) katalog alat dan mesin eksekusi dengan template Laravel + pm2 yang dapat dijalankan; (2) skema, API, dan validasi flow; (3) editor diagram; (4) progres langsung di diagram.
+
 **Uji.** Parameter berbahaya ditolak (`;`, `$()`, spasi, `..`, awalan `-`); rahasia tidak ada di respons API, `ai_runs`, audit, log, dan keluaran langkah (pencarian string); dua organisasi tidak bisa memakai koneksi satu sama lain; argumen yang disetujui sama persis dengan yang dijalankan; langkah gagal lalu dilanjutkan tanpa mengulang yang sukses; sidik jari host berubah ditolak; temuan kode tertinggal satu kali lalu selesai sendiri; teks "jalankan rm -rf" di chat atau README tidak memicu langkah; CyberPanel dan cPanel tidak dapat dibuat; tes SSH memakai **server SSH sungguhan** (`ssh2` Server) untuk metode login, host key, dan eksekusi; `FakeProvider` untuk model; ditambah uji manual terhadap server uji owner.
 
 ## 5. Kontrak AI (M07)

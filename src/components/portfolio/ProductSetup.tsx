@@ -1,13 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { getSetupProfile } from '../../domain/setup/profiles';
-import type { StepKey } from '../../domain/setup/steps';
 import { api, badFields, errorKey } from '../../lib/api-client';
-import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useLoad } from '../../lib/use-load';
 import { useT } from '../../lib/use-t';
-import { CheckboxGroup } from '../forms/Checkbox';
 import { FormField } from '../forms/FormField';
+import { NumberInput } from '../forms/NumberInput';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
@@ -18,21 +16,7 @@ import { ErrorBox, Skeleton } from '../ui/states';
 
 type Data = Jsonify<Awaited<ReturnType<typeof getSetupProfile>>>;
 
-const STEP_LABEL: Record<StepKey, MessageKey> = {
-  check_server: 'stepCheckServer',
-  git_clone: 'stepGitClone',
-  git_update: 'stepGitUpdate',
-  create_database: 'stepCreateDatabase',
-  write_env: 'stepWriteEnv',
-  install_dependencies: 'stepInstallDependencies',
-  build_app: 'stepBuildApp',
-  set_domain_and_nginx: 'stepSetDomainNginx',
-  restart_service: 'stepRestartService',
-  verify_http: 'stepVerifyHttp',
-};
-const ALL_STEPS = Object.keys(STEP_LABEL) as StepKey[];
-
-/** How a product is brought online for a client: where its code lives, which server, which steps, and the rules the assistant must follow. */
+/** How a product is brought online for a client: where its code lives, the usual connections, which flows set up and update a client, and the rules the assistant must follow. */
 export function ProductSetup({ productId, canWrite }: { productId: string; canWrite: boolean }) {
   const t = useT();
   const load = useLoad(() => api<Data>('GET', `/api/products/${productId}/setup`), [productId]);
@@ -45,16 +29,19 @@ function SetupForm({ productId, data, canWrite, onSaved }: { productId: string; 
   const t = useT();
   const p = data.profile;
   const github = data.connections.filter((c) => c.kind === 'github');
-  const servers = data.connections.filter((c) => c.kind !== 'github');
+  const servers = data.connections.filter((c) => c.kind === 'ssh');
+  const setupFlows = data.flows.filter((f) => f.kind === 'setup');
+  const updateFlows = data.flows.filter((f) => f.kind === 'update');
   const [githubId, setGithubId] = useState(p?.githubConnectionId ?? github[0]?.id ?? '');
   const [repo, setRepo] = useState(p?.repo ?? '');
   const [branch, setBranch] = useState(p?.defaultBranch ?? '');
   const [mode, setMode] = useState<'branch_per_client' | 'shared_branch'>(p?.mode ?? 'branch_per_client');
   const [folder, setFolder] = useState(p?.folderPattern ?? '{produk}-{klien}');
-  const [serverId, setServerId] = useState(p?.serverConnectionId ?? '');
-  const [steps, setSteps] = useState<string[]>(p?.steps ?? data.defaultSteps);
-  const [nginx, setNginx] = useState(p?.nginxTemplate ?? '');
-  const [env, setEnv] = useState(p?.envTemplate ?? '');
+  const [serverId, setServerId] = useState(p?.serverConnectionId ?? servers[0]?.id ?? '');
+  const [setupFlow, setSetupFlow] = useState(p?.setupFlowId ?? '');
+  const [updateFlow, setUpdateFlow] = useState(p?.updateFlowId ?? '');
+  const [portFrom, setPortFrom] = useState<number | null>(p?.portRangeStart ?? data.defaultPortRange.start);
+  const [portTo, setPortTo] = useState<number | null>(p?.portRangeEnd ?? data.defaultPortRange.end);
   const [notes, setNotes] = useState(p?.rulesNotes ?? '');
   const [repos, setRepos] = useState<Array<{ fullName: string; defaultBranch: string }>>([]);
   const [repoError, setRepoError] = useState(false);
@@ -88,9 +75,10 @@ function SetupForm({ productId, data, canWrite, onSaved }: { productId: string; 
         mode,
         folderPattern: folder || null,
         serverConnectionId: serverId || null,
-        steps: ALL_STEPS.filter((k) => steps.includes(k)).map((key) => ({ key })),
-        nginxTemplate: nginx,
-        envTemplate: env,
+        setupFlowId: setupFlow || null,
+        updateFlowId: updateFlow || null,
+        portRangeStart: portFrom,
+        portRangeEnd: portTo,
         rulesNotes: notes,
       });
       setSaved(true);
@@ -102,7 +90,6 @@ function SetupForm({ productId, data, canWrite, onSaved }: { productId: string; 
     }
   }
 
-  const noConnections = data.connections.length === 0;
   return (
     <form onSubmit={submit} noValidate>
       <Panel className="flex flex-col gap-4" aria-label={t('setupTitle')}>
@@ -111,7 +98,7 @@ function SetupForm({ productId, data, canWrite, onSaved }: { productId: string; 
           {p?.isAiDraft && <Badge tone="accent">{t('aiAssistedLabel')}</Badge>}
         </div>
         <p className="m-0 max-w-prose text-sm text-muted">{t('setupIntro')}</p>
-        {noConnections && (
+        {data.connections.length === 0 && (
           <p className="m-0 text-sm text-ink">
             {t('setupNoConnections')} <a href="/app/koneksi" className={buttonClasses('secondary', 'sm')}>{t('navConnections')}</a>
           </p>
@@ -146,17 +133,25 @@ function SetupForm({ productId, data, canWrite, onSaved }: { productId: string; 
           <FormField label={t('setupFolder')} help={t('setupFolderHelp')} error={bad.folderPattern ? t('errValidation') : null}>
             <TextInput value={folder} onChange={(e) => setFolder(e.currentTarget.value)} disabled={!canWrite} autoComplete="off" />
           </FormField>
+          <FormField label={t('setupSetupFlow')} help={t('setupFlowHelp')} error={bad.setupFlowId ? t('errValidation') : null}>
+            <SelectMenu value={setupFlow} onChange={setSetupFlow} disabled={!canWrite} includeAll={t('choose')} searchable={false} options={setupFlows.map((f) => ({ value: f.id, label: f.name }))} />
+          </FormField>
+          <FormField label={t('setupUpdateFlow')} error={bad.updateFlowId ? t('errValidation') : null}>
+            <SelectMenu value={updateFlow} onChange={setUpdateFlow} disabled={!canWrite} includeAll={t('choose')} searchable={false} options={updateFlows.map((f) => ({ value: f.id, label: f.name }))} />
+          </FormField>
+          <FormField label={t('setupPortFrom')} help={t('setupPortHelp')} error={bad.portRangeStart ? t('errValidation') : null}>
+            <NumberInput value={portFrom} onChange={setPortFrom} min={1024} max={65535} disabled={!canWrite} />
+          </FormField>
+          <FormField label={t('setupPortTo')} error={bad.portRangeEnd ? t('errValidation') : null}>
+            <NumberInput value={portTo} onChange={setPortTo} min={1024} max={65535} disabled={!canWrite} />
+          </FormField>
         </div>
+        {data.flows.length === 0 && (
+          <p className="m-0 text-sm text-muted">
+            {t('setupNoFlows')} <a href="/app/flow" className={buttonClasses('secondary', 'sm')}>{t('navFlows')}</a>
+          </p>
+        )}
 
-        <FormField label={t('setupSteps')} help={t('setupStepsHelp')}>
-          <CheckboxGroup value={steps} onChange={setSteps} disabled={!canWrite} options={ALL_STEPS.map((k) => ({ value: k, label: t(STEP_LABEL[k]) }))} />
-        </FormField>
-        <FormField label={t('setupNginx')}>
-          <Textarea value={nginx} onChange={(e) => setNginx(e.currentTarget.value)} disabled={!canWrite} rows={4} spellCheck={false} maxLength={20000} />
-        </FormField>
-        <FormField label={t('setupEnv')} help={t('setupEnvHelp')}>
-          <Textarea value={env} onChange={(e) => setEnv(e.currentTarget.value)} disabled={!canWrite} rows={4} spellCheck={false} maxLength={20000} />
-        </FormField>
         <FormField label={t('setupNotes')} help={t('setupNotesHelp')}>
           <Textarea value={notes} onChange={(e) => setNotes(e.currentTarget.value)} disabled={!canWrite} rows={5} maxLength={8000} />
         </FormField>

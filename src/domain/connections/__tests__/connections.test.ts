@@ -159,13 +159,13 @@ describe('M17 connections: limits and rotation (D-059)', () => {
       process.env.CONNECTIONS_KEY_VERSION = '2';
       const before = (await db.select().from(connections).where(eq(connections.id, id)))[0];
       expect(before.secretKeyVersion).toBe(1);
-      expect((await rotateConnectionSecrets()).rotated).toBeGreaterThanOrEqual(1);
+      expect((await rotateConnectionSecrets({ orgId: o.ownerCtx.orgId })).rotated).toBeGreaterThanOrEqual(1);
       const after = (await db.select().from(connections).where(eq(connections.id, id)))[0];
       expect(after.secretKeyVersion).toBe(2);
       expect(after.secretCiphertext).not.toBe(before.secretCiphertext);
       delete process.env.CONNECTIONS_KEY_V1; // the old key is no longer needed
       expect(await testConnection(o.ownerCtx, id, { acceptHostKey: FP }, deps())).toMatchObject({ status: 'ok' }); // decrypts with the new key
-      expect((await rotateConnectionSecrets()).rotated).toBe(0); // idempotent
+      expect((await rotateConnectionSecrets({ orgId: o.ownerCtx.orgId })).rotated).toBe(0); // idempotent
     } finally {
       process.env.CONNECTIONS_KEY = oldKey;
       delete process.env.CONNECTIONS_KEY_VERSION;
@@ -238,5 +238,38 @@ describe('M17 connections: pasted private keys', () => {
     await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'Tanpa Passphrase', authMethod: 'private_key', password: undefined, privateKey: enc }), 'key_needs_passphrase');
     await rejects(createConnection(o.ownerCtx, { ...ssh, name: 'Passphrase Salah', authMethod: 'private_key', password: undefined, privateKey: enc, passphrase: 'salah' }), 'key_wrong_passphrase');
     await createConnection(o.ownerCtx, { ...ssh, name: 'Passphrase Benar', authMethod: 'private_key', password: undefined, privateKey: enc, passphrase: 'hunter2-pass' });
+  });
+});
+
+describe('M17 connections: only the secrets the login method uses are kept', () => {
+  const key = () => (require('ssh2') as typeof import('ssh2')).utils.generateKeyPairSync('ed25519').private;
+  const sealed = async (ctx: { orgId: string }, id: string) => decryptSecret((await db.select().from(connections).where(eq(connections.id, id)))[0].secretCiphertext!, ctx.orgId, id);
+
+  it('a key login stores no password and hints nothing about one', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, { ...ssh, name: 'Kunci', authMethod: 'private_key', password: 'sisa-password-lama-2024', privateKey: key() });
+    expect(Object.keys(await sealed(o.ownerCtx, id))).toEqual(['privateKey']);
+    expect((await getConnection(o.ownerCtx, id)).secretHint).toBe('••••');
+    expect(JSON.stringify(await getConnection(o.ownerCtx, id))).not.toContain('2024');
+  });
+
+  it('switching from a password to a key drops the password; key and password keeps both', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, ssh);
+    await updateConnection(o.ownerCtx, id, { authMethod: 'key_and_password', privateKey: key() });
+    expect(Object.keys(await sealed(o.ownerCtx, id)).sort()).toEqual(['password', 'privateKey']);
+    expect((await getConnection(o.ownerCtx, id)).secretHint).toBe('••••-123');
+    await updateConnection(o.ownerCtx, id, { authMethod: 'private_key' });
+    expect(Object.keys(await sealed(o.ownerCtx, id))).toEqual(['privateKey']);
+    expect((await getConnection(o.ownerCtx, id)).secretHint).toBe('••••');
+    await updateConnection(o.ownerCtx, id, { authMethod: 'password' }).then(() => { throw new Error('should refuse'); }, (e) => expect((e as DomainError).code).toBe('validation')); // no password any more
+  });
+
+  it('pruning a stale secret does not forget the pinned host key or the last test', async () => {
+    const o = await makeOrg();
+    const { id } = await createConnection(o.ownerCtx, { ...ssh, name: 'Lama', authMethod: 'private_key', privateKey: key() });
+    await testConnection(o.ownerCtx, id, { acceptHostKey: FP }, deps());
+    await updateConnection(o.ownerCtx, id, {});
+    expect(await getConnection(o.ownerCtx, id)).toMatchObject({ hostKeyFingerprint: FP, testStatus: 'ok' });
   });
 });
