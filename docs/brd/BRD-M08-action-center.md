@@ -10,6 +10,8 @@
 | **Prasyarat** | BRD-M03, M05, M07, M15 (dan M04 untuk lead stagnan) |
 | **Sumber** | konsep awal (AI Action Center, Observe/Reason/Prepare/Execute, Modul 6), `docs/00` §4 |
 
+> **Amandemen 2026-10-29 (M17):** rule baru `deployment_outdated` (kode terpasang tertinggal dari branch) dan `deployment_down` (domain mati), serta kartu persetujuan dan progres run playbook.
+
 ## 1. Tujuan & nilai bisnis
 
 Pusat tempat sistem **memberi tahu apa yang butuh perhatian hari ini** beserta alasannya, draft tindakannya, dan tombol keputusan. Bukan chatbot: AI dilibatkan setelah event deterministik, dan setiap aksi berisiko menunggu persetujuan. Ini fitur pembeda utama produk. Melayani G1, G3, G4, G7.

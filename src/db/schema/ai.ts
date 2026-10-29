@@ -10,7 +10,7 @@ export const aiRunStatus = pgEnum('ai_run_status', ['ok', 'error', 'blocked_budg
 export const jobStatus = pgEnum('job_status', ['queued', 'running', 'done', 'failed']);
 export const approvalStatus = pgEnum('approval_status', ['pending', 'approved', 'rejected', 'expired']);
 export const findingStatus = pgEnum('finding_status', ['new', 'handled', 'ignored', 'snoozed', 'auto_resolved']);
-export const findingRule = pgEnum('finding_rule', ['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant']);
+export const findingRule = pgEnum('finding_rule', ['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant', 'deployment_outdated', 'deployment_down']);
 
 /** ERD 3.8. One row per model call (BR-M15-05). Summaries only, never full document text (BR-M15-06). */
 export const aiRuns = pgTable(

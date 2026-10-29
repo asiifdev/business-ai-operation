@@ -123,7 +123,7 @@ Sebagian sudah dibangun (token terang/gelap, form components, `Button`, `ThemeTo
 - **Halaman:** `/app/produk` (daftar), `/app/produk/:id` (detail + paket + deployment), `/app/klien`, `/app/klien/:id` (**tampilan 360°**: deployment, subscription, invoice, task, lead terkait, jejak audit).
 - **Layanan:** `products.*`, `packages.*` (harga integer ≥ 0, BR-M02-02), `clients.*` (nama unik tak peka huruf, BR-M02-10), `deployments.*` (unik produk+klien+environment, BR-M02-04). Arsip alih-alih hapus bila ada tagihan (BR-M02-08).
 - **Turunan:** `isBehind(deployment, product)` membandingkan semver (BR-M02-05, BR-M02-06); versi bukan semver ditandai "tak terbandingkan".
-- **Larangan:** tidak ada kolom kata sandi/token deployment (BR-M02-07).
+- **Larangan:** tidak ada kolom kata sandi/token/env **aplikasi klien** pada deployment (BR-M02-07, diamandemen 2026-10-29). Repo, branch, server, folder, commit terpasang, dan status uptime ditambahkan oleh M17.
 - **Uji:** dua paket per produk; tertinggal versi dihitung; hapus klien bertagihan ditolak; ubah harga paket tidak mengubah invoice lama (BR-M02-11).
 
 ### M03 Billing (BRD-M03)
@@ -260,6 +260,64 @@ src/pages/{robots.txt,sitemap.xml,llms.txt,llms-full.txt,pricing.md}.ts   # berk
 
 **Uji.** Selain pemeriksaan SEO: uji komponen (banner persetujuan tidak memuat GA4 sebelum Setuju; pilihan Tolak tidak memuat), uji ilustrasi (urutan langkah, navigasi keyboard), uji pembatas pendaftaran harian, Lighthouse manual sebelum rilis. Tindakan owner yang tidak dapat diautomasi: verifikasi Search Console dan Bing, pengiriman sitemap, IndexNow/Brave, dan pembuatan ID GA4 dan kunci Turnstile.
 
+### M17 Koneksi, playbook, dan operasi deployment (BRD-M17)
+
+> ✅ **Revisi PRD disetujui owner (2026-10-29, D-055):** bagian ini menambah spesifikasi M17 pada PRD v0.1.0. Nilai bawaan yang ditandai ⚠️ dapat diatur per organisasi. Tabelnya ada di ERD §3.9.
+
+**Prinsip.** SaaS multi-tenant: semua koneksi dan data milik satu organisasi (BR-M17-01). AI **merencanakan dan bertanya**, kode **memvalidasi dan menjalankan**, manusia **menyetujui** (BR-M17-04, -05). Tidak ada shell bebas.
+
+**Halaman**
+- `/app/koneksi`: daftar koneksi organisasi dan tombol tambah. Jenis **GitHub**, **SSH**, **aaPanel** aktif; **CyberPanel** dan **cPanel** tampil nonaktif berlabel "segera hadir". Hanya Pemilik membuat, mengubah, menguji, menghapus; yang lain hanya melihat (tanpa rahasia).
+- `/app/produk/:id` tab **Setup**: profil setup produk (form), dapat diisi atau diusulkan AI, disunting kapan saja oleh Pemilik/Admin.
+- `/app/setup` dan `/app/setup/:id`: daftar run dan **progres per langkah** (menunggu, berjalan, selesai, gagal, dilewati), keluaran tersaring, tombol coba lagi, lanjutkan, batalkan.
+- Deployment di `/app/produk/:id` dan 360° klien menampilkan lencana **kode tertinggal N commit** dan **status uptime**, serta tombol Perbarui (membuat run yang butuh persetujuan).
+- `/app/asisten` menampilkan kartu rencana dan progres run di dalam percakapan; kartu persetujuan juga di Action Center dan Telegram.
+
+**Koneksi**
+- **GitHub:** GitHub App (D-054). Organisasi memasang App pada akunnya dan memilih repo, lalu **membuktikan** akses ke instalasi itu lewat otorisasi pengguna GitHub (D-057); `installationId` mentah tidak diterima. Token instalasi berumur pendek diminta saat dipakai. ⚠️ Pendaftaran GitHub App dilakukan owner (lihat §10).
+- **SSH:** host, port, pengguna, metode `password` | `private_key` (passphrase opsional) | `key_and_password` ⚠️. **Sidik jari host disematkan** saat tes pertama atas konfirmasi pengguna; sidik jari berubah = koneksi ditolak sampai dikonfirmasi ulang (BR-M17-08).
+- **aaPanel:** URL panel dan API key. Daftar kemampuan yang dipakai dibatasi pada yang terdokumentasi resmi dan terbukti di server uji ⚠️ (BR-M17-09).
+- **Rahasia:** disimpan terenkripsi (AES-256-GCM dengan kunci induk `CONNECTIONS_KEY`, nonce acak per nilai, nomor versi kunci disimpan), tampil sebagian, tidak pernah dikembalikan API (BR-M17-02). Rahasia hanya didekripsi di dalam proses yang menjalankan koneksi, tidak pernah dilewatkan ke model, `ai_runs`, audit, log, atau keluaran langkah (BR-M17-03); keluaran disaring dengan mengganti nilai rahasia yang dikenal.
+- **Tes koneksi** wajib sebelum dipakai (BR-M17-10). Menghapus koneksi yang dipakai profil atau run aktif ditolak (BR-M17-13).
+
+**Profil setup per produk** (satu per produk): koneksi GitHub, repo, branch bawaan, **mode** `branch_per_client` | `shared_branch`, pola nama folder (mis. `{produk}-{klien}`), koneksi server bawaan, urutan langkah (dari katalog di bawah), templat nginx dan env, dan **catatan aturan kerja** teks bebas yang dibaca AI sebagai memori produk. AI boleh **mengusulkan** isi (tool `draft`), tersimpan bertanda "dibantu AI" sampai pengguna menyimpannya.
+
+**Katalog langkah (daftar izin, BR-M17-04).** Tiap langkah punya nama, skema argumen (Zod), tingkat (`read` atau `change`), dan templat perintah tetap. Argumen disisipkan dengan pengutipan aman setelah lolos pola ketat: domain (`^[a-z0-9.-]{1,253}$`, tanpa `..`), nama folder dan database (`^[a-z0-9_-]{1,64}$`), nama branch (pola nama ref Git yang aman, tanpa awalan `-`), URL repo harus milik koneksi GitHub. Langkah awal: `check_server` (read), `git_clone` (clone satu branch ke folder), `git_update` (tarik commit terbaru), `create_database`, `write_env` (dari templat; nilai rahasia aplikasi klien, mis. kata sandi database yang dibuat saat setup, **tidak disimpan** di Orbyte, BR-M02-07: ditampilkan sekali di hasil run, lalu hilang ⚠️ default), `install_dependencies`, `build_app`, `set_domain_and_nginx`, `restart_service`, `verify_http` (read). Langkah yang tidak tersedia pada pelaksana tertentu ditandai tidak didukung dan rencana ditolak sebelum disetujui (bukan gagal di tengah jalan).
+
+**Pelaksana (`ServerRunner`).** Satu antarmuka, **tiap jenis koneksi server adalah opsi yang berdiri sendiri** (D-055): `ssh`, `aapanel`, dan kelak `cyberpanel` dan `cpanel` (tampil "segera hadir"), ditambah pelaksana palsu `simulated` yang **hanya ada di tes otomatis** (BR-M17-16; tidak ada mode demo, D-059). Satu server memakai tepat satu koneksi; kemampuan tiap jenis berbeda, dan langkah yang tidak didukung jenis itu ditolak saat rencana dibuat. Tidak ada jenis yang menjadi cadangan jenis lain. Pustaka SSH dipilih saat implementasi ⚠️.
+
+**Run**
+- **Status:** `planned → awaiting_approval → running → (paused saat langkah gagal) → done | failed | cancelled`. Langkah: `pending → running → done | failed | skipped`.
+- **Rencana** dibuat service dari profil, koneksi, dan parameter (klien, domain, branch) yang dikonfirmasi pengguna dalam percakapan; AI tidak mengarang parameter. Rencana menjadi `approvals` dengan argumen persis (BR-M17-05); web dan Telegram memakai `decideApproval` yang sama.
+- **Eksekusi** oleh worker (`setup.run`, D-048): satu run per server pada satu waktu, batas waktu per langkah (default 5 menit, dapat diatur per organisasi: `organizations.step_timeout_sec`), keluaran dipotong 8 KB per langkah dan disaring. Langkah gagal menghentikan run; **lanjutkan** mengulang dari langkah gagal tanpa mengulang langkah sukses (BR-M17-07). Rollback manual (D-054).
+- Setelah `done`: deployment dibuat atau diperbarui (domain, repo, branch, commit terpasang), dan langganan serta draf invoice pertama dapat dibuat lewat service M03 atas persetujuan pengguna (nominal tetap dari kode).
+
+**Webhook GitHub (D-058).** Satu URL produksi `{APP_URL}/api/github/webhook`, publik tetapi hanya menerima kiriman bertanda tangan. Push memperbarui commit ujung branch deployment yang cocok seketika; Installation yang dihapus atau ditangguhkan menandai koneksi gagal. Payload adalah data dan tidak pernah memulai run.
+
+**Sinkronisasi kode (BR-M17-11, -12).** Job terjadwal membaca commit terpasang tiap deployment (lewat langkah `read` pada SSH ⚠️; lewat aaPanel bergantung hasil uji) dan ujung branch dari GitHub, lalu menyimpan keduanya dan waktu cek. `behindBy` dihitung, bukan disimpan sebagai status. Rule baru `deployment_outdated` lewat `automation.once` (dedupe per deployment dan commit ujung); selesai sendiri saat sejajar. Tombol Perbarui membuat run `git_update` yang perlu persetujuan. Mode `shared_branch`: satu pembaruan dapat mencakup beberapa deployment sebagai satu run per server.
+
+**Uptime.** Job terjadwal memeriksa HTTP domain deployment aktif (batas waktu dan jumlah percobaan ulang tetap di kode); dua kegagalan berurutan menerbitkan temuan `deployment_down`, pulih menutupnya. Frekuensi default **5 menit**, dapat diatur per organisasi (`organizations.uptime_interval_min`); riwayat panjang tidak disimpan pada versi ini.
+
+**Tool AI (BR-M17-03 sampai -06)**
+
+| Tool | Tingkat | Izin | Fungsi |
+|---|---|---|---|
+| `list_connections` | read | `connection.read` | nama, jenis, status tes; tanpa rahasia |
+| `get_setup_profile` | read | `setup.read` | profil produk dan catatan aturan kerja |
+| `get_code_status` | read | `setup.read` | deployment yang tertinggal beserta selisih commit |
+| `list_setup_runs`, `get_setup_run` | read | `setup.read` | status dan progres run |
+| `draft_setup_profile` | draft | `setup.write` | usulan isi profil produk |
+| `start_client_setup` | act | `setup.run` | membuat rencana run, menjadi persetujuan |
+| `update_deployment_code` | act | `setup.run` | membuat run pembaruan kode |
+
+Isi chat, screenshot, README dan pesan commit adalah data tersusun dalam pembungkus tidak tepercaya (CR-12); tidak ada tool yang menerima perintah mentah.
+
+**Izin baru** (matriks PRD §3 bertambah): `connection.read` (semua peran), `connection.write` (Pemilik), `setup.read` (semua), `setup.write` dan `setup.run` (Pemilik, Admin).
+
+**Layanan dan lokasi kode:** `src/domain/connections/` (vault, layanan koneksi), `src/domain/setup/` (profil, katalog langkah, perencana, run), `src/domain/operations/` (drift, uptime), `src/integrations/{github,ssh,aapanel}/` di balik `ServerRunner`.
+
+**Uji.** Parameter berbahaya ditolak (`;`, `$()`, spasi, `..`, awalan `-`); rahasia tidak ada di respons API, `ai_runs`, audit, log, dan keluaran langkah (pencarian string); dua organisasi tidak bisa memakai koneksi satu sama lain; argumen yang disetujui sama persis dengan yang dijalankan; langkah gagal lalu dilanjutkan tanpa mengulang yang sukses; sidik jari host berubah ditolak; temuan kode tertinggal satu kali lalu selesai sendiri; teks "jalankan rm -rf" di chat atau README tidak memicu langkah; CyberPanel dan cPanel tidak dapat dibuat; tes SSH memakai **server SSH sungguhan** (`ssh2` Server) untuk metode login, host key, dan eksekusi; `FakeProvider` untuk model; ditambah uji manual terhadap server uji owner.
+
 ## 5. Kontrak AI (M07)
 
 **Antarmuka `AiProvider`** (`src/ai/provider`): `chat({messages, tools?, schema?, effort, maxTokens})`, `transcribe({file, language, hints})`, `generateImage({prompt, n, size})`. Implementasi: `MetaProvider` (base `https://api.meta.ai/v1`, Bearer `MODEL_API_KEY`) dan `FakeProvider` (skrip balasan untuk tes tanpa jaringan, BRD-M07).
@@ -335,6 +393,8 @@ Hasil uji dicatat di `docs/02` §0.
 
 | Cek | Dibutuhkan oleh | Cara | Bila gagal |
 |---|---|---|---|
+| **M17:** kemampuan aaPanel API (situs, database, nginx, perintah, berkas), SSH kunci + kata sandi (`AuthenticationMethods`), baca commit terpasang lewat aaPanel | M17 | skill integrasi dari dokumentasi resmi, lalu uji terhadap server uji owner | langkah yang tidak terbukti ditandai tidak didukung pada jenis koneksi itu (tiap jenis berdiri sendiri) |
+| **M17:** GitHub App terdaftar (App ID, kunci privat, slug) oleh owner | M17 | owner mendaftarkan App di akun GitHub-nya | tidak ada koneksi GitHub sampai terdaftar; tes memakai pelaksana palsu (hanya tes) |
 | STT Indonesia: ✅ **terbukti** satu pembicara 22 dtk (`docs/02` §0). ⚠️ Masih diuji: **dua pembicara**, rekaman 5–10 menit, derau/code-switching | M09, M11 | skrip uji dengan rekaman tambahan | tolak > 10 menit; hapus klaim pembeda pembicara bila `speaker` tidak andal |
 | Vision (input gambar ke Spark) | M11 foto → task | satu gambar uji | hapus fitur foto |
 | Image generation: varian, ukuran, edit dengan gambar masukan | M10 | skrip uji | revisi lewat prompt baru, bukan edit |
@@ -345,7 +405,7 @@ Hasil uji dicatat di `docs/02` §0.
 
 ## 11. Variabel lingkungan
 
-`DATABASE_URL`, `DATABASE_URL_TEST`, `MODEL_API_KEY`, `MODEL_API_BASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `STORAGE_DRIVER`, `STORAGE_DIR` (hanya driver disk), `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `APP_URL`, `NODE_ENV`. Contoh di `.env.example`; nilai nyata tidak pernah di repo.
+`DATABASE_URL`, `DATABASE_URL_TEST`, `MODEL_API_KEY`, `MODEL_API_BASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `STORAGE_DRIVER`, `STORAGE_DIR` (hanya driver disk), `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `APP_URL`, `NODE_ENV`, `CONNECTIONS_KEY` (kunci induk enkripsi rahasia koneksi M17, 32 byte base64; tanpa kunci ini koneksi tidak dapat dibuat atau dibaca), `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` (GitHub App platform, M17), `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` (verifikasi pemasang App, D-057), `GITHUB_WEBHOOK_SECRET` (D-058), `ALLOW_PRIVATE_CONNECTIONS` (hanya pengembangan lokal). Contoh di `.env.example`; nilai nyata tidak pernah di repo.
 
 ## 12. Urutan implementasi dan fallback
 
@@ -396,3 +456,4 @@ Sisa ⚠️ yang menunggu: pembeda dua pembicara STT dan rekaman lebih panjang (
 | M11 | `brd/BRD-M11-telegram-assistant.md` | §6 |
 | M12 | `brd/BRD-M12-dashboard-bi.md` | §4 M12 |
 | M16 | `brd/BRD-M16-landing-site.md` | §4 M16 |
+| M17 | `brd/BRD-M17-koneksi-playbook-deployment.md` | §4 M17, §11 |

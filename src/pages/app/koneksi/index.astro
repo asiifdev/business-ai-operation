@@ -1,0 +1,30 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { ConnectionsPage } from '../../../components/connections/ConnectionsPage';
+import { readVerification } from '../../../domain/connections/github-verify';
+import { can } from '../../../domain/permissions';
+import { env } from '../../../lib/env';
+
+export const prerender = false;
+const canWrite = can(Astro.locals.user!.role, 'connection.write');
+// GitHub sent the person back through /api/github/callback, which signed what they may reach. A bare `installation_id`
+// in the address is ignored: only this signed proof is trusted (security review 2026-10-29).
+const proof = Astro.url.searchParams.get('gh');
+const verified = canWrite && proof && Astro.locals.ctx ? readVerification(Astro.locals.ctx, proof) : null;
+const githubError = Astro.url.searchParams.get('gh_error');
+// Right after installing the App, GitHub sends the person here (Setup URL) with `installation_id`. That value is NOT trusted;
+// it only means "they just installed", so the proof step starts by itself.
+if (canWrite && Astro.url.searchParams.has('installation_id') && !proof && !githubError) return Astro.redirect('/api/github/start');
+---
+
+<AppShell title="Koneksi" current="connections">
+  <ConnectionsPage
+    client:load
+    canWrite={canWrite}
+    githubReady={Boolean(env('GITHUB_APP_ID') && env('GITHUB_APP_PRIVATE_KEY') && env('GITHUB_APP_CLIENT_ID') && env('GITHUB_APP_CLIENT_SECRET'))}
+    githubSlug={env('GITHUB_APP_SLUG') ?? null}
+    verification={verified && proof ? { token: proof, installations: verified } : null}
+    githubError={githubError}
+    githubLinked={Astro.url.searchParams.get('gh_linked') === '1'}
+  />
+</AppShell>

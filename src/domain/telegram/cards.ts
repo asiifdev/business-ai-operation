@@ -20,6 +20,8 @@ const RULE: Record<FindingRule, MessageKey> = {
   renewal_upcoming: 'ruleRenewalUpcoming',
   task_late: 'ruleTaskLate',
   lead_stagnant: 'ruleLeadStagnant',
+  deployment_outdated: 'ruleDeploymentOutdated',
+  deployment_down: 'ruleDeploymentDown',
 };
 
 const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument' };

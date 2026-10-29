@@ -10,6 +10,8 @@
 | **Prasyarat** | BRD-M01, M07, M08, M09 |
 | **Sumber** | permintaan owner (asisten Telegram interaktif, terhubung langsung ke sistem), `docs/03` §7, keputusan D-004 (skill pihak ketiga ditolak); skill `telegram-bot-integration` ⬜ wajib ditulis dari dokumentasi resmi Telegram Bot API |
 
+> **Amandemen 2026-10-29 (M17):** persetujuan dan progres run playbook dapat diikuti di Telegram; foto atau screenshot percakapan klien menjadi draf task (bergantung hasil uji vision, PRD §10).
+
 ## 1. Tujuan & nilai bisnis
 
 Pemilik/staf mengelola bisnis dari ponsel: bertanya status, menerima peringatan proaktif, **menyetujui aksi dengan tombol**, mengirim voice note rapat, dan memotret masalah, semuanya terhubung ke sistem dan aturan yang sama dengan web. Bukan chatbot teks: ada **tombol interaktif** dan **aksi nyata**. Melayani G1, G2, G4, G7.

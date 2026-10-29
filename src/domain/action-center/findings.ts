@@ -43,7 +43,7 @@ export function canSeeRule(ctx: Pick<Ctx, 'role'>, rule: FindingRule): boolean {
 }
 
 function visibleRules(ctx: Ctx): FindingRule[] {
-  return (['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant'] as const).filter((r) => canSeeRule(ctx, r));
+  return (['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant', 'deployment_outdated', 'deployment_down'] as const).filter((r) => canSeeRule(ctx, r));
 }
 
 /**

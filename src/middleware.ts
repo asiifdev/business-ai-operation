@@ -6,7 +6,7 @@ import { startJobs } from './server/jobs';
 import { pickLocale, runWithLocale } from './lib/locale-server';
 
 /** Paths that never need a session. Everything else under /app and /api requires one. */
-const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register$/, /^\/api\/health$/, /^\/api\/telegram\/webhook$/];
+const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register$/, /^\/api\/health$/, /^\/api\/telegram\/webhook$/, /^\/api\/github\/webhook$/];
 const isAsset = (p: string) => p.startsWith('/_astro/') || /\.[a-z0-9]{2,5}$/i.test(p);
 
 export const onRequest = defineMiddleware(async (context, next) => {

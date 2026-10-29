@@ -10,6 +10,8 @@
 | **Prasyarat** | — (tidak bergantung pada ERD; kandidat dikerjakan lebih awal, butuh izin owner) |
 | **Sumber** | `docs/05`; kontrak umum komponen form (**tanpa salin kode**); skill `hallmark`, `tailwind-4-docs` |
 
+> **Amandemen 2026-10-29:** antarmuka berpusat pada asisten (chat-first), komponen progres langkah, dan pembaruan tampilan menyeluruh agar modern dan interaktif (skill `hallmark`).
+
 ## 1. Tujuan & nilai bisnis
 
 Satu identitas visual dan satu pustaka komponen yang konsisten, sehingga seluruh halaman terlihat dirancang (bukan generik) dan pekerjaan antarjalur tidak menduplikasi kontrol. Melayani nilai *Demo* (25%) dan G7.

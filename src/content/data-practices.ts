@@ -90,6 +90,13 @@ export const processors: Processor[] = [
     data: { en: 'Page views and clicks on calls to action on the public pages, only after you accept. Never inside the signed-in app.', id: 'Tampilan halaman dan klik ajakan bertindak di halaman publik, hanya setelah Anda setuju. Tidak pernah di dalam aplikasi setelah masuk.' },
   },
   {
+    name: 'GitHub',
+    hosts: ['api.github.com'],
+    inDevelopment: true,
+    purpose: { en: 'Reads the repositories you connect, to see which branch tip each deployment should run.', id: 'Membaca repositori yang Anda hubungkan, untuk melihat ujung branch yang seharusnya dijalankan tiap deployment.' },
+    data: { en: 'Repository names, branch names and commit ids of the repositories you choose to share through the GitHub App. No code is stored by Orbyte.', id: 'Nama repositori, nama branch, dan id commit dari repositori yang Anda bagikan lewat GitHub App. Orbyte tidak menyimpan kode.' },
+  },
+  {
     name: 'Telegram',
     // t.me only appears in the link the user opens to pair their account; the server never calls it.
     hosts: ['api.telegram.org', 't.me'],

@@ -19,6 +19,10 @@ export const organizations = pgTable(
     draftOffsetDays: smallint('draft_offset_days').notNull().default(7),
     schedulerHour: smallint('scheduler_hour').notNull().default(8),
     briefingHour: smallint('briefing_hour').notNull().default(8),
+    /** M17 (D-055): how often uptime and installed code are checked, and how long one run step may take. */
+    uptimeIntervalMin: smallint('uptime_interval_min').notNull().default(5),
+    stepTimeoutSec: integer('step_timeout_sec').notNull().default(300),
+    codeCheckIntervalMin: smallint('code_check_interval_min').notNull().default(30),
     invoiceNumberFormat: text('invoice_number_format').notNull().default('INV-{YYYY}-{NNNN}'),
     taxRateBps: integer('tax_rate_bps').notNull().default(0),
     stagnantDays: smallint('stagnant_days').notNull().default(14),

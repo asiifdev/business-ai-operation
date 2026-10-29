@@ -28,7 +28,9 @@ Satu tempat untuk tahu **produk apa, dipakai klien siapa, di deployment mana, ve
 
 **Termasuk:** produk (nama, deskripsi, versi saat ini, **paket dan harga resmi**), klien (nama, kontak, catatan), deployment (produk × klien: domain, versi terpasang, environment, status), tampilan **360° klien** (deployment, subscription, invoice, task), penandaan **deployment tertinggal versi** (turunan), arsip.
 
-**Tidak termasuk:** monitoring status server/domain otomatis; penyimpanan kredensial/rahasia deployment; integrasi repository/GitHub; branch Git; kontrak sebagai dokumen; cabang klien sebagai entitas terpisah ⚠️.
+**Tidak termasuk:** penyimpanan kredensial/rahasia **aplikasi klien**; kontrak sebagai dokumen; cabang klien sebagai entitas terpisah ⚠️.
+
+**Amandemen 2026-10-29 (M17):** deployment menerima repo, branch, server, folder, commit terpasang, dan status uptime; monitoring dan integrasi GitHub diatur [`BRD-M17`](BRD-M17-koneksi-playbook-deployment.md).
 
 ## 4. Proses bisnis
 
@@ -48,7 +50,7 @@ Satu tempat untuk tahu **produk apa, dipakai klien siapa, di deployment mana, ve
 | BR-M02-04 | Kombinasi (produk, klien, environment) **unik** | Usulan |
 | BR-M02-05 | **"Tertinggal versi"** adalah kondisi turunan: versi terpasang < versi produk saat ini; tidak disimpan sebagai status (CR-01) | Final |
 | BR-M02-06 | Versi dibandingkan sebagai semver; format lain ditolak atau ditandai tak terbandingkan ⚠️ | Usulan |
-| BR-M02-07 | **Rahasia deployment (kata sandi, token, env) tidak disimpan** di sistem | Final (keamanan) |
+| BR-M02-07 | **Rahasia aplikasi klien (kata sandi, token, env, kata sandi database) tidak disimpan** di sistem. Kredensial **koneksi milik organisasi** (GitHub, SSH, aaPanel) berbeda dan diatur BR-M17-02 (terenkripsi, tidak pernah ke model). Diamandemen 2026-10-29 | Final (keamanan) |
 | BR-M02-08 | Klien/produk dengan subscription/invoice **tidak dapat dihapus**, hanya diarsipkan; arsip menyembunyikan dari daftar aktif tetapi data tetap utuh | Usulan |
 | BR-M02-09 | Setiap perubahan produk, paket, klien, dan deployment tercatat di audit | Final (CR-09) |
 | BR-M02-10 | Nama klien unik per organisasi (tidak peka huruf besar/kecil) untuk mencegah duplikat saat konversi lead | Usulan |

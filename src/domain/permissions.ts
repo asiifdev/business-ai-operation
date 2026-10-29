@@ -56,6 +56,12 @@ export const PERMISSIONS = {
   'ai.usage.read': MANAGERS,
   'ai.run.read_own': ALL,
   'ai.run.read_any': MANAGERS,
+  // Connections and deployment operations (M17, D-054): the owner holds the secrets, managers run and approve
+  'connection.read': ALL,
+  'connection.write': OWNER,
+  'setup.read': ALL,
+  'setup.write': MANAGERS,
+  'setup.run': MANAGERS,
   // Telegram
   'telegram.link_self': ALL,
 } as const satisfies Record<string, readonly Role[]>;

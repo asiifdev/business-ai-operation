@@ -10,6 +10,8 @@
 | **Prasyarat** | BRD-M01, M02 |
 | **Sumber** | konsep awal (Modul 5 Maintenance & Issue Manager), `docs/00` §2 (masalah 3) |
 
+> **Amandemen 2026-10-29:** tiket dari chat atau screenshot klien menjadi draf task (lewat M07/M11); pengingat tiket yang terlupa lewat M08. Integrasi issue tracker tetap di luar lingkup.
+
 ## 1. Tujuan & nilai bisnis
 
 Permintaan klien (bug, fitur, maintenance) dan pekerjaan internal tidak lagi tercecer; ada prioritas, tenggat, dan relasi ke klien/produk/deployment. Menjadi tempat mendarat task dari rekaman rapat dan Telegram. Melayani G1 dan G2.

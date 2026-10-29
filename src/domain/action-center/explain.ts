@@ -31,6 +31,8 @@ const RULE_TASK: Record<FindingRule, string> = {
   task_late:
     'Tugas ini sudah lewat tenggat dan belum selesai. Jelaskan dalam 2 sampai 3 kalimat apa yang tertunda dan sarankan langkahnya (misalnya tetapkan penanggung jawab, naikkan prioritas, atau sepakati tenggat baru). Bila tugas ini Bug atau Maintenance untuk seorang klien, tulis draf kabar perkembangan singkat untuk klien itu; selain itu tulis "-" sebagai draf pesan.',
   lead_stagnant: 'Jelaskan temuan ini dalam 2 sampai 3 kalimat dan sarankan langkahnya.',
+  deployment_outdated: 'Kode yang terpasang di deployment ini tertinggal dari branch-nya. Jelaskan dalam 2 sampai 3 kalimat dampaknya dan sarankan memperbarui lewat run yang perlu persetujuan.',
+  deployment_down: 'Domain deployment ini tidak dapat dijangkau. Jelaskan dalam 2 sampai 3 kalimat apa yang perlu dicek lebih dulu dan sarankan langkahnya.',
 };
 
 export function explainInstructions(rule: FindingRule, organizationName: string, locale: Locale): string {

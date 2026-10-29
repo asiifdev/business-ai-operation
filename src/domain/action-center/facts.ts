@@ -1,6 +1,6 @@
 import { daysBetween } from '../billing/dates';
 
-export type FindingRule = 'invoice_overdue' | 'invoice_draft_ready' | 'renewal_upcoming' | 'task_late' | 'lead_stagnant';
+export type FindingRule = 'invoice_overdue' | 'invoice_draft_ready' | 'renewal_upcoming' | 'task_late' | 'lead_stagnant' | 'deployment_outdated' | 'deployment_down';
 export type FindingStatus = 'new' | 'handled' | 'ignored' | 'snoozed' | 'auto_resolved';
 
 /** Rules about money: only people who may read billing see them or act on them (PRD section 3, BRD-M08 section 2). */
@@ -87,6 +87,9 @@ const RULE_WEIGHT: Record<FindingRule, number> = {
   task_late: 120,
   invoice_draft_ready: 100,
   lead_stagnant: 80,
+  // M17 ⚠️ default weights, awaiting the owner like the others (D-043): a domain that is down outranks code that is behind.
+  deployment_down: 250,
+  deployment_outdated: 90,
 };
 
 /** A late task climbs with the priority it was given: an urgent bug a day late outranks a low chore a week late. */

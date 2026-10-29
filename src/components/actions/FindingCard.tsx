@@ -25,6 +25,8 @@ export const RULE_LABEL: Record<FindingRule, MessageKey> = {
   renewal_upcoming: 'ruleRenewalUpcoming',
   task_late: 'ruleTaskLate',
   lead_stagnant: 'ruleLeadStagnant',
+  deployment_outdated: 'ruleDeploymentOutdated',
+  deployment_down: 'ruleDeploymentDown',
 };
 const PRIORITY: Record<PriorityLevel, { label: MessageKey; tone: 'danger' | 'warn' | 'neutral' }> = {
   high: { label: 'prioHigh', tone: 'danger' },

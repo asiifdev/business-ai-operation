@@ -21,3 +21,6 @@ export const TEST_APP_URL: string | undefined = process.env.APP_URL ?? fromDotEn
 
 /** A fresh random secret for every test run: nothing static that looks like (or could be reused as) a real secret. */
 export const TEST_AUTH_SECRET = randomBytes(32).toString('hex');
+
+/** Likewise for the connection vault key (M17): tests never use the dev key. */
+export const TEST_CONNECTIONS_KEY = randomBytes(32).toString('base64');

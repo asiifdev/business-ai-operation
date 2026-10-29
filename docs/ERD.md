@@ -44,7 +44,7 @@
 | `document_status` | `draft` · `final` |
 | `approval_status` | `pending` Menunggu · `approved` Disetujui · `rejected` Ditolak · `expired` Kedaluwarsa |
 | `finding_status` | `new` Baru · `handled` Ditangani · `ignored` Diabaikan · `snoozed` Ditunda · `auto_resolved` Selesai sendiri |
-| `finding_rule` | `invoice_overdue` · `invoice_draft_ready` · `renewal_upcoming` · `task_late` · `lead_stagnant` |
+| `finding_rule` | `invoice_overdue` · `invoice_draft_ready` · `renewal_upcoming` · `task_late` · `lead_stagnant` · `deployment_outdated` · `deployment_down` |
 | `ai_feature` | `agent` · `minutes` · `transcribe` · `image` |
 | `ai_run_status` | `ok` · `error` · `blocked_budget` · `rejected_tool` |
 | `job_status` | `queued` · `running` · `done` · `failed` |
@@ -52,6 +52,13 @@
 | `file_kind` | `meeting_audio` · `marketing_image` |
 | `marketing_purpose` | `launch` · `promo` · `education` · `release` |
 | `deployment_status` | `active` · `inactive` |
+| `connection_kind` | `github` · `ssh` · `aapanel` (CyberPanel dan cPanel ditambahkan lewat migrasi saat didukung, D-055) |
+| `connection_test` | `untested` · `ok` · `failed` |
+| `setup_mode` | `branch_per_client` · `shared_branch` |
+| `run_kind` | `setup` · `update` |
+| `run_status` | `planned` · `awaiting_approval` · `running` · `paused` · `done` · `failed` · `cancelled` |
+| `step_status` | `pending` · `running` · `done` · `failed` · `skipped` |
+| `uptime_state` | `up` · `down` |
 
 ## 2. Diagram
 
@@ -115,6 +122,9 @@ Tipe `ref` = foreign key komposit ke `(org_id, id)` tabel induk (kecuali disebut
 | `draft_offset_days` | smallint | default 7, draf invoice dibuat H-n |
 | `scheduler_hour` | smallint | default 8, jam rule harian (0–23) |
 | `briefing_hour` | smallint | default 8 |
+| `uptime_interval_min` | smallint | default 5, interval cek uptime (M17, D-055) |
+| `step_timeout_sec` | integer | default 300, batas waktu satu langkah run (M17, D-055) |
+| `code_check_interval_min` | smallint | default 30, interval cek kode terpasang (M17, D-055) |
 | `invoice_number_format` | text | default `INV-{YYYY}-{NNNN}` |
 | `tax_rate_bps` | integer | default 0 |
 | `stagnant_days` | smallint | default 14 (D-025) |
@@ -177,7 +187,8 @@ Unik parsial: `UNIQUE (user_id) WHERE unlinked_at IS NULL`.
 **`deployments`** · BR-M02-03, -04, -07
 
 `id`, `org_id`, `product_id`, `client_id` (ref), `environment text` (mis. `production`, `staging`), `label N` (mis. nama cabang), `domain N`, `installed_version text N`, `status deployment_status` default `active`, timestamps. `UNIQUE (org_id, id)`, `UNIQUE (product_id, client_id, environment)`.
-**Tidak ada kolom** kata sandi/token/env (BR-M02-07). "Tertinggal versi" dihitung dari `installed_version` vs `products.current_version`.
+`repo text N` (`pemilik/nama`), `branch text N`, `server_connection_id N` (ref `connections`), `app_path text N` (folder di server), `deployed_commit text N` dan `latest_commit text N` (hasil cek terakhir), `behind_by integer N` (selisih commit pada cek terakhir; "tertinggal" dibaca dari pengamatan ini, bukan status, BR-M17-11), `code_checked_at N`, `uptime_state uptime_state N`, `uptime_failures integer` default 0, `uptime_changed_at N`, `uptime_checked_at N` (diamandemen M17, 2026-10-29).
+**Tidak ada kolom** kata sandi/token/env **aplikasi klien** (BR-M02-07). "Tertinggal versi" dihitung dari `installed_version` vs `products.current_version`.
 
 ### 3.3 Billing (M03)
 
@@ -289,6 +300,28 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`briefings`**: `id`, `org_id`, `briefing_date date`, `content text`, `is_ai boolean` (false = angka saja, "bukan hasil AI", BR-M08-11), `ai_run_id N`, `created_at`. `UNIQUE (org_id, briefing_date)`.
 
+### 3.9 Koneksi dan operasi deployment (M17)
+
+> ✅ Revisi ERD disetujui owner (2026-10-29, D-056). Migrasi mengikuti §9 butir 10.
+
+**`connections`** · BR-M17-01, -02, -08, -10, -13
+
+`id`, `org_id`, `kind connection_kind`, `name`, `config jsonb` (hanya data **bukan rahasia**: SSH `{host, port, username, authMethod}`, aaPanel `{url}`, GitHub `{installationId, accountLogin}`), `secret_ciphertext text N` (JSON rahasia terenkripsi AES-256-GCM: nonce, teks sandi, tag; base64), `secret_key_version smallint N` (versi `CONNECTIONS_KEY` untuk rotasi), `secret_hint text N` (mis. 4 karakter terakhir), `host_key_fingerprint text N` (SSH, disematkan atas konfirmasi pengguna), `test_status connection_test` default `untested`, `tested_at N`, `test_message text N`, `created_by text`, timestamps. `UNIQUE (org_id, id)`, `UNIQUE (org_id, lower(name))`. GitHub App tidak menyimpan rahasia di sini: token instalasi diminta saat dipakai dan kunci privat App ada di lingkungan server. Respons API tidak pernah memuat `secret_*`.
+
+**`product_setups`** (profil setup, satu per produk) · BR-M17 §6
+
+`id`, `org_id`, `product_id` (ref `products`, `UNIQUE`), `github_connection_id N` (ref `connections`), `repo text N`, `default_branch text N`, `mode setup_mode` default `branch_per_client`, `folder_pattern text N`, `server_connection_id N` (ref `connections`), `steps jsonb` (urutan kunci langkah dan opsi; divalidasi terhadap katalog di kode), `nginx_template text N`, `env_template text N`, `rules_notes text N` (memori aturan kerja untuk AI), `is_ai_draft boolean` default false, `updated_by text`, timestamps.
+
+**`playbook_runs`** · BR-M17-05, -07, -15
+
+`id`, `org_id`, `product_id`, `client_id N`, `deployment_id N` (ref), `server_connection_id` (ref `connections`), `kind run_kind`, `status run_status` default `planned`, `params jsonb` (parameter tervalidasi, **tanpa rahasia**), `approval_id N` (ref `approvals`), `summary text N`, `error text N`, `created_by text`, `started_at N`, `finished_at N`, timestamps. `UNIQUE (org_id, id)`. **Satu run `running` per server:** `UNIQUE (server_connection_id) WHERE status = 'running'` (BR-M17-15).
+
+**`playbook_steps`** · BR-M17-04, -07
+
+`id`, `org_id`, `run_id` (ref), `position integer`, `step_key text` (kunci dari katalog di kode), `params jsonb`, `status step_status` default `pending`, `attempts integer` default 0, `output text N` (dipotong 8 KB dan disaring dari rahasia), `error text N`, `started_at N`, `finished_at N`. `UNIQUE (run_id, position)`.
+
+Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); persetujuan memakai `approvals` yang sudah ada (tool `start_client_setup`, `update_deployment_code`).
+
 ## 4. Pengelompokan berkas skema
 
 | Berkas | Tabel |
@@ -300,9 +333,10 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 | `documents.ts` | `documents`, `document_items` |
 | `meetings.ts` | `files`, `meetings`, `meeting_turns` |
 | `marketing.ts` | `brand_kits`, `marketing_assets` |
+| `operations.ts` | `connections`, `product_setups`, `playbook_runs`, `playbook_steps` |
 | `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings` |
 
-Total **34 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
+Total **38 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
 
 ## 5. Penjaga di database (pemicu dan batasan)
 
@@ -343,6 +377,7 @@ Semua diambil lewat satu modul `derived` per kondisi dan dipakai UI, AI, dan Tel
 ## 8. Data awal (seed)
 
 Skrip `pnpm db:seed` menolak jalan bila `NODE_ENV=production` (BR-M01-10). Semua data **palsu**.
+- M17: **tanpa data awal** (tidak ada koneksi, profil, atau run di seed): rahasia dan server selalu milik pengguna (BR-M17-16, D-059).
 - **Dua organisasi** untuk uji isolasi: mis. "Orbit Studio" (agensi, data lengkap untuk demo) dan "Kopi Senja Digital" (data minimal).
 - Orbit Studio: 3 produk dengan 2 paket tiap produk, 6 klien, deployment (satu tertinggal versi), 5 subscription dengan jatuh tempo bervariasi (salah satu H-6, salah satu sudah lewat), invoice berstatus beragam termasuk satu `sent` yang lewat jatuh tempo dan satu pembayaran sebagian, 8 lead di berbagai tahap (satu stagnan), 10 task (dua terlambat), pengguna `owner`/`admin`/`staff`, brand kit, anggaran AI awal.
 - Tanggal dihitung relatif terhadap `Clock` (D-024) supaya skenario demo konsisten kapan pun dijalankan.
@@ -359,6 +394,7 @@ Urutan kelompok (satu migrasi per kelompok, mudah ditinjau). Nomor berkas mengik
 7. `documents`: dokumen dan item (+ pemicu final), FK `meetings.minutes_document_id`
 8. `action_center`: `findings`, `approvals`, `briefings`
 9. `marketing`: `brand_kits`, `marketing_assets`
+10. `operations` (M17): enum baru, `connections`, `product_setups`, `playbook_runs`, `playbook_steps`; kolom baru pada `deployments` dan `organizations`; nilai baru `finding_rule` (`deployment_outdated`, `deployment_down`)
 
 Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterapkan**, tidak pernah diubah setelah diterapkan di server live (koreksi = migrasi baru). Basis data uji (`DATABASE_URL_TEST`, nama wajib berakhiran `_test`) dibangun ulang dari migrasi yang sama pada setiap `pnpm test` dan dipakai tes penjaga di `tests/db/`.
 
@@ -378,6 +414,7 @@ Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterap
 | M10 | `brand_kits`, `marketing_assets`, `files` | BR-M10 |
 | M11 | `telegram_links`, `telegram_pairing_codes`, `telegram_updates` | BR-M11 |
 | M12 | tanpa tabel (hitung dari tabel di atas) | CR-06 |
+| M17 | `connections`, `product_setups`, `playbook_runs`, `playbook_steps`, kolom baru `deployments`/`organizations` | BR-M17-01/-02/-13/-15 |
 | M14 | tanpa tabel | n/a |
 
 ## 11. Keputusan dan pertanyaan terbuka

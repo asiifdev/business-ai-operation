@@ -99,6 +99,9 @@ Skill dibaca **sebelum** menyentuh area terkait. Skill integrasi baru wajib ditu
 | `context7` MCP | Dokumentasi pustaka lain | ✅ (konfigurasi global pengguna) |
 | `meta-model-api-integration` (`.claude/skills/meta-model-api-integration`) | Responses/Chat API, tool calling, structured output, gambar, STT, limit, retry | ✅ ditulis 2026-10-28 dari teks asli `dev.meta.ai/docs/*` (halaman yang dibaca dan yang tidak tercantum di skill); butir ⚠️ di §12 skill harus diuji sebelum diandalkan |
 | `telegram-bot-integration` (`.claude/skills/telegram-bot-integration`) | Bot Telegram interaktif (webhook, inline keyboard, callback, pairing, voice/foto, rate limit) | ✅ ditulis 2026-10-28 dari teks asli `core.telegram.org` (Bot API, FAQ, webhooks, features); butir ⚠️ di §13 skill harus diuji sebelum diandalkan |
+| `github-app-integration` (`.claude/skills/github-app-integration`) | GitHub App platform (M17): JWT, token instalasi, repo/branch/commit, drift, rate limit | ✅ ditulis 2026-10-29 dari `docs.github.com`; butir ⚠️ di §6 skill harus diuji sebelum diandalkan |
+| `aapanel-integration` (`.claude/skills/aapanel-integration`) | Koneksi server lewat aaPanel API (M17), opsi mandiri | ⚠️ ditulis 2026-10-29 dari `aapanel.com/docs/api`: **hanya autentikasi dan query data yang terdokumentasi**; semua kemampuan lain (situs, database, perintah, git, berkas) belum terbukti dan harus diuji di panel uji owner |
+| `ssh-integration` (`.claude/skills/ssh-integration`) | Koneksi server lewat SSH (M17, pustaka `ssh2`): kata sandi, kunci, gabungan, host key | ✅ ditulis 2026-10-29 dari dokumentasi `mscdex/ssh2` (Context7); butir ⚠️ di §6 skill harus diuji sebelum diandalkan |
 | ~~Skill Telegram pihak ketiga~~ | Kirim pesan/pengingat Telegram via Convex | ❌ **ditolak** (keputusan D-004): satu arah, tanpa tombol interaktif, butuh deploy key Convex production, 1 commit, lisensi tidak jelas |
 
 ## Jangan membuat dokumen markdown berserakan

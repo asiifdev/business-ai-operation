@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { TEST_APP_URL, TEST_AUTH_SECRET, TEST_URL } from './tests/test-env.ts';
+import { TEST_APP_URL, TEST_AUTH_SECRET, TEST_CONNECTIONS_KEY, TEST_URL } from './tests/test-env.ts';
 
 export default defineConfig({
   test: {
@@ -10,6 +10,7 @@ export default defineConfig({
       DATABASE_URL_TEST: TEST_URL,
       BETTER_AUTH_SECRET: TEST_AUTH_SECRET,
       BETTER_AUTH_URL: 'http://localhost:4321',
+      CONNECTIONS_KEY: TEST_CONNECTIONS_KEY,
       ...(TEST_APP_URL ? { APP_URL: TEST_APP_URL } : {}),
     },
   },

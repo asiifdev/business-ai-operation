@@ -67,10 +67,11 @@ Pengguna utama: pendiri/CTO agensi atau startup software kecil-menengah. Detail 
 | M14 | Design System & UI Kit | B | ✅ lebih dulu |
 | M15 | Audit & Guardrail Data | A | ✅ |
 | M16 | Landing & Marketing Site (publik) | B | ✅ |
+| M17 | Koneksi, Playbook, dan Operasi Deployment (GitHub, SSH, aaPanel, setup klien, drift kode, uptime) | B+A | ✅ (disetujui 2026-10-29) |
 
 ### 4.2 Di luar lingkup (dicatat, tidak dibangun di hackathon)
 
-Portal klien; payment gateway dan rekonsiliasi otomatis; integrasi GitHub/monitoring domain/server; profitabilitas berbasis jam kerja; forecast dan churn mendalam; billing SaaS milik platform sendiri, tier, dan onboarding self-serve; **video generation, TTS, embedding/RAG vektor** (tidak ada di Meta Model API, `docs/02`); knowledge base penuh (M13); integrasi kanal WhatsApp; SOW dan kontrak sebagai dokumen; multi-organisasi per pengguna (⚠️ M01).
+Portal klien; payment gateway dan rekonsiliasi otomatis; ~~integrasi GitHub/monitoring domain/server~~ (dimasukkan ke M17, 2026-10-29); profitabilitas berbasis jam kerja; forecast dan churn mendalam; billing SaaS milik platform sendiri, tier, dan onboarding self-serve; **video generation, TTS, embedding/RAG vektor** (tidak ada di Meta Model API, `docs/02`); knowledge base penuh (M13); integrasi kanal WhatsApp; SOW dan kontrak sebagai dokumen; multi-organisasi per pengguna (⚠️ M01).
 
 ## 5. Aturan bisnis lintas modul (CR)
 

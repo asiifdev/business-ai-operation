@@ -1,7 +1,7 @@
 import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
-export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
+export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'connections' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
 export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
@@ -44,6 +44,7 @@ export const NAV: readonly NavItem[] = [
   { id: 'subscriptions', group: 'billing', href: '/app/langganan', label: 'navSubscriptions', icon: 'repeat', roles: ['owner', 'admin'] },
   { id: 'ai', group: 'intelligence', href: '/app/ai', label: 'navAi', icon: 'usage' },
   { id: 'telegram', group: 'intelligence', href: '/app/settings/telegram', label: 'navTelegram', icon: 'send' },
+  { id: 'connections', group: 'intelligence', href: '/app/koneksi', label: 'navConnections', icon: 'pulse' },
 ];
 
 export const itemsFor = (role: Role): NavItem[] => NAV.filter((item) => !item.roles || item.roles.includes(role));

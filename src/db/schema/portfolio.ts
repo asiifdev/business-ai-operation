@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm';
-import { bigint, check, foreignKey, index, pgEnum, pgTable, text, unique, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, check, foreignKey, index, integer, pgEnum, pgTable, text, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { createdAtColumn, idColumn, lower, tstz, updatedAtColumn } from './_shared';
 import { organizations } from './auth';
 
 export const deploymentStatus = pgEnum('deployment_status', ['active', 'inactive']);
+export const uptimeState = pgEnum('uptime_state', ['up', 'down']);
 
 /** ERD 3.2. A product the organization sells or runs for clients. Its packages are the only source of prices (CR-05). */
 export const products = pgTable(
@@ -83,6 +84,19 @@ export const deployments = pgTable(
     domain: text('domain'),
     installedVersion: text('installed_version'),
     status: deploymentStatus('status').notNull().default('active'),
+    // M17 (ERD 3.2): where the code comes from and where it runs; what was seen at the last check, never a secret.
+    repo: text('repo'),
+    branch: text('branch'),
+    serverConnectionId: text('server_connection_id'),
+    appPath: text('app_path'),
+    deployedCommit: text('deployed_commit'),
+    latestCommit: text('latest_commit'),
+    behindBy: integer('behind_by'),
+    codeCheckedAt: tstz('code_checked_at'),
+    uptimeState: uptimeState('uptime_state'),
+    uptimeFailures: integer('uptime_failures').notNull().default(0),
+    uptimeChangedAt: tstz('uptime_changed_at'),
+    uptimeCheckedAt: tstz('uptime_checked_at'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },

@@ -17,6 +17,8 @@ const ruleLabel: Record<FindingRule, string> = {
   renewal_upcoming: 'langganan mendekati jatuh tempo',
   task_late: 'tugas terlambat',
   lead_stagnant: 'lead stagnan',
+  deployment_outdated: 'kode deployment tertinggal',
+  deployment_down: 'domain deployment mati',
 };
 
 /**

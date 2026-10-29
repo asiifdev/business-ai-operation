@@ -15,6 +15,7 @@ import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
+import { ProductSetup } from './ProductSetup';
 import { VersionBadge } from './VersionBadge';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -82,6 +83,8 @@ export function ProductDetail({ id, role }: { id: string; role: Role }) {
       )}
 
       <Packages productId={id} packages={packages} canWrite={canWrite && !archived} canArchive={canWrite} onChanged={() => void load.reload()} />
+
+      <ProductSetup productId={id} canWrite={canWrite && !archived} />
 
       <Panel className="flex flex-col gap-4">
         <h2 className="m-0 text-lg font-semibold text-ink">{t('deploymentsTitle')}</h2>
