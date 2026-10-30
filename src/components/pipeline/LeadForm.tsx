@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { LeadFormOptions } from '../../domain/pipeline/leads';
 import { api, badFields, errorKey } from '../../lib/api-client';
 import { useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { MoneyInput } from '../forms/MoneyInput';
+import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { Button } from '../ui/Button';
@@ -15,9 +17,10 @@ export interface LeadValues {
   source: string;
   needsSummary: string;
   estimatedValue: number | null;
+  assignedTo: string;
 }
 
-export const emptyLead: LeadValues = { name: '', contactName: '', email: '', phone: '', source: '', needsSummary: '', estimatedValue: null };
+export const emptyLead: LeadValues = { name: '', contactName: '', email: '', phone: '', source: '', needsSummary: '', estimatedValue: null, assignedTo: '' };
 
 /** The lead fields, used to add a lead and to edit one. */
 export function LeadForm({ initial = emptyLead, submitLabel, request, onDone, onCancel }: { initial?: LeadValues; submitLabel: string; request: (values: LeadValues) => Promise<unknown>; onDone: () => void; onCancel: () => void }) {
@@ -25,8 +28,12 @@ export function LeadForm({ initial = emptyLead, submitLabel, request, onDone, on
   const [values, setValues] = useState<LeadValues>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [assignees, setAssignees] = useState<LeadFormOptions['assignees']>([]);
+  useEffect(() => {
+    api<LeadFormOptions>('GET', '/api/leads/options').then((o) => setAssignees(o.assignees), () => setAssignees([]));
+  }, []);
   const bad = badFields(error);
-  const set = (key: Exclude<keyof LeadValues, 'estimatedValue'>) => (e: { currentTarget: { value: string } }) => setValues({ ...values, [key]: e.currentTarget.value });
+  const set = (key: Exclude<keyof LeadValues, 'estimatedValue' | 'assignedTo'>) => (e: { currentTarget: { value: string } }) => setValues({ ...values, [key]: e.currentTarget.value });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +71,11 @@ export function LeadForm({ initial = emptyLead, submitLabel, request, onDone, on
       <FormField label={t('fEstimatedValue')}>
         <MoneyInput value={values.estimatedValue} onChange={(v) => setValues({ ...values, estimatedValue: v })} min={0} />
       </FormField>
+      {assignees.length > 0 && (
+        <FormField label={t('fAssignee')}>
+          <SelectMenu value={values.assignedTo} onChange={(v) => setValues({ ...values, assignedTo: v })} includeAll={t('taskAssigneeNone')} options={assignees.map((u) => ({ value: u.id, label: u.name }))} />
+        </FormField>
+      )}
       <FormField label={t('fNeeds')}>
         <Textarea value={values.needsSummary} onChange={set('needsSummary')} rows={3} maxLength={4000} />
       </FormField>
@@ -76,4 +88,4 @@ export function LeadForm({ initial = emptyLead, submitLabel, request, onDone, on
 }
 
 /** What the API takes: empty text becomes "nothing" rather than an empty string. */
-export const leadPayload = (v: LeadValues) => ({ ...v, estimatedValue: v.estimatedValue ?? null });
+export const leadPayload = (v: LeadValues) => ({ ...v, estimatedValue: v.estimatedValue ?? null, assignedTo: v.assignedTo || null });

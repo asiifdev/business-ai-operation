@@ -11,6 +11,7 @@ import { FormField } from '../forms/FormField';
 import { MoneyInput } from '../forms/MoneyInput';
 import { NumberInput } from '../forms/NumberInput';
 import { SelectMenu } from '../forms/SelectMenu';
+import { ClientSelect } from '../portfolio/ClientSelect';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -132,7 +133,7 @@ function SubscriptionForm({ options, onDone, onCancel }: { options: Options; onD
     <form onSubmit={submit} noValidate className="flex max-w-2xl flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label={t('fClient')} required error={bad.clientId ? t('errValidation') : null}>
-          <SelectMenu value={clientId} onChange={setClientId} placeholder={t('choose')} options={options.clients.map((c) => ({ value: c.id, label: c.name }))} />
+          <ClientSelect clients={options.clients} value={clientId} onChange={setClientId} placeholder={t('choose')} />
         </FormField>
         <FormField label={t('fSubPackage')} required error={bad.packageId ? t('errValidation') : null}>
           <SelectMenu value={packageId} onChange={setPackageId} placeholder={t('choose')} options={options.packages.map((p) => ({ value: p.id, label: p.label, description: formatRupiah(p.monthlyPrice) }))} />

@@ -2,7 +2,7 @@ import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { isUniqueViolation } from '../../db/errors';
-import { clients, leads, organizations, tasks } from '../../db/schema';
+import { clients, leads, organizations, tasks, users } from '../../db/schema';
 import { recordAudit } from '../audit/service';
 import { todayIn } from '../billing/dates';
 import type { Ctx } from '../ctx';
@@ -46,6 +46,13 @@ function assertCanTouch(ctx: Ctx, lead: { assignedTo: string | null }) {
   throw new DomainError('forbidden', `${ctx.role} may not change this lead`);
 }
 
+/** A lead can only be handed to an active person of the same organization. */
+async function assertAssignable(tx: Pick<typeof db, 'select'>, orgId: string, userId: string | null | undefined) {
+  if (!userId) return;
+  const [u] = await tx.select({ id: users.id }).from(users).where(and(eq(users.orgId, orgId), eq(users.id, userId), eq(users.isActive, true)));
+  if (!u) throw new DomainError('validation', 'assignedTo');
+}
+
 const isAi = (ctx: Ctx) => ctx.actor.startsWith('ai:');
 
 /**
@@ -56,6 +63,7 @@ export async function createLead(ctx: Ctx, raw: z.input<typeof leadSchema>, opts
   assertCan(ctx, 'lead.write');
   const input = leadSchema.parse(raw);
   return db.transaction(async (tx) => {
+    await assertAssignable(tx, ctx.orgId, input.assignedTo);
     const [row] = await tx
       .insert(leads)
       .values({
@@ -85,7 +93,10 @@ export async function updateLead(ctx: Ctx, id: string, raw: z.input<typeof leadP
     assertCanTouch(ctx, before);
     if (before.archivedAt) throw new DomainError('invalid_state', 'archived lead');
     // Handing a lead to someone else is a manager's call.
-    if (patch.assignedTo !== undefined && patch.assignedTo !== before.assignedTo) assertCan(ctx, 'lead.write');
+    if (patch.assignedTo !== undefined && patch.assignedTo !== before.assignedTo) {
+      assertCan(ctx, 'lead.write');
+      await assertAssignable(tx, ctx.orgId, patch.assignedTo);
+    }
     const set: Partial<typeof leads.$inferInsert> = {};
     const changed: string[] = [];
     for (const key of FIELDS) {
@@ -202,10 +213,24 @@ export async function listLeads(ctx: Ctx, opts: { stage?: Stage; includeArchived
   return rows.map((l) => toRow(l, org.stagnantDays, now));
 }
 
-export async function getLead(ctx: Ctx, id: string): Promise<LeadRow> {
+export async function getLead(ctx: Ctx, id: string): Promise<LeadRow & { assigneeName: string | null }> {
   assertCan(ctx, 'lead.read');
   const org = await orgSettings(db, ctx.orgId);
-  return toRow(await loadLead(db, ctx.orgId, id), org.stagnantDays, ctx.clock.now());
+  const lead = await loadLead(db, ctx.orgId, id);
+  const [person] = lead.assignedTo ? await db.select({ name: users.name }).from(users).where(and(eq(users.orgId, ctx.orgId), eq(users.id, lead.assignedTo))) : [];
+  return { ...toRow(lead, org.stagnantDays, ctx.clock.now()), assigneeName: person?.name ?? null };
+}
+
+export interface LeadFormOptions {
+  assignees: Array<{ id: string; name: string }>;
+}
+
+/** People a lead can be handed to. Only managers assign (PRD section 3), so staff get an empty list. */
+export async function getLeadFormOptions(ctx: Ctx): Promise<LeadFormOptions> {
+  assertCan(ctx, 'lead.read');
+  if (!can(ctx.role, 'lead.write')) return { assignees: [] };
+  const people = await db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.orgId, ctx.orgId), eq(users.isActive, true))).orderBy(asc(users.name));
+  return { assignees: people };
 }
 
 export interface PipelineSummary {

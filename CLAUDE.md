@@ -63,7 +63,7 @@ Checklist (periksa sebelum owner commit):
 - [ ] Istilah/status konsisten dengan glosarium dan modul lain
 - [ ] Unit test untuk kalkulasi dan state machine
 - [ ] **E2E**: uji manual di browser untuk verifikasi eksploratif, **wajib lewat Claude in Chrome** (`mcp__claude-in-chrome__*`), **bukan Playwright MCP** (menyampah tangkapan layar dan log di repo); **Playwright** (pustaka tes) tetap untuk regression yang masuk CI
-- [ ] Dicoba manual di browser minimal sekali
+- [ ] Dicoba manual di browser minimal sekali. **Uji browser hanya di `https://ai-business.asiifdev.com`** (langsung online): **dilarang menjalankan dev server sendiri** (`pnpm dev`, `pnpm start`, dsb.) dan **dilarang memakai `localhost`** untuk uji manual. Perubahan kode langsung terlihat di domain itu
 - [ ] `docs/PLAN.md` (§1 status dokumen, §1a status implementasi), `CHANGELOG.md`, dan `README.md` (bila relevan) diperbarui di commit yang sama. **`pnpm test` memeriksa sinkronisasi dokumen** (`tests/docs-sync.test.ts`): jangan menyalin status ke dokumen lain, tautkan ke `docs/PLAN.md`
 
 ## Aturan teknis yang tidak boleh dilanggar

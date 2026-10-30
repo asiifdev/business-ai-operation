@@ -21,6 +21,13 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
   const [pending, setPending] = useState<string | null>(null);
 
   useEffect(() => {
+    document.documentElement.dataset.assistant = 'on';
+    return () => {
+      delete document.documentElement.dataset.assistant;
+    };
+  }, []);
+
+  useEffect(() => {
     const onAsk = (e: Event) => {
       const question = (e as CustomEvent<{ question?: string }>).detail?.question?.trim();
       onOpenChange(true);

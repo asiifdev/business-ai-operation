@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { ZodError } from 'zod';
 import type { Db } from '../db/client';
 import { AiRun, type AiRunStatus, type ToolLogEntry } from '../domain/ai/runs';
 import { requestApproval as defaultRequestApproval } from '../domain/approvals/service';
@@ -205,7 +206,10 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
     } catch (error) {
       log('failed');
       // A business-rule refusal is safe and useful to tell the model; anything else is not.
-      return toJson({ error: error instanceof DomainError ? error.code : 'gagal_dijalankan' });
+      // The reason is what lets the assistant explain a refusal and suggest a fix (duplicate name, wrong state, a field out of range).
+      if (error instanceof DomainError) return toJson({ error: error.code, ...(error.message && error.message !== error.code ? { alasan: error.message } : {}) });
+      if (error instanceof ZodError) return toJson({ error: 'validasi', rincian: error.issues.slice(0, 5).map((i) => `${i.path.join('.') || '(akar)'}: ${i.message}`) });
+      return toJson({ error: 'gagal_dijalankan' });
     }
   };
 

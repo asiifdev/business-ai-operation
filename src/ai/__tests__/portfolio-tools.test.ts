@@ -77,12 +77,13 @@ describe('portfolio tools read the real data of the organization', () => {
     await expect(run(b.ownerCtx, 'get_product_packages', { productId: a.crm })).rejects.toMatchObject({ code: 'not_found' });
   });
 
-  it('has no tool that can change the portfolio', () => {
-    const names = buildAssistantRegistry().list().map((t) => t.name);
-    expect(names.filter((n) => /^(create|update|delete|archive|set|add|remove)_/.test(n))).toEqual([]);
-    // The only tools that are not read-only are drafts (an unsent invoice, a task, a proposal) and the document finalization,
-    // an `act` tool that only becomes a pending approval: they touch no portfolio data.
-    expect(buildAssistantRegistry().list().filter((t) => t.tier !== 'read').map((t) => [t.name, t.tier])).toEqual([['draft_invoice', 'draft'], ['draft_task', 'draft'], ['draft_proposal', 'draft'], ['finalize_document', 'act'], ['convert_lead_to_client', 'act'], ['plan_flow_run', 'draft']]);
+  it('has no tool that changes the portfolio on its own: records change only as an `act` tool, after a person approved', () => {
+    const tools = buildAssistantRegistry().list();
+    // Anything that adds or changes a record is `act`; a `read` tool never changes anything; deleting has no tool at all.
+    expect(tools.filter((t) => /^(create|update|move)_/.test(t.name) && t.tier !== 'act').map((t) => t.name)).toEqual([]);
+    expect(tools.filter((t) => /^(delete|remove|archive|set|add)_/.test(t.name))).toEqual([]);
+    // Drafts only produce things a person still has to review: an unsent invoice, a task, a lead, a proposal, a poster, a flow diagram.
+    expect(tools.filter((t) => t.tier === 'draft').map((t) => t.name).sort()).toEqual(['draft_flow', 'draft_invoice', 'draft_lead', 'draft_marketing_caption', 'draft_proposal', 'draft_task', 'generate_marketing_asset', 'plan_flow_run']);
   });
 });
 

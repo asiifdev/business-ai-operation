@@ -20,7 +20,7 @@ import { LeadForm, leadPayload, type LeadValues } from './LeadForm';
 import { STAGE_LABEL, STAGE_TONE } from './stages';
 
 type Role = 'owner' | 'admin' | 'staff';
-type Lead = Jsonify<LeadRow>;
+type Lead = Jsonify<LeadRow & { assigneeName: string | null }>;
 
 /** One lead: its details, where it can go next, and the manager-only steps (accept, convert, reopen, archive). */
 export function LeadDetail({ id, role, timezone }: { id: string; role: Role; timezone: string }) {
@@ -65,6 +65,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
     source: lead.source ?? '',
     needsSummary: lead.needsSummary ?? '',
     estimatedValue: lead.estimatedValue,
+    assignedTo: lead.assignedTo ?? '',
   };
 
   return (
@@ -84,6 +85,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
           )}
         </div>
         {lead.stage === 'lost' && lead.lostReason && <p className="m-0 text-muted">{t('leadLostBecause', { reason: lead.lostReason })}</p>}
+        <p className="m-0 text-sm text-muted">{t('fAssignee')}: {lead.assigneeName ?? t('taskAssigneeNone')}</p>
         {!closed && !lead.isDraft && <p className="m-0 text-sm text-muted">{t('leadDaysInStage', { days: lead.daysInStage })}</p>}
         {actionError != null && <p role="alert" className="m-0 text-danger">{t(errorKey(actionError))}</p>}
       </header>
@@ -118,7 +120,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
         </Panel>
       )}
 
-      {!closed && isManager && (
+      {!closed && !lead.archivedAt && isManager && (
         <Panel aria-label={t('docCreateProposal')} className="flex flex-wrap items-center gap-3">
           <a href={`/app/dokumen/baru?leadId=${id}`} className={buttonClasses('secondary', 'sm')}>{t('docCreateProposal')}</a>
         </Panel>

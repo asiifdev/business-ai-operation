@@ -1,4 +1,5 @@
 import type { InlineKeyboard } from '../../integrations/telegram/client';
+import { ACT_TOOL_LABEL } from '../../lib/act-tool-labels';
 import { encodeApprovalCallback } from '../../integrations/telegram/callback';
 import { escapeHtml, escapeHtmlAttr, MAX_MESSAGE } from '../../integrations/telegram/text';
 import { formatDate, formatRupiah } from '../../lib/format';
@@ -24,7 +25,6 @@ const RULE: Record<FindingRule, MessageKey> = {
   deployment_down: 'ruleDeploymentDown',
 };
 
-const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun', convert_lead_to_client: 'toolConvertLead' };
 
 /** A link into the web app, or nothing when the app address is unknown. */
 const appLink = (appUrl: string | undefined, path: string | null, label: string) =>
@@ -72,7 +72,7 @@ export function findingMessage(locale: Locale, card: Pick<FindingCard, 'rule' | 
 /** An approval card with Approve / Reject / Detail (PRD section 6). The text says exactly what will run. */
 export function approvalMessage(locale: Locale, a: Pick<ApprovalCard, 'id' | 'tool' | 'rationale' | 'target' | 'expiresAt'>, timezoneFormat: (d: Date) => string): { text: string; keyboard: InlineKeyboard } {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
-  const lines = [`<b>${escapeHtml(t('apTitle'))}</b>`, escapeHtml(ACT_TOOL[a.tool] ? t(ACT_TOOL[a.tool]) : a.tool), escapeHtml(cut(a.rationale, 600))];
+  const lines = [`<b>${escapeHtml(t('apTitle'))}</b>`, escapeHtml(ACT_TOOL_LABEL[a.tool] ? t(ACT_TOOL_LABEL[a.tool]) : a.tool), escapeHtml(cut(a.rationale, 600))];
   if (a.target?.kind === 'invoice') lines.push(`${escapeHtml(a.target.number ?? t('factDraftNumber'))} · ${escapeHtml(a.target.clientName)} · ${formatRupiah(a.target.total)}`);
   if (a.target?.kind === 'lead') lines.push(`${escapeHtml(a.target.name)}${a.target.estimatedValue != null ? ` · ${formatRupiah(a.target.estimatedValue)}` : ''}`);
   lines.push('', `<i>${escapeHtml(t('apByAi'))}</i> · ${escapeHtml(t('apExpires', { when: timezoneFormat(a.expiresAt) }))}`);

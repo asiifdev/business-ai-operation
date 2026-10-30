@@ -4,7 +4,14 @@ import type { FindingRule } from '../../domain/action-center/facts';
 import { markInvoiceSent } from '../../domain/billing/invoices';
 import { finalizeDocument } from '../../domain/documents/service';
 import { startRun } from '../../domain/flows/service';
-import { convertLeadToClient } from '../../domain/pipeline/leads';
+import { convertLeadToClient, moveLead, updateLead } from '../../domain/pipeline/leads';
+import { createSubscription } from '../../domain/billing/subscriptions';
+import { createClient, updateClient } from '../../domain/portfolio/clients';
+import { createDeployment, updateDeployment } from '../../domain/portfolio/deployments';
+import { createProduct, updateProduct } from '../../domain/portfolio/products';
+import { setTaskStatus, updateTask } from '../../domain/tasks/service';
+import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
+import { STAGES } from '../../domain/pipeline/stages';
 import { formatRupiah } from '../../lib/format';
 import { ToolRegistry, defineTool } from './registry';
 
@@ -68,6 +75,129 @@ export const convertLeadToClientTool = defineTool({
       ? 'Jadikan lead yang menang ini klien dengan menautkannya ke klien yang sudah ada, lalu buat checklist onboarding sebagai tugas. Tidak ada pesan yang dikirim.'
       : 'Jadikan lead yang menang ini klien baru dari data lead, lalu buat checklist onboarding sebagai tugas. Tidak ada pesan yang dikirim.',
 });
+
+const id = z.string().trim().min(1).max(40);
+const text = (max: number) => z.string().trim().max(max);
+
+/**
+ * The data tools (BRD-M07 Appendix A): every record the assistant may add or change after a person approved it. Each one runs
+ * the same service as the form behind it, as the approver, so permissions, validation and audit are the service's own.
+ * Money, status of payment, due dates, prices, roles, settings and deletions have no tool here (BR-M07-04).
+ */
+export const createClientTool = defineTool({
+  name: 'create_client',
+  description: 'Proposes to ADD a new client (name, and optionally contact person, email, phone, address, notes) from what the person asked. Check list_clients first: do not propose a client that already exists. It never runs by itself: a person must approve it first. Nothing is sent to anyone.',
+  tier: 'act',
+  permission: 'client.write',
+  args: z.object({ name: text(120).min(2), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
+  execute: async (ctx, args) => createClient(ctx, args),
+  describe: (args) => `Tambahkan klien baru "${args.name}"${args.contactName ? ` (kontak: ${args.contactName})` : ''}. Tidak ada pesan yang dikirim.`,
+});
+
+export const updateClientTool = defineTool({
+  name: 'update_client',
+  description: 'Proposes to CHANGE details of an existing client (name, contact person, email, phone, address, notes). Give only the fields that change; clientId from list_clients. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'client.write',
+  args: z.object({ clientId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
+  execute: async (ctx, { clientId, ...patch }) => updateClient(ctx, clientId, patch),
+  describe: (args) => `Ubah data klien: ${Object.keys(args).filter((k) => k !== 'clientId').join(', ') || 'tidak ada perubahan'}.`,
+});
+
+export const createProductTool = defineTool({
+  name: 'create_product',
+  description: 'Proposes to ADD a new product to the catalogue (name, description, current version). Packages and prices are set by a person on the product page, never by you. Check list_products first. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'catalog.write',
+  args: z.object({ name: text(120).min(2), description: text(2000).optional(), currentVersion: text(40).optional() }),
+  execute: async (ctx, args) => createProduct(ctx, args),
+  describe: (args) => `Tambahkan produk baru "${args.name}" ke katalog. Paket dan harga diisi orang di halaman produk.`,
+});
+
+export const updateProductTool = defineTool({
+  name: 'update_product',
+  description: 'Proposes to CHANGE a product (name, description, current version). Give only what changes; productId from list_products. Prices are not touched. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'catalog.write',
+  args: z.object({ productId: id, name: text(120).min(2).optional(), description: text(2000).optional(), currentVersion: text(40).optional() }),
+  execute: async (ctx, { productId, ...patch }) => updateProduct(ctx, productId, patch),
+  describe: (args) => `Ubah data produk: ${Object.keys(args).filter((k) => k !== 'productId').join(', ') || 'tidak ada perubahan'}.`,
+});
+
+export const createDeploymentTool = defineTool({
+  name: 'create_deployment',
+  description: 'Proposes to RECORD a deployment: a product installed for a client (ids from list_products and list_clients), with environment (default production), optional label, domain (host name only, no https:// and no login) and installed version. It never runs by itself: a person must approve it first. It does not install anything on a server.',
+  tier: 'act',
+  permission: 'deployment.write',
+  args: z.object({ productId: id, clientId: id, environment: text(30).min(2).optional(), label: text(120).optional(), domain: text(253).optional(), installedVersion: text(40).optional() }),
+  execute: async (ctx, args) => createDeployment(ctx, args),
+  describe: (args) => `Catat deployment baru (${args.environment ?? 'production'}${args.domain ? `, ${args.domain}` : ''}). Tidak ada yang dipasang di server.`,
+});
+
+export const updateDeploymentTool = defineTool({
+  name: 'update_deployment',
+  description: 'Proposes to CHANGE a recorded deployment (environment, label, domain, installed version, active or inactive). deploymentId from list_deployments. It never runs by itself: a person must approve it first. It does not touch any server.',
+  tier: 'act',
+  permission: 'deployment.write',
+  args: z.object({ deploymentId: id, environment: text(30).min(2).optional(), label: text(120).optional(), domain: text(253).optional(), installedVersion: text(40).optional(), status: z.enum(['active', 'inactive']).optional() }),
+  execute: async (ctx, { deploymentId, ...patch }) => updateDeployment(ctx, deploymentId, patch),
+  describe: (args) => `Ubah catatan deployment: ${Object.keys(args).filter((k) => k !== 'deploymentId').join(', ') || 'tidak ada perubahan'}. Server tidak disentuh.`,
+});
+
+export const updateLeadTool = defineTool({
+  name: 'update_lead',
+  description: 'Proposes to CHANGE a lead (name, contact person, email, phone, source, needs, estimated value in Rupiah, assignedTo = a user id from list_team_members). Give only what changes; leadId from list_leads. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'lead.update_assigned',
+  args: z.object({ leadId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), source: text(80).optional(), needsSummary: text(4000).optional(), estimatedValue: z.number().int().min(0).optional(), assignedTo: id.nullable().optional() }),
+  execute: async (ctx, { leadId, ...patch }) => updateLead(ctx, leadId, patch),
+  describe: (args) => `Ubah data lead: ${Object.keys(args).filter((k) => k !== 'leadId').join(', ') || 'tidak ada perubahan'}.`,
+});
+
+export const moveLeadTool = defineTool({
+  name: 'move_lead',
+  description: 'Proposes to MOVE a lead one step to another pipeline stage (exploring, proposal, negotiation, won, lost). A lost lead needs lostReason. The system refuses an invalid move. leadId from list_leads. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'lead.update_assigned',
+  args: z.object({ leadId: id, to: z.enum(STAGES), lostReason: text(500).optional() }),
+  execute: async (ctx, args) => moveLead(ctx, args.leadId, args.to, args.lostReason ? { lostReason: args.lostReason } : {}),
+  describe: (args) => `Pindahkan lead ke tahap "${args.to}"${args.lostReason ? ` (alasan: ${args.lostReason})` : ''}.`,
+});
+
+export const updateTaskTool = defineTool({
+  name: 'update_task',
+  description: 'Proposes to CHANGE an accepted task: status (open, in_progress, done), priority, due date (YYYY-MM-DD), assignee (user id from list_team_members), title or description. taskId from list_tasks. It never runs by itself: a person must approve it first.',
+  tier: 'act',
+  permission: 'task.update_own',
+  args: z.object({
+    taskId: id,
+    status: z.enum(TASK_STATUSES).optional(),
+    title: text(200).min(2).optional(),
+    description: text(4000).optional(),
+    kind: z.enum(TASK_KINDS).optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    assigneeId: id.nullable().optional(),
+  }),
+  execute: async (ctx, { taskId, status, ...patch }) => {
+    if (Object.keys(patch).length) await updateTask(ctx, taskId, patch);
+    if (status) await setTaskStatus(ctx, taskId, status);
+  },
+  describe: (args) => `Ubah tugas: ${Object.keys(args).filter((k) => k !== 'taskId').join(', ') || 'tidak ada perubahan'}.`,
+});
+
+export const createSubscriptionTool = defineTool({
+  name: 'create_subscription',
+  description: 'Proposes to START a subscription for a client on an official package (ids from list_clients and get_product_packages), billed every intervalMonths (default 1). The amount is copied from the package by the system; you cannot set a price. It never runs by itself: a person with finance rights must approve it first. Nothing is sent to the client.',
+  tier: 'act',
+  permission: 'billing.write',
+  args: z.object({ clientId: id, packageId: id, deploymentId: id.optional(), intervalMonths: z.number().int().min(1).max(60).optional(), startedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
+  execute: async (ctx, args) => createSubscription(ctx, args),
+  describe: (args) => `Mulai langganan untuk klien ini dengan paket resmi, tagihan tiap ${args.intervalMonths ?? 1} bulan. Nominal diambil dari paket oleh sistem; tidak ada pesan yang dikirim.`,
+});
+
+/** The `act` tools on records. Registered in the assistant catalogue and in the registry the approval decision looks tools up in. */
+export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool] as const;
 
 export interface ActionFinding {
   id: string;
@@ -178,10 +308,11 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
     registry.register(finalizeDocumentTool);
     registry.register(startFlowRunTool);
     registry.register(convertLeadToClientTool);
+    for (const tool of DATA_ACT_TOOLS) registry.register(tool);
   }
 
   return registry;
 }
 
 /** Tools whose effect is on money: only people who may decide finance approvals can approve them (BR-M08-07). */
-export const FINANCIAL_ACT_TOOLS: ReadonlySet<string> = new Set(['mark_invoice_sent']);
+export const FINANCIAL_ACT_TOOLS: ReadonlySet<string> = new Set(['mark_invoice_sent', 'create_subscription']);

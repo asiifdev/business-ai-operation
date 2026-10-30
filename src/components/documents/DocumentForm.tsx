@@ -11,6 +11,7 @@ import { FormField } from '../forms/FormField';
 import { MoneyInput } from '../forms/MoneyInput';
 import { NumberInput } from '../forms/NumberInput';
 import { SelectMenu } from '../forms/SelectMenu';
+import { ClientSelect } from '../portfolio/ClientSelect';
 import { TextInput } from '../forms/TextInput';
 import { Icon } from '../shell/Icon';
 import { Button } from '../ui/Button';
@@ -115,7 +116,7 @@ function Form({ options, documentId, initial, presetLeadId, presetClientId }: { 
           {!editing && (
             <>
               <FormField label={t('fDocClient')} help={t('docPartyHelp')} error={bad.clientId ? t('docPartyHelp') : null}>
-                <SelectMenu value={clientId} onChange={setClientId} includeAll={t('choose')} options={options.clients.map((c) => ({ value: c.id, label: c.name }))} />
+                <ClientSelect clients={options.clients} value={clientId} onChange={setClientId} includeAll={t('choose')} />
               </FormField>
               <FormField label={t('fDocLead')}>
                 <SelectMenu value={leadId} onChange={setLeadId} includeAll={t('choose')} options={options.leads.map((l) => ({ value: l.id, label: l.name }))} />

@@ -13,6 +13,9 @@ const STORE = 'orbyte.assistant.thread';
 /** Fired by `askAssistant`; the app shell opens the side panel and asks. */
 export const ASK_EVENT = 'orbyte:ask';
 
+/** Set on the page by the assistant panel while it is mounted, so a form knows whether there is an assistant to ask. */
+export const assistantAvailable = () => typeof document !== 'undefined' && document.documentElement.dataset.assistant === 'on';
+
 /** Open the assistant from anywhere in the app, optionally with a question to ask right away. */
 export function askAssistant(question?: string) {
   if (typeof window === 'undefined') return;

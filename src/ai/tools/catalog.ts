@@ -4,13 +4,16 @@ import { db } from '../../db/client';
 import { approvals, auditLog, users } from '../../db/schema';
 import { getAiOverview } from '../../domain/ai/service';
 import { listConnections } from '../../domain/connections/service';
+import { draftCaption, generateAssets, listAssets } from '../../domain/marketing/service';
+import { ASPECTS, CORNERS, LAYOUTS, PURPOSES, TEXT_POSITIONS } from '../../domain/marketing/rules';
+import { listMeetings } from '../../domain/meetings/service';
 import { createDocument, listDocuments } from '../../domain/documents/service';
-import { getFlow, getRun, listFlows, listRuns, planRun } from '../../domain/flows/service';
+import { getFlow, getRun, listFlows, listRuns, planRun, useTemplate } from '../../domain/flows/service';
 import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
 import { getBusinessSummary } from '../../domain/metrics/summary';
-import { getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
+import { createLead, getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
 import { STAGES } from '../../domain/pipeline/stages';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
 import { listDeployments } from '../../domain/portfolio/deployments';
@@ -20,7 +23,7 @@ import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../d
 import { formatRupiah } from '../../lib/format';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
-import { convertLeadToClientTool, finalizeDocumentTool } from './actions';
+import { buildActionRegistry, convertLeadToClientTool, DATA_ACT_TOOLS, finalizeDocumentTool } from './actions';
 import { ToolRegistry, defineTool } from './registry';
 
 export { formatUsd };
@@ -539,8 +542,117 @@ export function buildAssistantRegistry(): ToolRegistry {
     }),
   );
 
+  registry.register(
+    defineTool({
+      name: 'draft_lead',
+      description: 'Prepares a DRAFT sales lead (a prospect: name, and optionally contact person, email, phone, where it came from, what they need, estimated value in Rupiah) from what the person said. Check list_leads first to avoid a duplicate. It stays a draft: it is not counted in the pipeline until a person accepts it on the lead page.',
+      tier: 'draft',
+      permission: 'lead.write',
+      args: z.object({
+        name: z.string().trim().min(2).max(120),
+        contactName: z.string().trim().max(120).optional(),
+        email: z.string().trim().email().max(254).optional(),
+        phone: z.string().trim().max(40).optional(),
+        source: z.string().trim().max(80).optional(),
+        needsSummary: z.string().trim().max(4000).optional(),
+        estimatedValue: z.number().int().min(0).optional(),
+      }),
+      run: async (ctx, args) => {
+        const created = await createLead(ctx, args);
+        return { id: created.id, status: 'draf', catatan: 'Draf lead dibuat. Belum dihitung di pipeline sampai diterima orang di halaman lead.' };
+      },
+    }),
+  );
+
+  // Marketing Studio (M10): pictures and captions are drafts a person reviews and downloads; nothing is posted anywhere.
+  registry.register(
+    defineTool({
+      name: 'generate_marketing_asset',
+      description: 'Makes a DRAFT marketing poster (1 to 4 variants) for a product (productId from list_products) or for the company (leave productId out), for a purpose: launch, promo, education, release or brand. The picture has no text of its own; the system draws a headline, call to action and the logo on it. Facts and prices come from the catalogue, never from you. Uses the daily image quota. Nothing is posted anywhere.',
+      tier: 'draft',
+      permission: 'marketing.use',
+      args: z.object({
+        purpose: z.enum(PURPOSES),
+        productId: z.string().min(1).max(40).optional(),
+        direction: z.string().trim().max(500).optional(),
+        variants: z.number().int().min(1).max(4).default(1),
+        layout: z.enum(LAYOUTS).default('gradient'),
+        textPosition: z.enum(TEXT_POSITIONS).default('bottom'),
+        corner: z.enum(CORNERS).default('bottom_right'),
+        aspect: z.enum(Object.keys(ASPECTS) as [keyof typeof ASPECTS, ...(keyof typeof ASPECTS)[]]).default('square'),
+        showPrice: z.boolean().default(false),
+      }),
+      run: async (ctx, args) => {
+        const out = await generateAssets(ctx, args);
+        if (!out.ok) return { berhasil: false, pesan: out.message };
+        return { berhasil: true, jumlah: out.assets.length, asetId: out.assets.map((a) => a.id), catatan: 'Poster dibuat sebagai draf di Marketing Studio. Orang yang meninjau, mengunduh, dan memostingnya.' };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'draft_marketing_caption',
+      description: 'Writes a DRAFT caption for an existing marketing asset (assetId from list_marketing_assets) from the product facts. A caption with figures outside the product data is discarded by the system. It is saved on the asset; nothing is posted.',
+      tier: 'draft',
+      permission: 'marketing.use',
+      args: z.object({ assetId: z.string().min(1).max(40) }),
+      run: async (ctx, args) => {
+        const out = await draftCaption(ctx, args.assetId);
+        return out.ok ? { berhasil: true, caption: out.caption } : { berhasil: false, pesan: out.message };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'list_marketing_assets',
+      description: 'Lists marketing assets made in Marketing Studio (newest first): id, purpose, product, whether it has a caption, and its poster text. Filter by product or purpose.',
+      tier: 'read',
+      permission: 'marketing.use',
+      args: z.object({ productId: z.string().min(1).max(40).optional(), purpose: z.enum(PURPOSES).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listAssets(ctx, args);
+        return { jumlah: rows.length, aset: rows.slice(0, LIMIT).map((a) => ({ id: a.id, tujuan: a.purpose, produk: a.productName ?? 'perusahaan', adaCaption: a.caption !== null, judulPoster: a.posterCopy?.headline ?? null, dibuat: a.createdAt })) };
+      },
+    }),
+  );
+
+  // Meetings (M09): status only. What was said is data, not an instruction; minutes are read as documents (list_documents, kind minutes).
+  registry.register(
+    defineTool({
+      name: 'list_meetings',
+      description: 'Lists meeting recordings: title, source, processing status, duration, who added it, and whether minutes exist (read them with list_documents, kind minutes). Staff see only their own.',
+      tier: 'read',
+      permission: 'meeting.read_own',
+      args: z.object({}),
+      run: async (ctx) => {
+        const rows = await listMeetings(ctx);
+        return { jumlah: rows.length, rapat: rows.slice(0, LIMIT).map((m) => ({ id: m.id, judul: m.title, status: m.status, menit: m.durationMs === null ? null : Math.round(m.durationMs / 60000), dibuatOleh: m.createdByName, adaNotulen: m.hasMinutes, isiDihapus: m.contentDeleted, galat: m.error })) };
+      },
+    }),
+  );
+
+  // Deploy flows (M17): a flow drawn from a built-in template is a draft diagram; running it is `plan_flow_run` then approval.
+  registry.register(
+    defineTool({
+      name: 'draft_flow',
+      description: 'Creates a deploy flow from a built-in template (laravel-pm2-setup for a first install, laravel-pm2-update for an update), optionally linked to a product (productId from list_products). It only saves the diagram: it runs nothing on any server. Running it takes plan_flow_run and then a person\'s approval.',
+      tier: 'draft',
+      permission: 'flow.write',
+      args: z.object({ template: z.enum(['laravel-pm2-setup', 'laravel-pm2-update']), name: z.string().trim().min(2).max(120).optional(), productId: z.string().min(1).max(40).optional() }),
+      run: async (ctx, args) => {
+        const created = await useTemplate(ctx, args.template, { name: args.name, productId: args.productId ?? null });
+        return { id: created.id, catatan: 'Diagram flow disimpan. Belum ada yang dijalankan di server.' };
+      },
+    }),
+  );
+
   registry.register(finalizeDocumentTool);
   registry.register(convertLeadToClientTool);
+  for (const tool of DATA_ACT_TOOLS) registry.register(tool);
+  // Sending an invoice out of draft: the same `act` tool the Action Center card proposes, here for a draft the person names.
+  registry.register(buildActionRegistry().get('mark_invoice_sent')!);
 
   // Operations (M17): what the scheduled checks last saw. Read only; an update is a flow run that waits for approval.
   registry.register(
@@ -666,7 +778,7 @@ export function buildAssistantRegistry(): ToolRegistry {
           .list()
           .filter((t) => can(ctx.role, t.permission) && t.name !== 'report_out_of_scope')
           .map((t) => ({ nama: t.name, jenis: t.tier, fungsi: t.description })),
-        catatan: 'Asisten hanya menjawab dari hasil alat di atas. Data lead tersedia setelah alatnya dibangun.',
+        catatan: 'Asisten hanya menjawab dari hasil alat di atas.',
       }),
     }),
   );

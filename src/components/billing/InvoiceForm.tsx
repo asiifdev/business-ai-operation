@@ -11,7 +11,7 @@ import { DateInput } from '../forms/DateInput';
 import { FormField } from '../forms/FormField';
 import { MoneyInput } from '../forms/MoneyInput';
 import { NumberInput } from '../forms/NumberInput';
-import { SelectMenu } from '../forms/SelectMenu';
+import { ClientSelect } from '../portfolio/ClientSelect';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { Icon } from '../shell/Icon';
@@ -94,13 +94,12 @@ function Form({ options, initial, invoiceId, presetClientId }: { options: Option
       <Panel className="flex max-w-3xl flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label={t('fClient')} required error={bad.clientId ? t('errValidation') : null}>
-            <SelectMenu value={clientId} onChange={setClientId} disabled={editing} placeholder={t('choose')} options={options.clients.map((c) => ({ value: c.id, label: c.name }))} error={Boolean(bad.clientId)} />
+            <ClientSelect clients={options.clients} value={clientId} onChange={setClientId} disabled={editing} placeholder={t('choose')} error={Boolean(bad.clientId)} />
           </FormField>
           <FormField label={t('fDueDate')} required help={t('dueDateHelp')} error={bad.dueDate ? t('errValidation') : null}>
             <DateInput value={dueDate} onChange={setDueDate} />
           </FormField>
         </div>
-        {options.clients.length === 0 && <p className="m-0 text-sm text-muted">{t('noClientsForBilling')}</p>}
       </Panel>
 
       <Panel className="flex flex-col gap-4" aria-label={t('itemsTitle')}>

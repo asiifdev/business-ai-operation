@@ -204,13 +204,13 @@ describe('acceptance: forbidden, unknown and broken tool calls', () => {
     expect(feedback).not.toContain('999');
   });
 
-  it('tells the model only the business-rule code when a tool refuses, and hides internal errors', async () => {
+  it('tells the model the business-rule code and its reason when a tool refuses (so it can explain and advise), and hides internal errors', async () => {
     const o = await makeOrg();
     const { registry } = build();
     const fake = new FakeProvider({ chat: [callTools([{ name: 'refuse_tool', args: {} }, { name: 'crash_tool', args: {} }]), say('Dua tool gagal.')] });
     const result = await agent(o, fake, { registry });
     const [refused, crashed] = fake.chatCalls[1].messages.slice(-2).map((m) => (m as { content: string }).content);
-    expect(JSON.parse(refused)).toEqual({ error: 'invalid_state' });
+    expect(JSON.parse(refused)).toMatchObject({ error: 'invalid_state' });
     expect(JSON.parse(crashed)).toEqual({ error: 'gagal_dijalankan' });
     expect(crashed).not.toContain('postgres');
     expect(result.tools.map((t) => t.status)).toEqual(['failed', 'failed']);

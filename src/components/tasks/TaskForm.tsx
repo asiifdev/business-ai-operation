@@ -7,6 +7,7 @@ import { useT } from '../../lib/use-t';
 import { DateInput } from '../forms/DateInput';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
+import { ClientSelect } from '../portfolio/ClientSelect';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { Button } from '../ui/Button';
@@ -96,7 +97,7 @@ export function TaskForm({ options, initial = emptyTask, submitLabel, request, o
       </FormField>
       <div className="grid gap-4 sm:grid-cols-3">
         <FormField label={t('fTaskClient')}>
-          <SelectMenu value={values.clientId} onChange={pickClient} includeAll={t('taskNone')} options={options.clients.map((c) => ({ value: c.id, label: c.name }))} />
+          <ClientSelect clients={options.clients} value={values.clientId} onChange={pickClient} includeAll={t('taskNone')} />
         </FormField>
         <FormField label={t('fTaskProduct')}>
           <SelectMenu value={values.productId} onChange={(v) => set('productId', v)} includeAll={t('taskNone')} options={options.products.map((p) => ({ value: p.id, label: p.name }))} disabled={Boolean(values.deploymentId)} />

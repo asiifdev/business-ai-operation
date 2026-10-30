@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ACT_TOOL_LABEL } from '../../lib/act-tool-labels';
 import type { ApprovalCard as Approval, DecisionResult } from '../../domain/action-center/approvals';
 import { api, errorKey } from '../../lib/api-client';
 import { formatDateTime, formatRupiah } from '../../lib/format';
@@ -11,7 +12,6 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 
-const TOOL_LABEL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun', convert_lead_to_client: 'toolConvertLead' };
 
 /**
  * One risky action waiting for a person (BR-M08-04): what it is, the record it touches, the exact arguments that will
@@ -41,7 +41,7 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
   return (
     <article className="flex flex-col gap-3 rounded-input border border-warm/60 bg-paper p-4">
       <header className="flex flex-wrap items-center gap-2">
-        <h3 className="m-0 text-base font-semibold text-ink">{TOOL_LABEL[approval.tool] ? t(TOOL_LABEL[approval.tool]) : approval.tool}</h3>
+        <h3 className="m-0 text-base font-semibold text-ink">{ACT_TOOL_LABEL[approval.tool] ? t(ACT_TOOL_LABEL[approval.tool]) : approval.tool}</h3>
         {approval.aiRunId && <Badge tone="accent">{t('apByAi')}</Badge>}
       </header>
       <p className="m-0 text-sm text-ink-2">{approval.rationale}</p>

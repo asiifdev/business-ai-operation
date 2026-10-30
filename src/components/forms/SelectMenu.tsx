@@ -29,9 +29,12 @@ interface Props {
   error?: boolean;
   id?: string;
   className?: string;
+  /** A last row "+ label" that closes the menu and calls `onCreate`: add what is missing without leaving the form. */
+  createLabel?: string;
+  onCreate?: () => void;
 }
 
-export function SelectMenu({ options, value, defaultValue = '', onChange, placeholder, includeAll, searchable, name, size = 'md', disabled, error, id, className }: Props) {
+export function SelectMenu({ options, value, defaultValue = '', onChange, placeholder, includeAll, searchable, name, size = 'md', disabled, error, id, className, createLabel, onCreate }: Props) {
   const t = useT();
   const field = useFieldControl({ id, invalid: error });
   const listId = useId();
@@ -183,6 +186,16 @@ export function SelectMenu({ options, value, defaultValue = '', onChange, placeh
               </li>
             ))}
           </ul>
+          {onCreate && createLabel && (
+            <button
+              type="button"
+              onClick={() => { close(); onCreate(); }}
+              className="flex w-full items-center gap-2 border-t border-rule px-4 py-2.5 text-left text-sm font-medium text-accent hover:bg-accent-wash"
+            >
+              <span aria-hidden="true">+</span>
+              {createLabel}
+            </button>
+          )}
         </div>
       </FloatingPanel>
     </div>

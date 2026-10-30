@@ -186,7 +186,7 @@ describe('listing', () => {
 describe('sweep and newer rules', () => {
   it('never closes a finding whose kind of record this build cannot read', async () => {
     const o = await makeOrg();
-    const [row] = await db.insert(findings).values({ orgId: o.orgId, rule: 'lead_stagnant', entityType: 'lead', entityId: 'lead-from-a-newer-build', periodKey: '2026-W44' }).returning({ id: findings.id });
+    const [row] = await db.insert(findings).values({ orgId: o.orgId, rule: 'lead_stagnant', entityType: 'record-kind-from-a-newer-build', entityId: 'x-from-a-newer-build', periodKey: '2026-W44' }).returning({ id: findings.id });
     await sweepFindings(o.orgId, o.clock.now());
     const [after] = await db.select({ status: findings.status }).from(findings).where(eq(findings.id, row.id));
     expect(after.status).toBe('new');

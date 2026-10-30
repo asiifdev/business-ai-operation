@@ -5,7 +5,7 @@ import { auditLog, clients, tasks } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import type { Ctx } from '../../ctx';
 import { createClient } from '../../portfolio/clients';
-import { acceptLeadDraft, convertLeadToClient, createLead, getLead, getPipelineSummary, listLeads, listStagnantLeads, moveLead, reopenLead, setLeadArchived, updateLead } from '../leads';
+import { acceptLeadDraft, convertLeadToClient, createLead, getLead, getLeadFormOptions, getPipelineSummary, listLeads, listStagnantLeads, moveLead, reopenLead, setLeadArchived, updateLead } from '../leads';
 
 afterAll(async () => {
   await pg.end();
@@ -69,6 +69,17 @@ describe('moving leads (BRD-M04 section 10)', () => {
     await expect(updateLead(o.staffCtx, mine, { assignedTo: null })).rejects.toMatchObject({ code: 'forbidden' });
     await expect(createLead(o.staffCtx, { name: 'Baru' })).rejects.toMatchObject({ code: 'forbidden' });
     expect(await listLeads(o.staffCtx)).toHaveLength(2); // staff can see the whole pipeline
+  });
+
+  it('assigns a lead only to an active person of the same organization', async () => {
+    const o = await makeOrg();
+    const other = await makeOrg();
+    await expect(createLead(o.ownerCtx, { name: 'Salah orang', assignedTo: other.ownerCtx.userId })).rejects.toMatchObject({ code: 'validation' });
+    const { id } = await createLead(o.ownerCtx, { name: 'Benar', assignedTo: o.staffCtx.userId });
+    expect((await getLead(o.ownerCtx, id)).assigneeName).toEqual(expect.any(String));
+    await expect(updateLead(o.ownerCtx, id, { assignedTo: other.ownerCtx.userId })).rejects.toMatchObject({ code: 'validation' });
+    expect((await getLeadFormOptions(o.ownerCtx)).assignees.map((a) => a.id)).toContain(o.staffCtx.userId);
+    expect((await getLeadFormOptions(o.staffCtx)).assignees).toEqual([]);
   });
 
   it('does not let an AI run move a lead, only suggest', async () => {

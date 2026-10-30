@@ -1,5 +1,6 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useT } from '../../lib/use-t';
+import { askAssistant, assistantAvailable } from '../assistant/useAssistant';
 import { cx } from '../../lib/cx';
 import { FieldContext } from './field';
 import { InputError } from './InputError';
@@ -29,6 +30,10 @@ export function FormField({ label, help, tip, required = false, error, showOptio
   const errorId = `${base}-error`;
   const [tipOpen, setTipOpen] = useState(false);
   const hasError = Array.isArray(error) ? error.length > 0 : Boolean(error);
+  // Inside the app a field error offers to ask the assistant why; public pages (sign in) have no assistant.
+  const [canAsk, setCanAsk] = useState(false);
+  useEffect(() => setCanAsk(hasError && assistantAvailable()), [hasError]);
+  const errorText = (Array.isArray(error) ? error.join(' ') : (error ?? '')) as string;
   const describedBy = [hasError && errorId, help && helpId, tip && tipOpen && tipId].filter(Boolean).join(' ') || undefined;
 
   return (
@@ -60,6 +65,15 @@ export function FormField({ label, help, tip, required = false, error, showOptio
         </div>
         {children}
         <InputError id={errorId} messages={error} />
+        {canAsk && (
+          <button
+            type="button"
+            onClick={() => askAssistant(t('askAboutErrorQuestion', { field: label, page: window.location.pathname, message: errorText }))}
+            className="w-fit text-sm text-accent underline underline-offset-4"
+          >
+            {t('askAboutError')}
+          </button>
+        )}
         {help && (
           <p id={helpId} className="m-0 text-sm text-muted">
             {help}
