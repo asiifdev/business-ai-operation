@@ -8,6 +8,7 @@ import { useLoad } from '../../lib/use-load';
 import { useLocale, useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
+import { ProductSelect } from './ProductSelect';
 import { TextInput } from '../forms/TextInput';
 import { ClientBilling } from '../billing/ClientBilling';
 import { ClientTasks } from '../tasks/ClientTasks';
@@ -248,7 +249,7 @@ function DeploymentForm({ clientId, onDone, onCancel }: { clientId: string; onDo
   return (
     <form onSubmit={submit} noValidate className="flex max-w-2xl flex-col gap-4 border-t border-rule pt-4">
       <FormField label={t('fProduct')} required error={duplicate ? t('errDuplicateDeployment') : bad.productId ? t('errValidation') : null}>
-        <SelectMenu options={options} value={values.productId} onChange={(productId) => setValues({ ...values, productId })} placeholder={t('pickProduct')} />
+        <ProductSelect products={options.map((o) => ({ id: o.value, name: o.label, description: o.description }))} value={values.productId} onChange={(productId) => setValues({ ...values, productId })} placeholder={t('pickProduct')} />
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label={t('fEnvironment')} required error={bad.environment ? t('errValidation') : null}>

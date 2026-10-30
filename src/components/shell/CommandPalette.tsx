@@ -107,7 +107,7 @@ export function CommandPalette({ open, onClose, role, onAsk }: { open: boolean; 
   let lastGroup: Entry['group'] | null = null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12dvh]" onKeyDown={onKeyDown}>
-      <div aria-hidden="true" onClick={onClose} className="palette-backdrop absolute inset-0 bg-ink/40 backdrop-blur-[2px]" />
+      <div aria-hidden="true" onClick={onClose} className="palette-backdrop absolute inset-0 bg-scrim/55 backdrop-blur-[2px]" />
       <div role="dialog" aria-modal="true" aria-label={t('searchPlaceholder')} className="palette relative flex max-h-[70dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-rule bg-key-face shadow-pop">
         <div className="flex items-center gap-3 border-b border-rule px-4">
           <Icon name="search" className="size-5 shrink-0 text-muted" />

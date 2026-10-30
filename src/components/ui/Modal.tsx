@@ -74,7 +74,7 @@ export function Modal({ open, onClose, title, placement = 'center', actions, chi
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
     <div className="fixed inset-0 z-50">
-      <div aria-hidden="true" onClick={onClose} className="palette-backdrop absolute inset-0 bg-ink/45" />
+      <div aria-hidden="true" onClick={onClose} className="palette-backdrop absolute inset-0 bg-scrim/55" />
       <div ref={panel} role="dialog" aria-modal="true" aria-label={title} className={cx('absolute flex flex-col border-rule bg-paper shadow-pop', PANEL[placement])}>
         {placement === 'bottom' && <span aria-hidden="true" className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-rule-2" />}
         <header className="flex shrink-0 items-center gap-2 border-b border-rule px-4 py-3">

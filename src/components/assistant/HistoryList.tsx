@@ -93,6 +93,7 @@ export function HistoryList({ sessions, currentId, onOpen, onNew, onSearch, onRe
                     <form className="flex items-center gap-1 p-1.5" onSubmit={(e) => { e.preventDefault(); save(s.id); }}>
                       <input
                         autoFocus
+                        onFocus={(e) => e.currentTarget.select()}
                         value={draft}
                         maxLength={80}
                         onChange={(e) => setDraft(e.currentTarget.value)}

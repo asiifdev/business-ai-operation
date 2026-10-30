@@ -10,6 +10,9 @@ export const FINANCIAL_ENTITIES = ['invoice', 'subscription', 'payment'] as cons
 
 export const PAGE_SIZE = 50;
 
+/** The entry's time cut to the millisecond, the precision of the paging cursor. */
+const inMs = sql`date_trunc('milliseconds', ${auditLog.createdAt})`;
+
 export const auditFilterSchema = z.object({
   actor: z.enum(['user', 'ai', 'system']).optional(),
   userId: z.string().max(40).optional(),
@@ -40,7 +43,8 @@ export async function listAudit(ctx: Ctx, raw: z.input<typeof auditFilterSchema>
   if (f.cursor) {
     const [iso, id] = f.cursor.split('|');
     const at = new Date(iso);
-    if (id && !Number.isNaN(at.getTime())) conditions.push(or(lt(auditLog.createdAt, at), and(eq(auditLog.createdAt, at), lt(auditLog.id, id))));
+    // The database keeps microseconds but a cursor carries milliseconds: compare and order at the cursor's precision, or rows that share a millisecond fall through the gap between two pages.
+    if (id && !Number.isNaN(at.getTime())) conditions.push(or(sql`${inMs} < ${at.toISOString()}::timestamptz`, and(sql`${inMs} = ${at.toISOString()}::timestamptz`, lt(auditLog.id, id))));
   }
 
   const rows = await db
@@ -58,7 +62,7 @@ export async function listAudit(ctx: Ctx, raw: z.input<typeof auditFilterSchema>
     .from(auditLog)
     .leftJoin(users, and(eq(users.orgId, auditLog.orgId), eq(users.id, auditLog.actorUserId)))
     .where(and(...conditions))
-    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .orderBy(desc(inMs), desc(auditLog.id))
     .limit(PAGE_SIZE + 1);
 
   const page = rows.slice(0, PAGE_SIZE);

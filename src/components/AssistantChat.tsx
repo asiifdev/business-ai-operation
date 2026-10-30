@@ -22,6 +22,14 @@ export function AssistantChat({ role }: { role: Role }) {
   const query = useRef('');
   const [drawer, setDrawer] = useState(false);
 
+  // The drawer is the phone's way to the history; on a wide screen the list is beside the conversation, so the drawer closes.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => wide.matches && setDrawer(false);
+    wide.addEventListener('change', onChange);
+    return () => wide.removeEventListener('change', onChange);
+  }, []);
+
   // The list is fetched on arrival and again whenever a new answer made it stale.
   useEffect(() => {
     if (a.sessions === null) void a.loadSessions(query.current);
@@ -37,7 +45,6 @@ export function AssistantChat({ role }: { role: Role }) {
     a.ask(q);
   }, []);
 
-  const current = a.sessions?.find((s) => s.id === a.sessionId);
   const history = (onDone?: () => void) => (
     <HistoryList
       sessions={a.sessions}
@@ -61,7 +68,7 @@ export function AssistantChat({ role }: { role: Role }) {
       <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 lg:gap-4">
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 max-w-prose">
-            <h1 className="m-0 truncate text-2xl font-semibold text-ink lg:text-3xl">{current?.title ?? t('assistantTitle')}</h1>
+            <h1 className="m-0 truncate text-2xl font-semibold text-ink lg:text-3xl">{a.title ?? t('assistantTitle')}</h1>
             <p className="mt-1 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>
           </div>
           <div className="flex items-center gap-2">

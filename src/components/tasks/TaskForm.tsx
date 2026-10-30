@@ -8,6 +8,7 @@ import { DateInput } from '../forms/DateInput';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { ClientSelect } from '../portfolio/ClientSelect';
+import { ProductSelect } from '../portfolio/ProductSelect';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { Button } from '../ui/Button';
@@ -100,7 +101,7 @@ export function TaskForm({ options, initial = emptyTask, submitLabel, request, o
           <ClientSelect clients={options.clients} value={values.clientId} onChange={pickClient} includeAll={t('taskNone')} />
         </FormField>
         <FormField label={t('fTaskProduct')}>
-          <SelectMenu value={values.productId} onChange={(v) => set('productId', v)} includeAll={t('taskNone')} options={options.products.map((p) => ({ value: p.id, label: p.name }))} disabled={Boolean(values.deploymentId)} />
+          <ProductSelect products={options.products} value={values.productId} onChange={(v) => set('productId', v)} includeAll={t('taskNone')} disabled={Boolean(values.deploymentId)} canCreate={options.canAssignOthers} />
         </FormField>
         <FormField label={t('fTaskDeployment')} help={t('taskDeploymentHelp')}>
           <SelectMenu value={values.deploymentId} onChange={pickDeployment} includeAll={t('taskNone')} options={deployments.map((d) => ({ value: d.id, label: d.label }))} />

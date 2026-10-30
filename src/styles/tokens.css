@@ -10,6 +10,8 @@
   --color-paper-3: #e8ebf1;
   --color-frame: #eef1f5;
   --color-ink: #0b1324;
+  /* The dim behind a dialog. Always dark: `ink` is the text colour and turns light in the dark theme, which washed the page out. */
+  --color-scrim: #070d1b;
   --color-ink-2: #2f3a50;
   --color-muted: #5b6579;
   --color-rule: #e3e7ee;
@@ -70,6 +72,7 @@
   --color-paper-3: #1a2540;
   --color-frame: #060b16;
   --color-ink: #e9eef8;
+  --color-scrim: #010309;
   --color-ink-2: #bcc6da;
   --color-muted: #8d99b1;
   --color-rule: #1c2740;

@@ -52,7 +52,7 @@ const dir = '{{params.folder_root}}/{{params.domain}}';
 const laravelPm2Setup: FlowTemplate = {
   key: 'laravel-pm2-setup',
   name: 'Laravel + pm2: klien baru',
-  description: 'Setup klien baru: cek server, alokasi port Reverb, database, clone, .env, composer, npm, migrasi, build, proxy WebSocket, pm2, dan catat deployment. Situs PHP di aaPanel dibuat setelah alat panel.create_site terbukti; sampai saat itu buat manual sebelum langkah cek situs.',
+  description: 'Setup klien baru: cek server, alokasi port Reverb, database, clone, .env, composer, npm, migrasi, build, proxy WebSocket, pm2, dan catat deployment. Situs PHP di aaPanel dibuat manual sebelum langkah cek situs, karena pembuatannya otomatis belum tersedia.',
   kind: 'setup',
   build: () =>
     definitionSchema.parse({

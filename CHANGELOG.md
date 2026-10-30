@@ -5,6 +5,7 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 ## [Unreleased]
 
 ### Added
+- Produk dapat ditambah dari dalam form deployment dan form tugas lewat modal (`ProductSelect`), dengan tombol "Pakai produk yang sudah ada" saat nama duplikat. Penambahan produk di form tugas hanya ditawarkan kepada Pemilik dan Admin.
 - Riwayat percakapan asisten (D-078): percakapan tersimpan di server untuk pemiliknya (tabel `assistant_sessions` dan `assistant_messages`, migrasi `0018`). Halaman Asisten punya panel riwayat (dikelompokkan Hari ini, Kemarin, 7 hari terakhir, Lebih lama; cari, ganti nama, hapus; laci di HP) dan panel samping punya tombol Riwayat. Percakapan terbuka kembali persis seperti semula (jawaban, sumber, tautan draf, persetujuan) dan ikut ke perangkat lain. Hanya pemiliknya yang melihatnya; Pemilik organisasi pun tidak.
 - Asisten lebih interaktif: waktu pada setiap pesan, tombol Salin dan Tanya ulang, dan saran pertanyaan lanjutan sesuai sumber jawaban.
 - Pilihan bahasa kini tersimpan di akun (bukan hanya cookie browser): memilih ID atau EN dengan pengalih juga memperbarui bahasa profil, sehingga asisten, Telegram, dan perangkat lain memakai bahasa yang sama (audit `user.locale_changed`). Sebelumnya akun yang terdaftar dari browser berbahasa Inggris tetap `en` walau antarmuka diubah ke Indonesia.
@@ -24,6 +25,11 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 - Komponen `Steps` (progres langkah) di tampilan run setup (daftar langkah yang dapat diklik di samping diagram) dan di detail invoice (Draf, Terkirim, Lunas); komponen `Modal` dan `Toast` (notifikasi setelah ulang atau batalkan run). Ketiganya ada di galeri `/dev/komponen` dan punya tes dasar.
 
 ### Changed
+- Asisten menulis jawaban sebagai kalimat biasa, bukan daftar "kolom: nilai"; templat flow tidak lagi menyebut nama alat internal di deskripsinya.
+- Perbaikan halaman Audit log: halaman berikutnya bisa melewatkan entri yang waktunya sama sampai milidetik dengan entri terakhir halaman sebelumnya (database menyimpan mikrodetik, kursor hanya milidetik). Urutan dan kursor kini memakai presisi milidetik yang sama.
+- Laci riwayat asisten (HP) menutup sendiri saat layar melebar ke ukuran desktop, tidak lagi menutupi halaman.
+- Latar belakang di balik panel asisten, dialog, dan palet ⌘K di mode gelap kini gelap. Sebelumnya memakai warna teks (`ink`), yang di mode gelap berwarna terang, sehingga halaman tampak berkabut; kini token `--color-scrim` yang selalu gelap di kedua tema.
+- Riwayat asisten: judul header tetap benar saat percakapan terbuka tidak ada di hasil pencarian, teks judul langsung terpilih saat ganti nama, percakapan kosong dimulai dari sambutannya (bukan terpotong), dan saran lanjutan tidak mengulang pertanyaan yang baru diajukan.
 - Asisten: bila kata-kata model dibuang karena memuat angka yang tidak berasal dari tool, tetapi pekerjaannya (draf atau permintaan persetujuan) sudah berhasil, jawabannya kini "Sudah saya kerjakan" dengan tautan, bukan penolakan "tidak menemukan datanya". Angka yang diketik pengguna sendiri dianggap valid saat diulang, dan hasil tool draf mengembalikan nilai yang disimpan. Log audit memakai nama entitas biasa, Rupiah untuk nominal, dan nama tahap lead. Tombol "Buat proposal" tidak tampil untuk lead yang masih draf.
 - Log audit: aksi yang belum berlabel (lead diarsipkan atau dipulihkan, poster dari Telegram, bahasa diubah) kini berlabel, dan kolom Detail memakai label biasa tanpa id internal, hash, atau penghitung; kartu persetujuan untuk tool ubah tidak lagi menyebut nama kolom mentah.
 - Bahasa bisnis di antarmuka asisten: kartu persetujuan menampilkan "Yang akan disimpan" sebagai daftar berlabel (tanpa JSON dan tanpa id internal), sumber jawaban memakai nama biasa (bukan nama tool), dan draf invoice dari asisten memakai jatuh tempo 14 hari bila tidak disebut, tanpa meminta format tanggal.

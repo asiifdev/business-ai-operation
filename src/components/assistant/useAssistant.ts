@@ -80,6 +80,7 @@ export function useAssistant() {
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [title, setTitle] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const busyRef = useRef(false);
   const turnsRef = useRef<Turn[]>([]);
@@ -98,11 +99,12 @@ export function useAssistant() {
 
   async function open(id: string): Promise<boolean> {
     setOpening(true);
-    const data = await call<{ id: string; messages: StoredMessage[] }>('GET', `/api/assistant/sessions/${id}`);
+    const data = await call<{ id: string; title: string; messages: StoredMessage[] }>('GET', `/api/assistant/sessions/${id}`);
     setOpening(false);
     if (!data) return false;
     setTurnsNow(toTurns(data.messages));
     setSession(data.id);
+    setTitle(data.title);
     return true;
   }
 
@@ -136,7 +138,11 @@ export function useAssistant() {
       if (res.ok && body?.ok) {
         const { sessionId: saved, ...reply } = body.data as AssistantReply & { sessionId?: string };
         setTurnsNow([...withQuestion, { id: nextId(), kind: 'assistant', reply: reply as AssistantReply, at: new Date().toISOString() }]);
-        if (saved) setSession(saved);
+        if (saved) {
+          // A conversation that just began is titled after its first question, as the server does.
+          if (saved !== sessionRef.current) setTitle(question.replace(/\s+/g, ' ').trim().slice(0, 80));
+          setSession(saved);
+        }
         setSessions(null); // the list is stale now: it is fetched again when it is next opened
       } else setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: res.status === 429 ? t('rateLimited') : t('genericError'), retry: question }]);
     } catch {
@@ -166,7 +172,9 @@ export function useAssistant() {
   async function rename(id: string, title: string) {
     const trimmed = title.trim();
     if (!trimmed) return;
-    if (await call('PATCH', `/api/assistant/sessions/${id}`, { title: trimmed })) setSessions((list) => list?.map((s) => (s.id === id ? { ...s, title: trimmed } : s)) ?? null);
+    if (!(await call('PATCH', `/api/assistant/sessions/${id}`, { title: trimmed }))) return;
+    if (sessionRef.current === id) setTitle(trimmed);
+    setSessions((list) => list?.map((s) => (s.id === id ? { ...s, title: trimmed } : s)) ?? null);
   }
 
   async function remove(id: string) {
@@ -178,6 +186,7 @@ export function useAssistant() {
   function newChat() {
     setTurnsNow([]);
     setSession(null);
+    setTitle(null);
   }
 
   return {
@@ -185,6 +194,7 @@ export function useAssistant() {
     busy,
     opening,
     sessionId,
+    title,
     sessions,
     ask: (q: string) => void ask(q),
     askAgain,

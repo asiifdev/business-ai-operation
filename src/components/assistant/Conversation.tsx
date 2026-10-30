@@ -148,18 +148,21 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
 }) {
   const t = useT();
   const endRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<HTMLDivElement>(null);
   const locale = useLocale();
   const isManager = role !== 'staff';
   const lastAssistantId = [...turns].reverse().find((x) => x.kind === 'assistant')?.id;
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    // An empty conversation starts at its greeting, whatever the scroll position of the one before it was.
+    if (turns.length === 0 && !busy) startRef.current?.scrollIntoView({ block: 'start' });
+    else endRef.current?.scrollIntoView({ block: 'end' });
   }, [turns, busy]);
 
   if (turns.length === 0 && !busy) {
     const starters = startersFor(role);
     return (
-      <div className={cx('m-auto flex w-full flex-col gap-4', compact ? 'py-2' : 'max-w-xl py-8')}>
+      <div ref={startRef} className={cx('m-auto flex w-full flex-col gap-4', compact ? 'py-2' : 'max-w-xl py-8')}>
         <div className="flex items-start gap-3">
           <AssistantMark />
           <div className="min-w-0">
@@ -248,6 +251,8 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
   const t = useT();
   const locale = useLocale();
   const [copied, setCopied] = useState(false);
+  // Never suggest the question that was just asked.
+  const chips = last && !(!reply.ok || reply.refused) ? followUps(reply).filter((key) => t(key) !== askAgain) : [];
   const text = reply.text ?? reply.message ?? '';
   const failed = !reply.ok || reply.refused;
   return (
@@ -308,11 +313,11 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
             )}
           </div>
         )}
-        {last && !failed && followUps(reply).length > 0 && (
+        {chips.length > 0 && (
           <div className="flex flex-col gap-1.5 border-t border-rule pt-2">
             <span className="text-xs text-muted">{t('assistantFollowUp')}</span>
             <div className="flex flex-wrap gap-2">
-              {followUps(reply).map((key) => (
+              {chips.map((key) => (
                 <button key={key} type="button" disabled={disabled} onClick={() => onAsk(t(key))} className="min-h-8 rounded-full border border-rule bg-paper px-3 text-sm text-ink hover:border-accent/50 hover:bg-accent-wash disabled:opacity-50">
                   {t(key)}
                 </button>
