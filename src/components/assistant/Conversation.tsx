@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react';
+import { ACT_TOOL_LABEL } from '../../lib/act-tool-labels';
 import type { AssistantReply } from '../../ai/assistant';
 import { parseAnswer, type Run } from '../../lib/answer';
 import { cx } from '../../lib/cx';
@@ -31,7 +32,30 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   list_tasks: 'srcListTasks',
   find_similar_tasks: 'srcFindSimilarTasks',
   draft_task: 'srcDraftTask',
+  get_billing_summary: 'srcGetBillingSummary',
+  list_invoices: 'srcListInvoices',
+  get_invoice: 'srcGetInvoice',
+  list_subscriptions: 'srcListSubscriptions',
+  draft_invoice: 'srcDraftInvoice',
+  list_documents: 'srcListDocuments',
+  draft_proposal: 'srcDraftProposal',
+  draft_lead: 'srcDraftLead',
+  list_flows: 'srcListFlows',
+  get_flow: 'srcGetFlow',
+  draft_flow: 'srcDraftFlow',
+  plan_flow_run: 'srcPlanFlowRun',
+  list_setup_runs: 'srcListSetupRuns',
+  get_setup_run: 'srcGetSetupRun',
+  list_connections: 'srcListConnections',
+  list_marketing_assets: 'srcListMarketingAssets',
+  generate_marketing_asset: 'srcGenerateAsset',
+  draft_marketing_caption: 'srcDraftCaption',
+  list_meetings: 'srcListMeetings',
+  get_finding_facts: 'srcGetFindingFacts',
 };
+
+/** Every tool name becomes a business word; a name nobody labelled is never shown as it is. */
+const sourceLabel = (name: string, t: (key: MessageKey) => string) => (SOURCE_LABEL[name] ? t(SOURCE_LABEL[name]) : ACT_TOOL_LABEL[name] ? t(ACT_TOOL_LABEL[name]) : t('srcOther'));
 
 export const STARTERS: Record<'manager' | 'staff', MessageKey[]> = {
   manager: ['starterBehind', 'starterLateTasks', 'starterPackages', 'starterClients', 'starterUsage', 'starterTeam', 'starterApprovals', 'starterCapabilities'],
@@ -186,8 +210,8 @@ function AssistantTurn({ reply, isManager, width }: { reply: AssistantReply; isM
           <div className="flex flex-wrap items-center gap-2 border-t border-rule pt-2">
             <span className="text-sm text-muted">{t('assistantSources')}</span>
             {reply.sources.map((source) => (
-              <span key={source} title={source} className="rounded-input border border-rule bg-paper px-2 py-0.5 text-sm text-ink">
-                {SOURCE_LABEL[source] ? t(SOURCE_LABEL[source]) : source}
+              <span key={source} className="rounded-input border border-rule bg-paper px-2 py-0.5 text-sm text-ink">
+                {sourceLabel(source, t)}
               </span>
             ))}
             {isManager && reply.costMicroUsd !== null && (

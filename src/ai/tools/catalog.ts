@@ -1,7 +1,8 @@
 import { and, desc, eq, gt, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { approvals, auditLog, users } from '../../db/schema';
+import { approvals, auditLog, organizations, users } from '../../db/schema';
+import { addDays, todayIn } from '../../domain/billing/dates';
 import { getAiOverview } from '../../domain/ai/service';
 import { listConnections } from '../../domain/connections/service';
 import { draftCaption, generateAssets, listAssets } from '../../domain/marketing/service';
@@ -354,17 +355,19 @@ export function buildAssistantRegistry(): ToolRegistry {
   registry.register(
     defineTool({
       name: 'draft_invoice',
-      description: 'Prepares a DRAFT invoice for a client from the items given. It stays a draft: a person must review it, mark it sent and only then does it get a number. It never sends anything and never records a payment. Needs the client id from list_clients. Use only prices that came from a tool result.',
+      description: 'Prepares a DRAFT invoice for a client from the items given. It stays a draft: a person must review it, mark it sent and only then does it get a number. It never sends anything and never records a payment. Needs the client id from list_clients. Use only prices that came from a tool result. Leave dueDate out unless the person named a date: the system then sets 14 days from today, like the invoice form, so do not ask for it.',
       tier: 'draft',
       permission: 'billing.write',
       args: z.object({
         clientId: z.string().min(1).max(40),
-        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         notes: z.string().trim().max(500).optional(),
         items: z.array(z.object({ description: z.string().trim().min(1).max(300), quantity: z.number().int().min(1).max(1000), unitPrice: z.number().int().min(0) })).min(1).max(20),
       }),
       run: async (ctx, args) => {
-        const created = await createInvoiceDraft(ctx, args);
+        // The date is the code's, not the model's: without one it is the form's default, 14 days from today in the organization's time zone.
+        const dueDate = args.dueDate ?? addDays(todayIn((await db.select({ tz: organizations.timezone }).from(organizations).where(eq(organizations.id, ctx.orgId)))[0].tz, ctx.clock.now()), 14);
+        const created = await createInvoiceDraft(ctx, { ...args, dueDate });
         const d = await getInvoice(ctx, created.id);
         return { id: created.id, status: 'draf', total: money(d.invoice.total), catatan: 'Draf dibuat. Belum dikirim dan belum bernomor; harus ditinjau dan ditandai terkirim oleh orang.' };
       },

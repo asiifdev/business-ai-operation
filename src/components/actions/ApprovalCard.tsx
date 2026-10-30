@@ -7,6 +7,7 @@ import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useT } from '../../lib/use-t';
 import { InvoiceStatusBadge } from '../billing/status';
+import { approvalArgRows } from './approvalArgs';
 import { STAGE_LABEL } from '../pipeline/stages';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -67,7 +68,14 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
 
       <div className="flex flex-col gap-1">
         <span className="text-sm text-muted">{t('apArgs')}</span>
-        <code className="block overflow-x-auto rounded bg-paper-2 px-3 py-2 font-mono text-xs whitespace-pre text-ink">{JSON.stringify(approval.args, null, 2)}</code>
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded bg-paper-2 px-3 py-2 text-sm">
+          {approvalArgRows(approval.args, t).map((r) => (
+            <div key={r.key} className="contents">
+              <dt className="text-muted">{r.label}</dt>
+              <dd className="m-0 text-ink [overflow-wrap:anywhere]">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       <p className="m-0 text-xs text-muted">

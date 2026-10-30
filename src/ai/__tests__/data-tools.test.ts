@@ -5,7 +5,9 @@ import { approvals, clients, leads } from '../../db/schema';
 import { decideApproval } from '../../domain/action-center/approvals';
 import { makeOrg } from '../../domain/ai/__tests__/support';
 import type { Ctx } from '../../domain/ctx';
+import { getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { createLead } from '../../domain/pipeline/leads';
+import { createClient } from '../../domain/portfolio/clients';
 import { askAssistant } from '../assistant';
 import { FakeProvider, callTools, say } from '../fake-provider';
 import { buildActionRegistry, DATA_ACT_TOOLS } from '../tools/actions';
@@ -81,6 +83,18 @@ describe('data tools (D-077): the assistant adds and changes records only after 
     const [row] = await db.select().from(approvals).where(and(eq(approvals.orgId, o.orgId), eq(approvals.tool, 'move_lead')));
     expect((await decideApproval(o.ownerCtx, row.id, { decision: 'approve' })).executed).toBe(true);
     expect((await db.select().from(leads).where(eq(leads.id, id)))[0].stage).toBe('exploring');
+  });
+
+  it('sets the due date of a draft invoice itself (14 days from today) when the person named none, instead of asking for a date format', async () => {
+    const o = await makeOrg();
+    const { id: clientId } = await createClient(o.ownerCtx, { name: 'Toko Tanpa Tanggal' });
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'draft_invoice', args: { clientId, items: [{ description: 'Maintenance bulanan', quantity: 1, unitPrice: 1_500_000 }] } }]), say('Draf invoice dibuat.')] });
+    await ask(o.ownerCtx, fake, 'Buatkan draf invoice maintenance 1,5 juta untuk Toko Tanpa Tanggal');
+    const [row] = await listInvoices(o.ownerCtx, { clientId });
+    const detail = await getInvoice(o.ownerCtx, row.id);
+    const days = Math.round((Date.parse(detail.invoice.dueDate) - o.ownerCtx.clock.now().getTime()) / 86_400_000);
+    expect(days).toBeGreaterThanOrEqual(13);
+    expect(days).toBeLessThanOrEqual(14);
   });
 
   it('tells the model why a tool was refused so it can explain and advise', async () => {
