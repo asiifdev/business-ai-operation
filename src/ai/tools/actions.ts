@@ -76,6 +76,7 @@ export const convertLeadToClientTool = defineTool({
       : 'Jadikan lead yang menang ini klien baru dari data lead, lalu buat checklist onboarding sebagai tugas. Tidak ada pesan yang dikirim.',
 });
 
+const stageName = { new: 'Baru', exploring: 'Penjajakan', proposal: 'Proposal', negotiation: 'Negosiasi', won: 'Menang', lost: 'Kalah' } as const;
 const id = z.string().trim().min(1).max(40);
 const text = (max: number) => z.string().trim().max(max);
 
@@ -101,7 +102,7 @@ export const updateClientTool = defineTool({
   permission: 'client.write',
   args: z.object({ clientId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
   execute: async (ctx, { clientId, ...patch }) => updateClient(ctx, clientId, patch),
-  describe: (args) => `Ubah data klien: ${Object.keys(args).filter((k) => k !== 'clientId').join(', ') || 'tidak ada perubahan'}.`,
+  describe: () => 'Ubah data klien sesuai isian di bawah. Tidak ada pesan yang dikirim.',
 });
 
 export const createProductTool = defineTool({
@@ -121,7 +122,7 @@ export const updateProductTool = defineTool({
   permission: 'catalog.write',
   args: z.object({ productId: id, name: text(120).min(2).optional(), description: text(2000).optional(), currentVersion: text(40).optional() }),
   execute: async (ctx, { productId, ...patch }) => updateProduct(ctx, productId, patch),
-  describe: (args) => `Ubah data produk: ${Object.keys(args).filter((k) => k !== 'productId').join(', ') || 'tidak ada perubahan'}.`,
+  describe: () => 'Ubah data produk sesuai isian di bawah. Harga paket tidak disentuh.',
 });
 
 export const createDeploymentTool = defineTool({
@@ -141,7 +142,7 @@ export const updateDeploymentTool = defineTool({
   permission: 'deployment.write',
   args: z.object({ deploymentId: id, environment: text(30).min(2).optional(), label: text(120).optional(), domain: text(253).optional(), installedVersion: text(40).optional(), status: z.enum(['active', 'inactive']).optional() }),
   execute: async (ctx, { deploymentId, ...patch }) => updateDeployment(ctx, deploymentId, patch),
-  describe: (args) => `Ubah catatan deployment: ${Object.keys(args).filter((k) => k !== 'deploymentId').join(', ') || 'tidak ada perubahan'}. Server tidak disentuh.`,
+  describe: () => 'Ubah catatan deployment sesuai isian di bawah. Server tidak disentuh.',
 });
 
 export const updateLeadTool = defineTool({
@@ -151,7 +152,7 @@ export const updateLeadTool = defineTool({
   permission: 'lead.update_assigned',
   args: z.object({ leadId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), source: text(80).optional(), needsSummary: text(4000).optional(), estimatedValue: z.number().int().min(0).optional(), assignedTo: id.nullable().optional() }),
   execute: async (ctx, { leadId, ...patch }) => updateLead(ctx, leadId, patch),
-  describe: (args) => `Ubah data lead: ${Object.keys(args).filter((k) => k !== 'leadId').join(', ') || 'tidak ada perubahan'}.`,
+  describe: () => 'Ubah data lead sesuai isian di bawah.',
 });
 
 export const moveLeadTool = defineTool({
@@ -161,7 +162,7 @@ export const moveLeadTool = defineTool({
   permission: 'lead.update_assigned',
   args: z.object({ leadId: id, to: z.enum(STAGES), lostReason: text(500).optional() }),
   execute: async (ctx, args) => moveLead(ctx, args.leadId, args.to, args.lostReason ? { lostReason: args.lostReason } : {}),
-  describe: (args) => `Pindahkan lead ke tahap "${args.to}"${args.lostReason ? ` (alasan: ${args.lostReason})` : ''}.`,
+  describe: (args) => `Pindahkan lead ke tahap "${stageName[args.to]}"${args.lostReason ? ` (alasan: ${args.lostReason})` : ''}.`,
 });
 
 export const updateTaskTool = defineTool({
@@ -183,7 +184,7 @@ export const updateTaskTool = defineTool({
     if (Object.keys(patch).length) await updateTask(ctx, taskId, patch);
     if (status) await setTaskStatus(ctx, taskId, status);
   },
-  describe: (args) => `Ubah tugas: ${Object.keys(args).filter((k) => k !== 'taskId').join(', ') || 'tidak ada perubahan'}.`,
+  describe: () => 'Ubah tugas sesuai isian di bawah.',
 });
 
 export const createSubscriptionTool = defineTool({

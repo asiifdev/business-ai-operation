@@ -5,7 +5,7 @@ import { parseAnswer, type Run } from '../../lib/answer';
 import { cx } from '../../lib/cx';
 import type { MessageKey } from '../../lib/i18n';
 import { formatUsd } from '../../lib/usd';
-import { useT } from '../../lib/use-t';
+import { useLocale, useT } from '../../lib/use-t';
 import { LogoMark } from '../brand/LogoMark';
 import { Textarea } from '../forms/Textarea';
 import { Icon } from '../shell/Icon';
@@ -52,6 +52,37 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   draft_marketing_caption: 'srcDraftCaption',
   list_meetings: 'srcListMeetings',
   get_finding_facts: 'srcGetFindingFacts',
+};
+
+/** Questions worth asking next, by what the answer rested on. Plain suggestions, not generated: they never promise a tool that is not there. */
+const FOLLOW_UP: Record<string, MessageKey[]> = {
+  list_invoices: ['fuBilling', 'fuTasks'],
+  get_billing_summary: ['fuInvoices', 'fuPipeline'],
+  get_invoice: ['fuInvoices', 'fuBilling'],
+  list_subscriptions: ['fuInvoices', 'fuBilling'],
+  list_tasks: ['fuApprovals', 'fuInvoices'],
+  list_leads: ['fuPipeline', 'fuProducts'],
+  get_pipeline_summary: ['fuTasks', 'fuInvoices'],
+  list_clients: ['fuClients', 'fuInvoices'],
+  list_deployments: ['fuClients', 'fuTasks'],
+  list_products: ['fuClients', 'fuProducts'],
+  get_product_packages: ['fuClients', 'fuInvoices'],
+  get_business_summary: ['fuInvoices', 'fuTasks', 'fuPipeline'],
+  list_pending_approvals: ['fuInvoices', 'fuTasks'],
+};
+const followUps = (reply: AssistantReply): MessageKey[] => {
+  if (reply.pendingApprovals.length > 0) return ['fuApprovals'];
+  return [...new Set(reply.sources.flatMap((s) => FOLLOW_UP[s] ?? []))].slice(0, 3);
+};
+
+/** Where a draft the assistant made can be reviewed. */
+const DRAFT_HREF: Record<string, (id: string) => string> = {
+  draft_invoice: (id) => `/app/invoice/${id}`,
+  draft_lead: (id) => `/app/lead/${id}`,
+  draft_task: (id) => `/app/task/${id}`,
+  draft_proposal: (id) => `/app/dokumen/${id}`,
+  draft_flow: (id) => `/app/flow/${id}`,
+  plan_flow_run: (id) => `/app/setup/${id}`,
 };
 
 /** Every tool name becomes a business word; a name nobody labelled is never shown as it is. */
@@ -117,7 +148,9 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
 }) {
   const t = useT();
   const endRef = useRef<HTMLDivElement>(null);
+  const locale = useLocale();
   const isManager = role !== 'staff';
+  const lastAssistantId = [...turns].reverse().find((x) => x.kind === 'assistant')?.id;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -162,9 +195,21 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
             <div className={cx(width, 'rounded-card rounded-br-sm bg-accent px-4 py-2.5 text-accent-ink')}>
               <p className="sr-only">{t('assistantYou')}</p>
               <p className="m-0 whitespace-pre-wrap text-base">{turn.text}</p>
+              {turn.at && <p className="m-0 mt-1 text-right text-xs text-accent-ink/70">{timeOf(turn.at, locale)}</p>}
             </div>
           )}
-          {turn.kind === 'assistant' && <AssistantTurn reply={turn.reply} isManager={isManager} width={width} />}
+          {turn.kind === 'assistant' && (
+            <AssistantTurn
+              reply={turn.reply}
+              at={turn.at}
+              isManager={isManager}
+              width={width}
+              last={turn.id === lastAssistantId}
+              disabled={busy}
+              onAsk={onAsk}
+              askAgain={previousQuestion(turns, turn.id)}
+            />
+          )}
           {turn.kind === 'error' && (
             <div className={cx(width, 'rounded-card border border-danger bg-danger-wash px-4 py-3')} role="alert">
               <p className="m-0 text-base text-ink">{turn.text}</p>
@@ -187,8 +232,22 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
   );
 }
 
-function AssistantTurn({ reply, isManager, width }: { reply: AssistantReply; isManager: boolean; width: string }) {
+/** The question an answer replied to, so it can be asked again. */
+function previousQuestion(turns: Turn[], answerId: number): string | null {
+  const index = turns.findIndex((x) => x.id === answerId);
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const turn = turns[i];
+    if (turn.kind === 'user') return turn.text;
+  }
+  return null;
+}
+
+const timeOf = (iso: string, locale: string) => new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
+function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, askAgain }: { reply: AssistantReply; at?: string; isManager: boolean; width: string; last: boolean; disabled: boolean; onAsk: (question: string) => void; askAgain: string | null }) {
   const t = useT();
+  const locale = useLocale();
+  const [copied, setCopied] = useState(false);
   const text = reply.text ?? reply.message ?? '';
   const failed = !reply.ok || reply.refused;
   return (
@@ -198,6 +257,7 @@ function AssistantTurn({ reply, isManager, width }: { reply: AssistantReply; isM
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-ink">{t('assistantName')}</span>
           <span className={cx('rounded-full px-2 py-0.5 text-xs', failed ? 'border border-rule-2 text-muted' : 'bg-mint-wash text-mint-ink')}>{reply.label}</span>
+          {at && <span className="ml-auto text-xs text-muted">{timeOf(at, locale)}</span>}
         </div>
         <Answer text={text} />
         {reply.pendingApprovals.length > 0 && (
@@ -206,6 +266,12 @@ function AssistantTurn({ reply, isManager, width }: { reply: AssistantReply; isM
             <Icon name="arrow" className="size-4" />
           </a>
         )}
+        {reply.drafts?.filter((d) => DRAFT_HREF[d.tool]).map((d) => (
+          <a key={`${d.tool}-${d.id}`} href={DRAFT_HREF[d.tool](d.id)} className="flex w-fit items-center gap-2 rounded-input border border-rule px-3 py-1.5 text-sm text-ink no-underline hover:bg-paper">
+            {t('assistantOpenDraft', { what: sourceLabel(d.tool, t) })}
+            <Icon name="arrow" className="size-4" />
+          </a>
+        ))}
         {reply.sources.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-rule pt-2">
             <span className="text-sm text-muted">{t('assistantSources')}</span>
@@ -217,6 +283,41 @@ function AssistantTurn({ reply, isManager, width }: { reply: AssistantReply; isM
             {isManager && reply.costMicroUsd !== null && (
               <span className="ml-auto text-sm text-muted tabular-nums">{t('assistantCost')} {formatUsd(reply.costMicroUsd)}</span>
             )}
+          </div>
+        )}
+        {text && (
+          <div className="-mb-1 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(text).then(() => {
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1500);
+                });
+              }}
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-input px-2 text-xs text-muted hover:bg-paper-2 hover:text-ink"
+            >
+              <Icon name={copied ? 'check' : 'copy'} className="size-3.5" />
+              {copied ? t('assistantCopied') : t('assistantCopy')}
+            </button>
+            {last && askAgain && (
+              <button type="button" disabled={disabled} onClick={() => onAsk(askAgain)} className="inline-flex min-h-8 items-center gap-1.5 rounded-input px-2 text-xs text-muted hover:bg-paper-2 hover:text-ink disabled:opacity-50">
+                <Icon name="repeat" className="size-3.5" />
+                {t('assistantAskAgain')}
+              </button>
+            )}
+          </div>
+        )}
+        {last && !failed && followUps(reply).length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-rule pt-2">
+            <span className="text-xs text-muted">{t('assistantFollowUp')}</span>
+            <div className="flex flex-wrap gap-2">
+              {followUps(reply).map((key) => (
+                <button key={key} type="button" disabled={disabled} onClick={() => onAsk(t(key))} className="min-h-8 rounded-full border border-rule bg-paper px-3 text-sm text-ink hover:border-accent/50 hover:bg-accent-wash disabled:opacity-50">
+                  {t(key)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

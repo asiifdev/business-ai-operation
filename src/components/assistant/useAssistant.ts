@@ -3,13 +3,20 @@ import type { AssistantReply } from '../../ai/assistant';
 import { useLocale, useT } from '../../lib/use-t';
 
 export type Turn =
-  | { id: number; kind: 'user'; text: string }
-  | { id: number; kind: 'assistant'; reply: AssistantReply }
+  | { id: number; kind: 'user'; text: string; at?: string }
+  | { id: number; kind: 'assistant'; reply: AssistantReply; at?: string }
   | { id: number; kind: 'error'; text: string; retry: string };
 
+export interface SessionSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const MAX_LENGTH = 2000;
-/** The conversation follows the person from page to page in this tab (the side panel and the full page share it). */
-const STORE = 'orbyte.assistant.thread';
+/** Which conversation is open in this tab: the side panel and the full page both carry on with it. The words live on the server (D-078). */
+const CURRENT = 'orbyte.assistant.session';
 /** Fired by `askAssistant`; the app shell opens the side panel and asks. */
 export const ASK_EVENT = 'orbyte:ask';
 
@@ -22,56 +29,96 @@ export function askAssistant(question?: string) {
   window.dispatchEvent(new CustomEvent<{ question?: string }>(ASK_EVENT, { detail: { question } }));
 }
 
-function readStored(): Turn[] {
+function readCurrent(): string | null {
   try {
-    const raw = sessionStorage.getItem(STORE);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as Turn[]) : [];
+    return sessionStorage.getItem(CURRENT);
   } catch {
-    return [];
+    return null;
   }
 }
 
-function store(turns: Turn[]) {
+function storeCurrent(id: string | null) {
   try {
-    sessionStorage.setItem(STORE, JSON.stringify(turns.slice(-30)));
+    if (id) sessionStorage.setItem(CURRENT, id);
+    else sessionStorage.removeItem(CURRENT);
   } catch {
-    /* Storage can be blocked; the conversation then lasts as long as the page. */
+    /* Storage can be blocked; the conversation is still kept on the server and in the history. */
+  }
+}
+
+type StoredMessage = { seq: number; kind: 'user' | 'assistant' | 'error'; body: unknown; createdAt: string };
+
+/** What the server stored, as the turns the conversation shows. */
+function toTurns(messages: StoredMessage[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const m of messages) {
+    if (m.kind === 'user') turns.push({ id: m.seq, kind: 'user', text: (m.body as { text?: string }).text ?? '', at: m.createdAt });
+    else if (m.kind === 'assistant') turns.push({ id: m.seq, kind: 'assistant', reply: m.body as AssistantReply, at: m.createdAt });
+  }
+  return turns;
+}
+
+async function call<T>(method: 'GET' | 'PATCH' | 'DELETE', url: string, body?: unknown): Promise<T | null> {
+  try {
+    const res = await fetch(url, { method, credentials: 'same-origin', headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+    const json = await res.json().catch(() => null);
+    return res.ok && json?.ok ? (json.data as T) : null;
+  } catch {
+    return null;
   }
 }
 
 /**
- * The conversation with the assistant: its turns, the pending question and the call to `/api/ai/chat`. Every answer comes
- * from the server, which only answers about the organization (D-049); this hook only carries the words back and forth.
+ * The conversation with the assistant: its turns, the open session and the call to `/api/ai/chat`. Every answer comes from
+ * the server, which only answers about the organization (D-049) and keeps the conversation for its owner (D-078); this hook
+ * carries the words back and forth and lists, opens, renames and deletes the person's earlier conversations.
  */
 export function useAssistant() {
   const t = useT();
   const locale = useLocale();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const busyRef = useRef(false);
   const turnsRef = useRef<Turn[]>([]);
+  const sessionRef = useRef<string | null>(null);
 
-  // Read after hydration so the server and the first browser render agree.
-  useEffect(() => {
-    const stored = readStored();
-    turnsRef.current = stored;
-    setTurns(stored);
-  }, []);
-
-  function update(next: Turn[]) {
+  function setTurnsNow(next: Turn[]) {
     turnsRef.current = next;
     setTurns(next);
-    store(next);
   }
+
+  function setSession(id: string | null) {
+    sessionRef.current = id;
+    setSessionId(id);
+    storeCurrent(id);
+  }
+
+  async function open(id: string): Promise<boolean> {
+    setOpening(true);
+    const data = await call<{ id: string; messages: StoredMessage[] }>('GET', `/api/assistant/sessions/${id}`);
+    setOpening(false);
+    if (!data) return false;
+    setTurnsNow(toTurns(data.messages));
+    setSession(data.id);
+    return true;
+  }
+
+  // Read after hydration so the server and the first browser render agree; the open conversation is fetched, not guessed.
+  useEffect(() => {
+    const id = readCurrent();
+    if (id) void open(id).then((ok) => ok || setSession(null));
+  }, []);
 
   const nextId = () => turnsRef.current.reduce((max, turn) => Math.max(max, turn.id), 0) + 1;
 
   async function ask(raw: string, history: Turn[] = turnsRef.current) {
     const question = raw.trim().slice(0, MAX_LENGTH);
     if (!question || busyRef.current) return;
-    const withQuestion: Turn[] = [...history, { id: nextId(), kind: 'user', text: question }];
-    update(withQuestion);
+    const withQuestion: Turn[] = [...history, { id: nextId(), kind: 'user', text: question, at: new Date().toISOString() }];
+    setTurnsNow(withQuestion);
     busyRef.current = true;
     setBusy(true);
     const all: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -84,12 +131,16 @@ export function useAssistant() {
     }
     const messages = all.slice(-10);
     try {
-      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale }) });
+      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale, sessionId: sessionRef.current ?? undefined }) });
       const body = await res.json().catch(() => null);
-      if (res.ok && body?.ok) update([...withQuestion, { id: nextId(), kind: 'assistant', reply: body.data as AssistantReply }]);
-      else update([...withQuestion, { id: nextId(), kind: 'error', text: res.status === 429 ? t('rateLimited') : t('genericError'), retry: question }]);
+      if (res.ok && body?.ok) {
+        const { sessionId: saved, ...reply } = body.data as AssistantReply & { sessionId?: string };
+        setTurnsNow([...withQuestion, { id: nextId(), kind: 'assistant', reply: reply as AssistantReply, at: new Date().toISOString() }]);
+        if (saved) setSession(saved);
+        setSessions(null); // the list is stale now: it is fetched again when it is next opened
+      } else setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: res.status === 429 ? t('rateLimited') : t('genericError'), retry: question }]);
     } catch {
-      update([...withQuestion, { id: nextId(), kind: 'error', text: t('genericError'), retry: question }]);
+      setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: t('genericError'), retry: question }]);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -102,5 +153,47 @@ export function useAssistant() {
     void ask(turn.retry, history);
   }
 
-  return { turns, busy, ask: (q: string) => void ask(q), retry, clear: () => update([]) };
+  /** Ask the last question again as a new turn, keeping the earlier answer in the conversation. */
+  function askAgain(question: string) {
+    void ask(question);
+  }
+
+  async function loadSessions(q = '') {
+    const data = await call<{ sessions: SessionSummary[] }>('GET', `/api/assistant/sessions${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`);
+    setSessions(data?.sessions ?? []);
+  }
+
+  async function rename(id: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    if (await call('PATCH', `/api/assistant/sessions/${id}`, { title: trimmed })) setSessions((list) => list?.map((s) => (s.id === id ? { ...s, title: trimmed } : s)) ?? null);
+  }
+
+  async function remove(id: string) {
+    if (!(await call('DELETE', `/api/assistant/sessions/${id}`))) return;
+    setSessions((list) => list?.filter((s) => s.id !== id) ?? null);
+    if (sessionRef.current === id) newChat();
+  }
+
+  function newChat() {
+    setTurnsNow([]);
+    setSession(null);
+  }
+
+  return {
+    turns,
+    busy,
+    opening,
+    sessionId,
+    sessions,
+    ask: (q: string) => void ask(q),
+    askAgain,
+    retry,
+    newChat,
+    clear: newChat,
+    open,
+    loadSessions,
+    rename,
+    remove,
+  };
 }

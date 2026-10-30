@@ -369,7 +369,7 @@ export function buildAssistantRegistry(): ToolRegistry {
         const dueDate = args.dueDate ?? addDays(todayIn((await db.select({ tz: organizations.timezone }).from(organizations).where(eq(organizations.id, ctx.orgId)))[0].tz, ctx.clock.now()), 14);
         const created = await createInvoiceDraft(ctx, { ...args, dueDate });
         const d = await getInvoice(ctx, created.id);
-        return { id: created.id, status: 'draf', total: money(d.invoice.total), catatan: 'Draf dibuat. Belum dikirim dan belum bernomor; harus ditinjau dan ditandai terkirim oleh orang.' };
+        return { id: created.id, status: 'draf', total: money(d.invoice.total), jatuhTempo: dueDate, catatan: 'Draf dibuat. Belum dikirim dan belum bernomor; harus ditinjau dan ditandai terkirim oleh orang.' };
       },
     }),
   );
@@ -562,7 +562,7 @@ export function buildAssistantRegistry(): ToolRegistry {
       }),
       run: async (ctx, args) => {
         const created = await createLead(ctx, args);
-        return { id: created.id, status: 'draf', catatan: 'Draf lead dibuat. Belum dihitung di pipeline sampai diterima orang di halaman lead.' };
+        return { id: created.id, status: 'draf', nama: args.name, ...(args.estimatedValue != null ? { nilaiEstimasi: money(args.estimatedValue) } : {}), catatan: 'Draf lead dibuat. Belum dihitung di pipeline sampai diterima orang di halaman lead.' };
       },
     }),
   );

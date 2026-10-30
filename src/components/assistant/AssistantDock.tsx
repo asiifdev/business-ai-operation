@@ -5,6 +5,7 @@ import { Icon } from '../shell/Icon';
 import { buttonClasses } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Composer, Conversation } from './Conversation';
+import { HistoryList } from './HistoryList';
 import { ASK_EVENT, useAssistant } from './useAssistant';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -16,9 +17,22 @@ type Role = 'owner' | 'admin' | 'staff';
  */
 export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useT();
-  const { turns, busy, ask, retry, clear } = useAssistant();
+  const a = useAssistant();
+  const { turns, busy, ask, retry } = a;
   const composer = useRef<HTMLTextAreaElement>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const query = useRef('');
+
+  const showHistory = () => {
+    void a.loadSessions(query.current);
+    setView('history');
+  };
+
+  // The list is stale after a new answer: fetch it again when it is being looked at.
+  useEffect(() => {
+    if (view === 'history' && a.sessions === null) void a.loadSessions(query.current);
+  }, [view, a.sessions]);
 
   useEffect(() => {
     document.documentElement.dataset.assistant = 'on';
@@ -31,7 +45,10 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
     const onAsk = (e: Event) => {
       const question = (e as CustomEvent<{ question?: string }>).detail?.question?.trim();
       onOpenChange(true);
-      if (question) setPending(question);
+      if (question) {
+        setPending(question);
+        setView('chat');
+      }
     };
     window.addEventListener(ASK_EVENT, onAsk);
     return () => window.removeEventListener(ASK_EVENT, onAsk);
@@ -54,8 +71,18 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
       bodyClassName="flex flex-col gap-4 !p-0"
       actions={
         <>
+          <button
+            type="button"
+            onClick={() => (view === 'history' ? setView('chat') : showHistory())}
+            aria-pressed={view === 'history'}
+            aria-label={t('historyTitle')}
+            title={t('historyTitle')}
+            className={'grid size-10 place-items-center rounded-full transition-colors duration-(--duration-micro) hover:bg-paper-2 hover:text-ink ' + (view === 'history' ? 'bg-accent-wash text-accent' : 'text-ink-2')}
+          >
+            <Icon name="history" className="size-5" />
+          </button>
           {turns.length > 0 && (
-            <button type="button" onClick={() => { clear(); composer.current?.focus(); }} disabled={busy} className={buttonClasses('secondary', 'sm')}>
+            <button type="button" onClick={() => { a.newChat(); setView('chat'); composer.current?.focus(); }} disabled={busy} className={buttonClasses('secondary', 'sm')}>
               {t('assistantClear')}
             </button>
           )}
@@ -65,13 +92,30 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4">
-        <Conversation turns={turns} busy={busy} role={role} onAsk={ask} onRetry={retry} compact />
-      </div>
-      <div className="shrink-0 border-t border-rule bg-paper px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-        <Composer ref={composer} busy={busy} onSend={ask} rows={1} />
-        <p className="mt-2 mb-0 text-xs text-muted">{t('dockHint')}</p>
-      </div>
+      {view === 'history' ? (
+        <div className="flex min-h-0 flex-1 flex-col px-4 py-4">
+          <HistoryList
+            sessions={a.sessions}
+            currentId={a.sessionId}
+            onOpen={(id) => void a.open(id)}
+            onNew={() => a.newChat()}
+            onSearch={(q) => { query.current = q; void a.loadSessions(q); }}
+            onRename={(id, title) => void a.rename(id, title)}
+            onDelete={(id) => void a.remove(id)}
+            onDone={() => setView('chat')}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4">
+            <Conversation turns={turns} busy={busy || a.opening} role={role} onAsk={ask} onRetry={retry} compact />
+          </div>
+          <div className="shrink-0 border-t border-rule bg-paper px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <Composer ref={composer} busy={busy} onSend={ask} rows={1} />
+            <p className="mt-2 mb-0 text-xs text-muted">{t('dockHint')}</p>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

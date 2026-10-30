@@ -31,3 +31,21 @@ export async function changeOwnPassword(ctx: Ctx, raw: z.input<typeof changePass
     await recordAudit(tx, { orgId: ctx.orgId, actor: ctx.actor, userId: ctx.userId }, { action: 'user.password_changed', entityType: 'user', entityId: ctx.userId });
   });
 }
+
+/**
+ * The language a person chose is theirs, not the browser's: it decides what the assistant, Telegram and every other device
+ * speak to them in. Only a change is written, and the audit row names the new language.
+ */
+export async function saveOwnLocale(ctx: Ctx, locale: 'id' | 'en'): Promise<boolean> {
+  const next = z.enum(['id', 'en']).parse(locale);
+  return db.transaction(async (tx) => {
+    const changed = await tx
+      .update(users)
+      .set({ locale: next })
+      .where(and(eq(users.orgId, ctx.orgId), eq(users.id, ctx.userId), ne(users.locale, next)))
+      .returning({ id: users.id });
+    if (changed.length === 0) return false;
+    await recordAudit(tx, { orgId: ctx.orgId, actor: ctx.actor, userId: ctx.userId }, { action: 'user.locale_changed', entityType: 'user', entityId: ctx.userId, summary: { locale: next } });
+    return true;
+  });
+}

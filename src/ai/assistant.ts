@@ -67,6 +67,8 @@ export interface AssistantReply {
   sources: string[];
   tools: Array<{ name: string; status: string }>;
   pendingApprovals: Array<{ id: string; tool: string }>;
+  /** Drafts made while answering, each with the tool that made it and its id. */
+  drafts: Array<{ tool: string; id: string }>;
   runId: string | null;
   /** Only managers see what a run cost. */
   costMicroUsd: number | null;
@@ -114,6 +116,7 @@ export async function askAssistant(
     sources: result.sources,
     tools: result.tools.map((t) => ({ name: t.name, status: t.status })),
     pendingApprovals: result.pendingApprovals,
+    drafts: result.drafts ?? [],
     runId: result.runId,
     costMicroUsd: can(ctx.role, 'ai.usage.read') ? result.costMicroUsd : null,
   };

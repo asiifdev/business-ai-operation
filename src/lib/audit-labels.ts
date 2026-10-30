@@ -109,4 +109,63 @@ export const AUDIT_LABEL: Record<string, MessageKey> = {
   'user.created': 'auditUserCreated',
   'user.deactivated': 'auditUserDeactivated',
   'user.role_changed': 'auditUserRoleChanged',
+  'lead.archived': 'auditLeadArchived',
+  'lead.unarchived': 'auditLeadUnarchived',
+  'telegram.poster_made': 'auditTelegramPoster',
+  'user.locale_changed': 'auditUserLocaleChanged',
 };
+
+/** Plain name of the kind of record an entry is about. */
+export const AUDIT_ENTITY_LABEL: Record<string, MessageKey> = {
+  ai_budget: 'auditEntAiBudget',
+  approval: 'auditEntApproval',
+  brand_kit: 'auditEntBrandKit',
+  briefing: 'auditEntBriefing',
+  client: 'auditEntClient',
+  connection: 'auditEntConnection',
+  deployment: 'auditEntDeployment',
+  finding: 'auditEntFinding',
+  flow: 'auditEntFlow',
+  invoice: 'auditEntInvoice',
+  lead: 'auditEntLead',
+  marketing_asset: 'auditEntMarketingAsset',
+  meeting: 'auditEntMeeting',
+  organization: 'auditEntOrganization',
+  package: 'auditEntPackage',
+  playbook_run: 'auditEntPlaybookRun',
+  product: 'auditEntProduct',
+  subscription: 'auditEntSubscription',
+  task: 'auditEntTask',
+  user: 'auditEntUser',
+  payment: 'auditEntPayment',
+  document: 'auditEntDocument',
+};
+
+/** Detail keys with a plain label. Any other key is shown with its underscores and camelCase turned into words. */
+export const AUDIT_DETAIL_KEY: Record<string, MessageKey> = {
+  date: 'auditKeyDate',
+  currentVersion: 'auditKeyCurrentVersion',
+  total: 'auditKeyTotal',
+  amount: 'auditKeyAmount',
+  name: 'auditKeyName',
+  to: 'auditKeyTo',
+  from: 'auditKeyFrom',
+  note: 'auditKeyNote',
+  reason: 'auditKeyReason',
+  tool: 'auditKeyTool',
+  draft: 'auditKeyDraft',
+  role: 'auditKeyRole',
+  locale: 'auditKeyLocale',
+  purpose: 'auditKeyPurpose',
+  scope: 'auditKeyScope',
+  status: 'auditKeyStatus',
+  kind: 'auditKeyKind',
+  repo: 'auditKeyRepo',
+  domain: 'auditKeyDomain',
+  headline: 'auditKeyHeadline',
+  stage: 'auditKeyStage',
+};
+
+/** Internal ids, hashes and counters that mean nothing to a person reading the log. The entry itself still stores them. */
+export const AUDIT_DETAIL_HIDDEN: ReadonlySet<string> = new Set(['runId', 'aiRunId', 'findingId', 'approvalId', 'hash', 'isAi', 'bytes', 'nodes', 'version', 'durationMs', 'turns', 'dropped', 'characters', 'productId', 'secretChanged', 'fields', 'setupFlow', 'updateFlow', 'aiDraft', 'showPrice', 'textPosition', 'withText']);
+

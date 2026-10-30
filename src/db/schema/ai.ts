@@ -45,6 +45,43 @@ export const aiRuns = pgTable(
   ],
 );
 
+/** ERD 3.8, D-078. One conversation with the assistant. Only the person it belongs to may read or change it. */
+export const assistantSessions = pgTable(
+  'assistant_sessions',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    userId: text('user_id').notNull(),
+    title: text('title').notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (t) => [
+    unique('uq_assistant_sessions_org_id').on(t.orgId, t.id),
+    foreignKey({ columns: [t.orgId, t.userId], foreignColumns: [users.orgId, users.id], name: 'fk_assistant_sessions_user' }),
+    index('idx_assistant_sessions_user').on(t.orgId, t.userId, t.updatedAt),
+  ],
+);
+
+/** ERD 3.8, D-078. The turns of a session, whole: what the person saw is what is stored. */
+export const assistantMessages = pgTable(
+  'assistant_messages',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    seq: integer('seq').notNull(),
+    kind: text('kind').notNull(),
+    body: jsonb('body').notNull(),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.orgId, t.sessionId], foreignColumns: [assistantSessions.orgId, assistantSessions.id], name: 'fk_assistant_messages_session' }).onDelete('cascade'),
+    unique('uq_assistant_messages_seq').on(t.sessionId, t.seq),
+    check('assistant_messages_kind_ck', sql`${t.kind} in ('user', 'assistant', 'error')`),
+  ],
+);
+
 /** Daily spending cap per feature, set by the Owner (CR-11, D-025). */
 export const aiBudgets = pgTable(
   'ai_budgets',

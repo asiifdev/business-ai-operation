@@ -27,6 +27,11 @@ export const NO_DATA_REFUSAL: Record<Locale, string> = {
   id: 'Saya hanya menjawab dari data dan fungsi yang ada di Orbyte, dan tidak menemukan datanya untuk pertanyaan ini. Tanyakan hal yang ada di data Anda, atau tanyakan "apa yang bisa kamu lakukan?".',
   en: 'I only answer from the data and functions in Orbyte, and I found no data for this question. Ask about something in your data, or ask "what can you do?".',
 };
+/** Said when the model's own words had to be dropped but the work itself (a draft, an approval request) succeeded. */
+export const ACTION_DONE_FALLBACK: Record<Locale, string> = {
+  id: 'Sudah saya kerjakan. Silakan tinjau hasilnya lewat tautan di bawah; draf belum berlaku dan permintaan persetujuan menunggu keputusan Anda.',
+  en: 'Done. Please review the result through the links below; drafts are not final yet and approval requests wait for your decision.',
+};
 export const OUT_OF_SCOPE_REFUSAL: Record<Locale, string> = {
   id: 'Pertanyaan itu di luar data dan fungsi yang saya punya, jadi saya tidak menjawabnya. Tanyakan "apa yang bisa kamu lakukan?" untuk melihat apa yang bisa saya bantu.',
   en: 'That is outside the data and functions I have, so I will not answer it. Ask "what can you do?" to see what I can help with.',

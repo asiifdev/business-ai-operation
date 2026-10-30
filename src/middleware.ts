@@ -4,6 +4,8 @@ import { LOCALE_COOKIE } from './lib/i18n';
 import { ensureTicker } from './server/ticker';
 import { startJobs } from './server/jobs';
 import { pickLocale, runWithLocale } from './lib/locale-server';
+import { saveOwnLocale } from './domain/users/profile';
+import { isLocale } from './lib/i18n';
 
 /** Paths that never need a session. Everything else under /app and /api requires one. */
 const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register$/, /^\/api\/health$/, /^\/api\/telegram\/webhook$/, /^\/api\/github\/webhook$/];
@@ -48,6 +50,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     acceptLanguage: context.request.headers.get('accept-language'),
   });
   context.locals.locale = locale;
+  // A language chosen with the switch lives in a cookie; the account keeps it too, so Telegram and other devices speak the same one.
+  const chosen = context.cookies.get(LOCALE_COOKIE)?.value;
+  if (resolved && isLocale(chosen) && chosen !== resolved.user.locale) void saveOwnLocale(resolved.ctx, chosen).catch(() => undefined);
   // React renders the page's islands while the response body is read, so read it all inside the language scope.
   // Otherwise two requests in different languages could end up rendering with each other's.
   return runWithLocale(locale, async () => {

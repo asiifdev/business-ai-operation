@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import type { listAudit } from '../../domain/audit/read';
 import { api, errorKey } from '../../lib/api-client';
-import { AUDIT_LABEL } from '../../lib/audit-labels';
+import { ACT_TOOL_LABEL } from '../../lib/act-tool-labels';
+import { AUDIT_DETAIL_HIDDEN, AUDIT_DETAIL_KEY, AUDIT_ENTITY_LABEL, AUDIT_LABEL } from '../../lib/audit-labels';
+import { formatRupiah } from '../../lib/format';
+import { STAGE_LABEL } from '../pipeline/stages';
+import type { MessageKey } from '../../lib/i18n';
 import { formatDateTime } from '../../lib/format';
 import type { Jsonify } from '../../lib/json-types';
 import { useLoad } from '../../lib/use-load';
@@ -18,13 +22,16 @@ import * as tbl from '../ui/table';
 type Page = Jsonify<Awaited<ReturnType<typeof listAudit>>> & { entityTypes: string[] };
 type Entry = Page['entries'][number];
 
-/** A short, readable line from an entry's summary: `key: value` pairs, nested changes as `from → to`. */
-function detail(summary: unknown): string {
+/** A short, readable line from an entry's summary: labelled pairs, nested changes as `from → to`, internal ids left out. */
+function detail(summary: unknown, t: (key: MessageKey) => string): string {
   if (!summary || typeof summary !== 'object') return '';
+  const words = (key: string) => (AUDIT_DETAIL_KEY[key] ? t(AUDIT_DETAIL_KEY[key]) : key.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
+  const show = (key: string, v: unknown): string => (typeof v === 'number' && (key === 'total' || key === 'amount') ? formatRupiah(v) : typeof v === 'string' && v in STAGE_LABEL && (key === 'to' || key === 'from') ? t(STAGE_LABEL[v as keyof typeof STAGE_LABEL]) : key === 'tool' && typeof v === 'string' && ACT_TOOL_LABEL[v] ? t(ACT_TOOL_LABEL[v]) : typeof v === 'boolean' ? (v ? '✓' : '–') : typeof v === 'object' ? JSON.stringify(v) : String(v));
   return Object.entries(summary as Record<string, unknown>)
+    .filter(([k, v]) => !AUDIT_DETAIL_HIDDEN.has(k) && !/Id$/.test(k) && v !== null && v !== '')
     .map(([k, v]) => {
-      if (v && typeof v === 'object' && 'from' in v && 'to' in v) return `${k}: ${String((v as { from: unknown }).from)} → ${String((v as { to: unknown }).to)}`;
-      return `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`;
+      if (v && typeof v === 'object' && 'from' in v && 'to' in v) return `${words(k)}: ${String((v as { from: unknown }).from)} → ${String((v as { to: unknown }).to)}`;
+      return `${words(k)}: ${show(k, v)}`;
     })
     .join(' · ')
     .slice(0, 240);
@@ -84,7 +91,7 @@ export function AuditPage({ timezone, isOwner }: { timezone: string; isOwner: bo
             <SelectMenu value={actor} onChange={setActor} includeAll={t('auditActorAny')} searchable={false} options={[{ value: 'user', label: t('auditActorUser') }, { value: 'ai', label: t('auditActorAi') }, { value: 'system', label: t('auditActorSystem') }]} />
           </FormField>
           <FormField label={t('auditEntity')}>
-            <SelectMenu value={entityType} onChange={setEntityType} includeAll={t('auditEntityAny')} options={(first.value.state === 'ready' ? first.value.data.entityTypes : []).map((e) => ({ value: e, label: e }))} />
+            <SelectMenu value={entityType} onChange={setEntityType} includeAll={t('auditEntityAny')} options={(first.value.state === 'ready' ? first.value.data.entityTypes : []).map((e) => ({ value: e, label: AUDIT_ENTITY_LABEL[e] ? t(AUDIT_ENTITY_LABEL[e]) : e }))} />
           </FormField>
           <FormField label={t('auditFrom')}>
             <DateInput value={from} onChange={setFrom} />
@@ -115,9 +122,9 @@ export function AuditPage({ timezone, isOwner }: { timezone: string; isOwner: bo
                     <td data-label={t('auditColWho')} className={`py-3 pr-3 ${tbl.label}`}>{who(e)}</td>
                     <td data-label={t('auditColWhat')} className={`py-3 pr-3 ${tbl.label}`}>
                       <span className="text-ink">{label(e.action)}</span>
-                      <span className="ml-2 font-mono text-xs text-muted">{e.entityType}</span>
+                      <span className="ml-2 font-mono text-xs text-muted">{AUDIT_ENTITY_LABEL[e.entityType] ? t(AUDIT_ENTITY_LABEL[e.entityType]) : e.entityType}</span>
                     </td>
-                    <td data-label={t('auditColDetail')} className={`py-3 text-sm text-muted ${tbl.label} ${tbl.full}`}>{detail(e.summary)}</td>
+                    <td data-label={t('auditColDetail')} className={`py-3 text-sm text-muted ${tbl.label} ${tbl.full}`}>{detail(e.summary, t)}</td>
                   </tr>
                 ))}
               </tbody>

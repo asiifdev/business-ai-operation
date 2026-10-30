@@ -120,7 +120,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
         </Panel>
       )}
 
-      {!closed && !lead.archivedAt && isManager && (
+      {!closed && !lead.archivedAt && !lead.isDraft && isManager && (
         <Panel aria-label={t('docCreateProposal')} className="flex flex-wrap items-center gap-3">
           <a href={`/app/dokumen/baru?leadId=${id}`} className={buttonClasses('secondary', 'sm')}>{t('docCreateProposal')}</a>
         </Panel>

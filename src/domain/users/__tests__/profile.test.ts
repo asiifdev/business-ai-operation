@@ -7,10 +7,24 @@ import { makeOrg } from '../../ai/__tests__/support';
 import { userCtx } from '../../ctx';
 import { DomainError } from '../../errors';
 import { createUser } from '../service';
-import { changeOwnPassword } from '../profile';
+import { changeOwnPassword, saveOwnLocale } from '../profile';
 
 afterAll(async () => {
   await pg.end();
+});
+
+describe('own language', () => {
+  it('saves the chosen language on the account, writes only a real change, and audits it', async () => {
+    const o = await makeOrg();
+    const before = (await db.select().from(users).where(eq(users.id, o.ownerCtx.userId)))[0].locale;
+    const next = before === 'id' ? 'en' : 'id';
+    expect(await saveOwnLocale(o.ownerCtx, next)).toBe(true);
+    expect((await db.select().from(users).where(eq(users.id, o.ownerCtx.userId)))[0].locale).toBe(next);
+    expect(await saveOwnLocale(o.ownerCtx, next)).toBe(false);
+    const rows = await db.select().from(auditLog).where(and(eq(auditLog.orgId, o.orgId), eq(auditLog.action, 'user.locale_changed')));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].summary).toMatchObject({ locale: next });
+  });
 });
 
 describe('M01 own password', () => {

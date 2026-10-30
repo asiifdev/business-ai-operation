@@ -7,7 +7,7 @@ import type { Ctx } from '../domain/ctx';
 import { DomainError } from '../domain/errors';
 import { can } from '../domain/permissions';
 import { AiProviderError, type AiErrorKind } from './errors';
-import { AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, detectLocale, friendlyAiError, type Locale } from './messages';
+import { ACTION_DONE_FALLBACK, AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, detectLocale, friendlyAiError, type Locale } from './messages';
 import { findUnverifiedNumbers } from './numbers';
 import type { AiProvider } from './provider';
 import type { ToolRegistry } from './tools/registry';
@@ -75,6 +75,8 @@ export interface AgentResult {
   costMicroUsd: number;
   tools: ToolLogEntry[];
   pendingApprovals: Array<{ id: string; tool: string }>;
+  /** Drafts this run made (a `draft` tool that returned an id): the interface links to each so a person reviews it at once. */
+  drafts?: Array<{ tool: string; id: string }>;
   /** Numbers in the answer that no tool result contained (BR-M07-10). The caller decides what to do with them. */
   unverifiedNumbers: string[];
   /** True when the answer followed at least one successful tool result (always true for a normal strict answer). */
@@ -139,6 +141,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   const safetyIdentifier = createHash('sha256').update(`${input.ctx.orgId}:${input.ctx.userId}`).digest('hex').slice(0, 32);
   const toolOutputs: string[] = [];
   const pendingApprovals: Array<{ id: string; tool: string }> = [];
+  const drafts: Array<{ tool: string; id: string }> = [];
   let invalidCalls = 0;
   let rejectedCall = false;
   let outOfScope = false;
@@ -148,7 +151,8 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   const guarded = strict || input.grounding === 'advisory';
   // Fixed refusals follow the language the person wrote in, not only their interface language.
   const lastUser = [...input.messages].reverse().find((m) => m.role === 'user');
-  const refusalLocale = detectLocale(typeof lastUser?.content === 'string' ? lastUser.content : '', locale);
+  const userText = typeof lastUser?.content === 'string' ? lastUser.content : '';
+  const refusalLocale = detectLocale(userText, locale);
   const sourcesOf = () => [...new Set(run.toolLog.filter((t) => t.status === 'ok').map((t) => t.name))];
 
   const stop = async (kind: AgentResult['errorKind'], message: string, error: string, status: AiRunStatus = 'error'): Promise<AgentResult> => {
@@ -201,6 +205,8 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       }
       log('ok');
       toolOutputs.push(text);
+      const draftId = (output as { id?: unknown } | null)?.id;
+      if (tool.tier === 'draft' && typeof draftId === 'string') drafts.push({ tool: tool.name, id: draftId });
       if (output && typeof output === 'object' && (output as { outOfScope?: unknown }).outOfScope === true) outOfScope = true;
       return text;
     } catch (error) {
@@ -232,7 +238,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
 
       if (result.toolCalls.length === 0) {
         const text = result.text ?? '';
-        const unverified = findUnverifiedNumbers(text, toolOutputs, input.trustedNumbers);
+        const unverified = findUnverifiedNumbers(text, [...toolOutputs, userText], input.trustedNumbers);
         const grounded = toolOutputs.length > 0;
 
         if (guarded && ((strict && !grounded) || unverified.length > 0)) {
@@ -254,12 +260,13 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
             ok: true,
             label: NOT_AI_LABEL[locale],
             status: 'ok',
-            text: NO_DATA_REFUSAL[refusalLocale],
+            text: pendingApprovals.length || drafts.length ? ACTION_DONE_FALLBACK[refusalLocale] : NO_DATA_REFUSAL[refusalLocale],
             runId: run.id,
             rounds,
             costMicroUsd: run.spentMicroUsd,
             tools: [...run.toolLog],
             pendingApprovals,
+            drafts,
             unverifiedNumbers: unverified,
             grounded,
             refused: true,
@@ -281,6 +288,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           costMicroUsd: run.spentMicroUsd,
           tools: [...run.toolLog],
           pendingApprovals,
+          drafts,
           unverifiedNumbers: unverified,
           grounded,
           refused: false,
@@ -302,6 +310,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           costMicroUsd: run.spentMicroUsd,
           tools: [...run.toolLog],
           pendingApprovals,
+          drafts,
           unverifiedNumbers: [],
           grounded: false,
           refused: true,

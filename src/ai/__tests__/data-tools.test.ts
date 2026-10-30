@@ -69,9 +69,11 @@ describe('data tools (D-077): the assistant adds and changes records only after 
   it('makes draft_lead a draft that stays out of the pipeline until a person accepts it', async () => {
     const o = await makeOrg();
     const fake = new FakeProvider({ chat: [callTools([{ name: 'draft_lead', args: { name: 'Calon Baru', estimatedValue: 3_000_000 } }]), say('Draf lead dibuat.')] });
-    await ask(o.ownerCtx, fake, 'Catat calon klien Calon Baru');
+    const reply = await ask(o.ownerCtx, fake, 'Catat calon klien Calon Baru');
     const [lead] = await db.select().from(leads).where(and(eq(leads.orgId, o.orgId), eq(leads.name, 'Calon Baru')));
     expect(lead.isDraft).toBe(true);
+    // The reply carries the draft, so the interface can link straight to it.
+    expect(reply.drafts).toEqual([{ tool: 'draft_lead', id: lead.id }]);
   });
 
   it('moves a lead through move_lead only after approval, as the approver (the service refuses an AI actor)', async () => {
@@ -95,6 +97,24 @@ describe('data tools (D-077): the assistant adds and changes records only after 
     const days = Math.round((Date.parse(detail.invoice.dueDate) - o.ownerCtx.clock.now().getTime()) / 86_400_000);
     expect(days).toBeGreaterThanOrEqual(13);
     expect(days).toBeLessThanOrEqual(14);
+  });
+
+  it('keeps the work and says so when the model\'s own words had to be dropped (numbers no tool returned), instead of "no data"', async () => {
+    const o = await makeOrg();
+    // The model writes a figure no tool returned and then repeats it after one correction: its words are dropped, the draft stays.
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'draft_lead', args: { name: 'Calon Angka' } }]), say('Lead dibuat, target 777 pelanggan.'), say('Lead dibuat, target 777 pelanggan.')] });
+    const reply = await ask(o.ownerCtx, fake, 'Catat calon klien Calon Angka');
+    expect(reply.refused).toBe(true);
+    expect(reply.text).toMatch(/Sudah saya kerjakan/);
+    expect(reply.drafts).toHaveLength(1);
+  });
+
+  it('accepts a number the person typed themselves when the assistant repeats it', async () => {
+    const o = await makeOrg();
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'draft_lead', args: { name: 'Calon Echo' } }]), say('Draf lead Calon Echo dibuat, target 777 pelanggan seperti Anda sebut.')] });
+    const reply = await ask(o.ownerCtx, fake, 'Catat calon klien Calon Echo dengan target 777 pelanggan');
+    expect(reply.refused).toBe(false);
+    expect(reply.text).toMatch(/777/);
   });
 
   it('tells the model why a tool was refused so it can explain and advise', async () => {

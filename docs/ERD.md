@@ -298,6 +298,12 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 `id`, `org_id N`, `type text` (`meeting.process`, `image.generate`, `briefing.generate`, `finding.explain`), `payload jsonb`, `status job_status`, `attempts smallint`, `max_attempts smallint` default 3, `run_after timestamptz`, `locked_at N`, `locked_by text N`, `last_error text N`, `result jsonb N`, `created_at`, `finished_at N`. Indeks parsial `(run_after) WHERE status = 'queued'` untuk `FOR UPDATE SKIP LOCKED`.
 
+**`assistant_sessions`** (riwayat percakapan asisten, D-078) · BR-M07
+
+`id`, `org_id`, `user_id` (→ `users`, pemilik percakapan; **hanya pemiliknya yang melihatnya**), `title text` (diisi dari pertanyaan pertama, dapat diganti pemiliknya), `created_at`, `updated_at` (waktu pesan terakhir). `FK (org_id, user_id) → users`, `UNIQUE (org_id, id)`, indeks `(org_id, user_id, updated_at desc)`.
+
+**`assistant_messages`**: `id`, `org_id`, `session_id`, `seq integer` (urutan dalam sesi), `kind text` (`user`, `assistant`, `error`), `body jsonb` (user: `{text}`; assistant: jawaban lengkap beserta sumber, draf, dan persetujuan yang diajukan; error: `{text, retry}`), `created_at`. `FK (org_id, session_id) → assistant_sessions` `ON DELETE CASCADE`, `UNIQUE (session_id, seq)`. Isi percakapan adalah data pengguna: tidak masuk `audit_log` dan tidak dipakai melatih apa pun; menghapus sesi menghapus pesannya.
+
 **`briefings`**: `id`, `org_id`, `briefing_date date`, `content text`, `is_ai boolean` (false = angka saja, "bukan hasil AI", BR-M08-11), `ai_run_id N`, `created_at`. `UNIQUE (org_id, briefing_date)`.
 
 ### 3.9 Koneksi dan operasi deployment (M17)
@@ -345,9 +351,9 @@ Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); per
 | `meetings.ts` | `files`, `meetings`, `meeting_turns` |
 | `marketing.ts` | `brand_kits`, `marketing_assets` |
 | `operations.ts` | `connections`, `product_setups`, `playbook_runs`, `playbook_steps` |
-| `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings` |
+| `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings`, `assistant_sessions`, `assistant_messages` |
 
-Total **38 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
+Total **40 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
 
 ## 5. Penjaga di database (pemicu dan batasan)
 

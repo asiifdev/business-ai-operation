@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { api, badFields, errorKey } from '../../lib/api-client';
+import { useEffect, useState, type FormEvent } from 'react';
+import { api, ApiError, badFields, errorKey } from '../../lib/api-client';
 import { useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { TextInput } from '../forms/TextInput';
@@ -24,6 +24,18 @@ export function QuickClientModal({ open, onClose, onCreated }: { open: boolean; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const bad = badFields(error);
+  const [existing, setExisting] = useState<NewClient | null>(null);
+
+  // A name that is taken usually means the client is already there: offer to use it instead of leaving the person stuck.
+  useEffect(() => {
+    setExisting(null);
+    if (!(error instanceof ApiError && error.code === 'duplicate')) return;
+    const wanted = name.trim().toLowerCase();
+    api<{ clients: NewClient[] }>('GET', `/api/clients?q=${encodeURIComponent(name.trim())}`).then(
+      (res) => setExisting(res.clients.find((c) => c.name.trim().toLowerCase() === wanted) ?? null),
+      () => setExisting(null),
+    );
+  }, [error]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -62,6 +74,17 @@ export function QuickClientModal({ open, onClose, onCreated }: { open: boolean; 
             <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} maxLength={40} autoComplete="off" />
           </FormField>
         </div>
+        {existing && (
+          <Button
+            onClick={() => {
+              onCreated({ id: existing.id, name: existing.name });
+              setError(null);
+              onClose();
+            }}
+          >
+            {t('quickClientUseExisting')}
+          </Button>
+        )}
         <div className="flex gap-2">
           <Button type="submit" variant="primary" loading={busy}>{t('quickClientSave')}</Button>
           <Button onClick={onClose} disabled={busy}>{t('cancel')}</Button>

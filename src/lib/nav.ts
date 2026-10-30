@@ -2,7 +2,7 @@ import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
 export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'marketing' | 'audit' | 'users' | 'orgsettings' | 'connections' | 'flows' | 'runs' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
-export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic';
+export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic' | 'history' | 'copy' | 'edit' | 'trash';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
 /**
