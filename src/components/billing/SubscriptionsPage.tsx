@@ -15,10 +15,10 @@ import { ClientSelect } from '../portfolio/ClientSelect';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { DataTable } from '../ui/DataTable';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import * as tbl from '../ui/table';
 
 type Row = Jsonify<SubscriptionRow>;
 type Options = Jsonify<BillingFormOptions>;
@@ -54,35 +54,31 @@ export function SubscriptionsPage() {
         {list.value.state === 'error' && <ErrorBox onRetry={list.retry}>{t(errorKey(list.value.error))}</ErrorBox>}
         {list.value.state === 'ready' && list.value.data.subscriptions.length === 0 && <EmptyState action={<Button variant="primary" onClick={() => setAdding(true)}>{t('newSubscription')}</Button>}>{t('emptySubs')}</EmptyState>}
         {list.value.state === 'ready' && list.value.data.subscriptions.length > 0 && (
-          <div className="overflow-x-auto">
-            <table role="table" className={tbl.table + ' sm:min-w-[40rem]'}>
-              <thead className={tbl.thead}>
-                <tr className="text-left text-muted">
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('colClient')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('colPlan')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right font-medium">{t('colAmount')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('colNextDue')}</th>
-                  <th scope="col" className="py-2 font-medium">{t('colStatus')}</th>
-                </tr>
-              </thead>
-              <tbody className={tbl.tbody}>
-                {list.value.data.subscriptions.map((s) => (
-                  <tr key={s.id} role="row" className={tbl.row}>
-                    <td data-label={t('colClient')} className={`py-3 pr-3 ${tbl.label}`}>
-                      <a href={`/app/langganan/${s.id}`} className="font-medium text-ink no-underline hover:text-accent">{s.clientName}</a>
-                    </td>
-                    <td data-label={t('colPlan')} className={`py-3 pr-3 ${tbl.label}`}>{s.productName} · {s.packageName}</td>
-                    <td data-label={t('colAmount')} className={`py-3 pr-3 sm:text-right ${tbl.label}`}>
-                      <span className="font-mono tabular-nums">{formatRupiah(s.amount)}</span>
-                      <span className="block text-xs text-muted">{t('everyMonths', { n: s.intervalMonths })}</span>
-                    </td>
-                    <td data-label={t('colNextDue')} className={`py-3 pr-3 ${tbl.label}`}>{s.status === 'active' ? formatDate(s.nextDueDate) : '—'}</td>
-                    <td data-label={t('colStatus')} className={`py-3 ${tbl.label}`}><Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{t(s.status === 'active' ? 'subStatusActive' : 'subStatusStopped')}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            label={t('subsTitle')}
+            rows={list.value.data.subscriptions}
+            rowKey={(s) => s.id}
+            search={(s) => `${s.clientName} ${s.productName} ${s.packageName}`}
+            minWidth="40rem"
+            columns={[
+              { id: 'client', header: t('colClient'), sortValue: (s) => s.clientName, cell: (s) => <a href={`/app/langganan/${s.id}`} className="font-medium text-ink no-underline hover:text-accent">{s.clientName}</a> },
+              { id: 'plan', header: t('colPlan'), sortValue: (s) => `${s.productName} ${s.packageName}`, cell: (s) => `${s.productName} · ${s.packageName}` },
+              {
+                id: 'amount',
+                header: t('colAmount'),
+                align: 'right',
+                sortValue: (s) => s.amount,
+                cell: (s) => (
+                  <>
+                    <span className="font-mono tabular-nums">{formatRupiah(s.amount)}</span>
+                    <span className="block text-xs text-muted">{t('everyMonths', { n: s.intervalMonths })}</span>
+                  </>
+                ),
+              },
+              { id: 'due', header: t('colNextDue'), sortValue: (s) => (s.status === 'active' ? s.nextDueDate : null), cell: (s) => (s.status === 'active' ? formatDate(s.nextDueDate) : '—') },
+              { id: 'status', header: t('colStatus'), sortValue: (s) => s.status, cell: (s) => <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{t(s.status === 'active' ? 'subStatusActive' : 'subStatusStopped')}</Badge> },
+            ]}
+          />
         )}
       </Panel>
     </div>

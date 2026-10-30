@@ -11,40 +11,24 @@ import { Toggle } from '../forms/Toggle';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { DataTable } from '../ui/DataTable';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import * as tbl from '../ui/table';
 
 type Row = Jsonify<ClientRow>;
 
-/** The client list with search. The search text lives in the URL (`?q=`), so a filtered list can be shared or reloaded. */
+/** The client list. Search, sort and page live in the URL (`?q=`, `?sort=`), so a view can be shared or reloaded; archived clients are the server's filter. */
 export function ClientsPage() {
   const t = useT();
-  const [q, setQ] = useState('');
-  const [search, setSearch] = useState('');
   const [archived, setArchived] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    const initial = new URLSearchParams(window.location.search).get('q') ?? '';
-    setQ(initial);
-    setSearch(initial);
     if (new URLSearchParams(window.location.search).get('new') === '1') setAdding(true);
   }, []);
-  // Wait for a pause in typing before asking the server, and keep the URL in step.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(q);
-      const url = new URL(window.location.href);
-      if (q) url.searchParams.set('q', q);
-      else url.searchParams.delete('q');
-      window.history.replaceState(null, '', url);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [q]);
 
-  const list = useLoad(() => api<{ clients: Row[] }>('GET', `/api/clients?${new URLSearchParams({ ...(search ? { q: search } : {}), ...(archived ? { archived: '1' } : {}) })}`), [search, archived]);
+  const list = useLoad(() => api<{ clients: Row[] }>('GET', `/api/clients?${new URLSearchParams(archived ? { archived: '1' } : {})}`), [archived]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,45 +41,38 @@ export function ClientsPage() {
       )}
 
       <Panel aria-busy={list.value.state === 'loading'} className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="w-full max-w-sm">
-            <TextInput type="search" value={q} onChange={(e) => setQ(e.currentTarget.value)} placeholder={t('searchClients')} aria-label={t('searchClients')} clearable maxLength={80} />
-          </div>
-          <Toggle label={t('showArchived')} checked={archived} onChange={setArchived} />
-        </div>
         {list.value.state === 'loading' && <Skeleton rows={5} />}
         {list.value.state === 'error' && <ErrorBox onRetry={list.retry} />}
-        {list.value.state === 'ready' && list.value.data.clients.length === 0 && (
-          <EmptyState action={!search ? <Button variant="primary" onClick={() => setAdding(true)}>{t('newClient')}</Button> : undefined}>{search ? t('noMatch') : t('emptyClients')}</EmptyState>
+        {list.value.state === 'ready' && list.value.data.clients.length === 0 && !archived && (
+          <EmptyState action={<Button variant="primary" onClick={() => setAdding(true)}>{t('newClient')}</Button>}>{t('emptyClients')}</EmptyState>
         )}
-        {list.value.state === 'ready' && list.value.data.clients.length > 0 && (
-          <div className="overflow-x-auto">
-            <table role="table" className={tbl.table + ' sm:min-w-[38rem]'}>
-              <thead className={tbl.thead}>
-                <tr className="text-left text-muted">
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('fName')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('colContact')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right font-medium">{t('colDeployments')}</th>
-                  <th scope="col" className="py-2 text-right font-medium">{t('colBehind')}</th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup" className={tbl.tbody}>
-                {list.value.data.clients.map((c) => (
-                  <tr key={c.id} role="row" className={tbl.row + ' align-middle'}>
-                    <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium max-sm:p-0 ' + tbl.full}>
-                      <a href={`/app/klien/${c.id}`} className="font-medium text-ink no-underline transition-colors hover:text-accent">{c.name}</a>
-                      {c.archivedAt && <Badge className="ml-2">{t('archivedBadge')}</Badge>}
-                    </th>
-                    <td role="cell" data-label={t('colContact')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{[c.contactName, c.email].filter(Boolean).join(', ') || t('noValue')}</td>
-                    <td role="cell" data-label={t('colDeployments')} className={'py-3 pr-3 text-right text-ink tabular-nums max-sm:p-0 max-sm:text-left ' + tbl.label}>{c.deploymentCount}</td>
-                    <td role="cell" data-label={t('colBehind')} className={'py-3 text-right max-sm:p-0 max-sm:text-left ' + tbl.label}>
-                      {c.behindCount > 0 ? <Badge tone="warn">{c.behindCount}</Badge> : <span className="text-muted">{t('noValue')}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {list.value.state === 'ready' && (list.value.data.clients.length > 0 || archived) && (
+          <DataTable
+            label={t('clientsTitle')}
+            rows={list.value.data.clients}
+            rowKey={(c) => c.id}
+            search={(c) => `${c.name} ${c.contactName ?? ''} ${c.email ?? ''}`}
+            emptyMatch={() => t('noMatch')}
+            minWidth="38rem"
+            toolbar={<Toggle label={t('showArchived')} checked={archived} onChange={setArchived} />}
+            columns={[
+              {
+                id: 'name',
+                header: t('fName'),
+                sortValue: (c) => c.name,
+                full: true,
+                cell: (c) => (
+                  <>
+                    <a href={`/app/klien/${c.id}`} className="font-medium text-ink no-underline transition-colors hover:text-accent">{c.name}</a>
+                    {c.archivedAt && <Badge className="ml-2">{t('archivedBadge')}</Badge>}
+                  </>
+                ),
+              },
+              { id: 'contact', header: t('colContact'), sortValue: (c) => c.contactName ?? c.email, cell: (c) => [c.contactName, c.email].filter(Boolean).join(', ') || t('noValue') },
+              { id: 'deployments', header: t('colDeployments'), align: 'right', sortValue: (c) => c.deploymentCount, cell: (c) => <span className="tabular-nums">{c.deploymentCount}</span> },
+              { id: 'behind', header: t('colBehind'), align: 'right', sortValue: (c) => c.behindCount, cell: (c) => (c.behindCount > 0 ? <Badge tone="warn">{c.behindCount}</Badge> : <span className="text-muted">{t('noValue')}</span>) },
+            ]}
+          />
         )}
       </Panel>
     </div>

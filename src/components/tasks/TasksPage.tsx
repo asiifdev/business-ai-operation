@@ -11,10 +11,10 @@ import { SelectMenu } from '../forms/SelectMenu';
 import { Toggle } from '../forms/Toggle';
 import { Icon } from '../shell/Icon';
 import { Button } from '../ui/Button';
+import { DataTable } from '../ui/DataTable';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import * as tbl from '../ui/table';
 import { KIND_LABEL, moveLabel, PRIORITY_LABEL, STATUS_LABEL, TaskBadges } from './labels';
 import { TaskForm, taskPayload } from './TaskForm';
 import { Tabs } from '../ui/Tabs';
@@ -79,7 +79,12 @@ export function TasksPage() {
   function update(patch: Partial<Filters>) {
     const next = { ...f, ...patch };
     setFilters(next);
-    window.history.replaceState(null, '', `${window.location.pathname}${toQuery(next, false)}`);
+    // The table keeps its own search, sort and page in the URL beside the filters, so only the filter keys are rewritten.
+    const p = new URLSearchParams(window.location.search);
+    for (const k of ['view', 'status', 'kind', 'assignee', 'clientId', 'late', 'done']) p.delete(k);
+    for (const [k, v] of new URLSearchParams(toQuery(next, false).slice(1))) p.set(k, v);
+    const qs = p.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
   }
 
   async function act(id: string, fn: () => Promise<unknown>) {
@@ -246,45 +251,45 @@ function TaskTable({ tasks, busyId, onMove }: { tasks: Task[]; busyId: string | 
   const t = useT();
   if (tasks.length === 0) return null;
   return (
-    <div className="overflow-x-auto">
-      <table role="table" className={tbl.table + ' sm:min-w-[52rem]'}>
-        <thead className={tbl.thead}>
-          <tr className="text-left text-muted">
-            <th scope="col" className="py-2 pr-3 font-medium">{t('colTask')}</th>
-            <th scope="col" className="py-2 pr-3 font-medium">{t('colAbout')}</th>
-            <th scope="col" className="py-2 pr-3 font-medium">{t('colAssignee')}</th>
-            <th scope="col" className="py-2 pr-3 font-medium">{t('colDue')}</th>
-            <th scope="col" className="py-2 pr-3 font-medium">{t('colStatus')}</th>
-            <th scope="col" className="py-2 font-medium"><span className="sr-only">{t('taskDetails')}</span></th>
-          </tr>
-        </thead>
-        <tbody className={tbl.tbody}>
-          {tasks.map((task) => (
-            <tr key={task.id} role="row" className={tbl.row}>
-              <td data-label={t('colTask')} className={`py-3 pr-3 ${tbl.label} ${tbl.full}`}>
-                <a href={`/app/task/${task.id}`} className="font-medium text-ink no-underline hover:text-accent [overflow-wrap:anywhere]">{task.title}</a>
-                <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                  {t(KIND_LABEL[task.kind])} · {t(PRIORITY_LABEL[task.priority])}
-                </span>
-              </td>
-              <td data-label={t('colAbout')} className={`py-3 pr-3 ${tbl.label}`}><About task={task} /></td>
-              <td data-label={t('colAssignee')} className={`py-3 pr-3 ${tbl.label}`}>{task.assigneeName ?? <span className="text-muted">{t('taskAssigneeNone')}</span>}</td>
-              <td data-label={t('colDue')} className={`py-3 pr-3 tabular-nums ${tbl.label}`}>
-                {task.dueDate ? formatDate(task.dueDate) : '—'}
-              </td>
-              <td data-label={t('colStatus')} className={`py-3 pr-3 ${tbl.label}`}><TaskBadges task={task} showStatus /></td>
-              <td className={`py-3 ${tbl.full}`}>
-                <span className="flex flex-wrap justify-end gap-1.5">
-                  {task.nextStatuses.filter((s) => s !== 'open' || task.status === 'done').map((to) => (
-                    <Button key={to} size="sm" variant={to === 'done' ? 'primary' : 'secondary'} loading={busyId === task.id} onClick={() => onMove(task, to)}>{t(moveLabel(task.status, to))}</Button>
-                  ))}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      label={t('tasksTitle')}
+      rows={tasks}
+      rowKey={(task) => task.id}
+      search={(task) => `${task.title} ${task.clientName ?? ''} ${task.productName ?? ''} ${task.leadName ?? ''} ${task.assigneeName ?? ''}`}
+      minWidth="52rem"
+      columns={[
+        {
+          id: 'task',
+          header: t('colTask'),
+          sortValue: (task) => task.title,
+          full: true,
+          cell: (task) => (
+            <>
+              <a href={`/app/task/${task.id}`} className="font-medium text-ink no-underline hover:text-accent [overflow-wrap:anywhere]">{task.title}</a>
+              <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                {t(KIND_LABEL[task.kind])} · {t(PRIORITY_LABEL[task.priority])}
+              </span>
+            </>
+          ),
+        },
+        { id: 'about', header: t('colAbout'), sortValue: (task) => task.clientName ?? task.productName ?? task.leadName, cell: (task) => <About task={task} /> },
+        { id: 'assignee', header: t('colAssignee'), sortValue: (task) => task.assigneeName, cell: (task) => task.assigneeName ?? <span className="text-muted">{t('taskAssigneeNone')}</span> },
+        { id: 'due', header: t('colDue'), sortValue: (task) => task.dueDate, cell: (task) => <span className="tabular-nums">{task.dueDate ? formatDate(task.dueDate) : '—'}</span> },
+        { id: 'status', header: t('colStatus'), cell: (task) => <TaskBadges task={task} showStatus /> },
+        {
+          id: 'actions',
+          header: t('taskDetails'),
+          full: true,
+          cell: (task) => (
+            <span className="flex flex-wrap justify-end gap-1.5">
+              {task.nextStatuses.filter((s) => s !== 'open' || task.status === 'done').map((to) => (
+                <Button key={to} size="sm" variant={to === 'done' ? 'primary' : 'secondary'} loading={busyId === task.id} onClick={() => onMove(task, to)}>{t(moveLabel(task.status, to))}</Button>
+              ))}
+            </span>
+          ),
+        },
+      ]}
+    />
   );
 }
 

@@ -64,6 +64,7 @@ Checklist (periksa sebelum owner commit):
 - [ ] Unit test untuk kalkulasi dan state machine
 - [ ] **E2E**: uji manual di browser untuk verifikasi eksploratif, **wajib lewat Claude in Chrome** (`mcp__claude-in-chrome__*`), **bukan Playwright MCP** (menyampah tangkapan layar dan log di repo); **Playwright** (pustaka tes) tetap untuk regression yang masuk CI
 - [ ] Dicoba manual di browser minimal sekali. **Uji browser hanya di `https://ai-business.asiifdev.com`** (langsung online): **dilarang menjalankan dev server sendiri** (`pnpm dev`, `pnpm start`, dsb.) dan **dilarang memakai `localhost`** untuk uji manual. Perubahan kode langsung terlihat di domain itu
+- [ ] **Data uji wajib dibuat lewat UI** (klik dan isi form di Claude in Chrome), **dilarang keras lewat `fetch`/API langsung** (`javascript_tool` hanya untuk membaca DOM dan URL). **Alasannya:** uji browser sekaligus menguji tampilan, integrasi antarlapisan (form → endpoint → service → DB), dan interaktivitas yang dialami pengguna sungguhan. Membuat data lewat API melewati semua itu, sehingga cacat di form, validasi tampilan, dan komponen tidak ketahuan. Bila prasyarat data kurang (mis. paket untuk langganan), buat juga lewat UI
 - [ ] `docs/PLAN.md` (§1 status dokumen, §1a status implementasi), `CHANGELOG.md`, dan `README.md` (bila relevan) diperbarui di commit yang sama. **`pnpm test` memeriksa sinkronisasi dokumen** (`tests/docs-sync.test.ts`): jangan menyalin status ke dokumen lain, tautkan ke `docs/PLAN.md`
 
 ## Aturan teknis yang tidak boleh dilanggar
@@ -84,6 +85,7 @@ Checklist (periksa sebelum owner commit):
 - **Wajib pakai skill `hallmark`** untuk semua keputusan desain visual (anti-AI-slop). Jangan pakai tampilan default.
 - **Dilarang kontrol mentah di halaman**: `<select>`, `<input type=checkbox|radio|number|file>`, `<textarea>`. Pakai komponen di `src/components/ui/` dan `src/components/forms/` (FormField, TextInput, SelectMenu, Textarea, Checkbox, Radio, Toggle, NumberInput, MoneyInput, DateInput, FileInput, dst).
 - **Sebelum membuat komponen baru, cek `src/components/`** dan daftar kontrak di `docs/05`. Jangan duplikasi.
+- **Sistem ini modern: interaktivitas harus canggih dan modern, jangan metode klasik.** Aksi yang menghapus atau mengubah status minta konfirmasi lewat dialog (`ConfirmButton`/`Modal`), bukan `confirm()` browser atau tombol yang berganti rupa; hasil aksi diberi umpan balik lewat toast (otomatis dari `api()`, `src/lib/mutation-toasts.ts`); jangan reload halaman penuh bila keadaan bisa diperbarui di tempat; jangan `alert()`/`prompt()`.
 - Keterangan **bahasa bisnis** di bawah kontrol, bukan istilah teknis. Mode terang/gelap wajib.
 - Pola komponen form **hanya dirujuk lewat kontraknya** di `docs/05`. Kode tidak boleh disalin (aturan hackathon 1).
 

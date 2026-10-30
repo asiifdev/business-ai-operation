@@ -1,23 +1,15 @@
 import { useEffect, useState } from 'react';
 import { cx } from '../../lib/cx';
 import { useT } from '../../lib/use-t';
+import { dropCarried, takeCarried, toast, TOAST_EVENT, type ToastItem, type ToastTone } from '../../lib/toast-bus';
 import { Icon } from '../shell/Icon';
 
-type Tone = 'success' | 'danger' | 'neutral';
-interface Item { id: number; text: string; tone: Tone }
+type Tone = ToastTone;
+type Item = ToastItem;
 
-const EVENT = 'orbyte:toast';
 const LIFETIME = 5000;
-let nextId = 1;
 
-/**
- * Short feedback after an action ("Run continues from the failed step"). Anyone can call it; the one `Toaster` in the app
- * shell shows it. Never the only place a result is said: the page itself also shows the new state.
- */
-export function toast(text: string, tone: Tone = 'success') {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent<Item>(EVENT, { detail: { id: nextId++, text, tone } }));
-}
+export { toast };
 
 const ICON = { success: 'check', danger: 'alert', neutral: 'bell' } as const;
 const MARK: Record<Tone, string> = { success: 'text-success', danger: 'text-danger', neutral: 'text-muted' };
@@ -29,8 +21,7 @@ export function Toaster() {
 
   useEffect(() => {
     const timers = new Set<ReturnType<typeof setTimeout>>();
-    const onToast = (e: Event) => {
-      const item = (e as CustomEvent<Item>).detail;
+    const show = (item: Item) => {
       setItems((list) => [...list.slice(-2), item]);
       const timer = setTimeout(() => {
         setItems((list) => list.filter((x) => x.id !== item.id));
@@ -38,9 +29,17 @@ export function Toaster() {
       }, LIFETIME);
       timers.add(timer);
     };
-    window.addEventListener(EVENT, onToast);
+    const onToast = (e: Event) => {
+      const item = (e as CustomEvent<Item>).detail;
+      show(item);
+      // If this page is still open a moment later, no page change followed, so the toast need not be carried over.
+      const drop = setTimeout(() => dropCarried(item.id), 800);
+      timers.add(drop);
+    };
+    window.addEventListener(TOAST_EVENT, onToast);
+    for (const item of takeCarried()) show(item);
     return () => {
-      window.removeEventListener(EVENT, onToast);
+      window.removeEventListener(TOAST_EVENT, onToast);
       timers.forEach(clearTimeout);
     };
   }, []);

@@ -1,4 +1,6 @@
-import type { MessageKey } from './i18n';
+import { t, type MessageKey } from './i18n';
+import { mutationToastKey } from './mutation-toasts';
+import { toast } from './toast-bus';
 
 /** What a failed API call carries: the HTTP status, the error code and, for validation, the names of the bad fields. */
 export class ApiError extends Error {
@@ -12,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Calls our own JSON API. Resolves with `data`, or throws `ApiError`. Never sends anything but JSON. */
+/** Calls our own JSON API. Resolves with `data`, or throws `ApiError`. Never sends anything but JSON. A change that succeeds raises a toast (`mutationToastKey`). */
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -22,6 +24,8 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   });
   const parsed = await res.json().catch(() => null);
   if (!res.ok || !parsed?.ok) throw new ApiError(res.status, parsed?.error?.code ?? 'internal', parsed?.error?.fields ?? []);
+  const key = mutationToastKey(method, url);
+  if (key) toast(t(key), 'success', { carry: true });
   return parsed.data as T;
 }
 

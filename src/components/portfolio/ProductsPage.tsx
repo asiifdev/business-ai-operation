@@ -13,11 +13,11 @@ import { Toggle } from '../forms/Toggle';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClasses } from '../ui/Button';
+import { DataTable } from '../ui/DataTable';
 import { LOGO_MAX_BYTES, LOGO_TYPES, ProductLogo, SOURCE_LABEL } from './ProductLogo';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import * as tbl from '../ui/table';
 
 type Role = 'owner' | 'admin' | 'staff';
 type Row = Jsonify<ProductRow>;
@@ -51,38 +51,34 @@ export function ProductsPage({ role }: { role: Role }) {
           <EmptyState action={canWrite ? <Button variant="primary" onClick={() => setAdding(true)}>{t('newProduct')}</Button> : undefined}>{t('emptyProducts')}</EmptyState>
         )}
         {list.value.state === 'ready' && list.value.data.products.length > 0 && (
-          <div className="overflow-x-auto">
-            <table role="table" className={tbl.table + ' sm:min-w-[40rem]'}>
-              <thead className={tbl.thead}>
-                <tr className="text-left text-muted">
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('fName')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('colVersion')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right font-medium">{t('colPackages')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right font-medium">{t('colDeployments')}</th>
-                  <th scope="col" className="py-2 text-right font-medium">{t('colBehind')}</th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup" className={tbl.tbody}>
-                {list.value.data.products.map((p) => (
-                  <tr key={p.id} role="row" className={tbl.row + ' align-middle'}>
-                    <th scope="row" role="rowheader" className={'py-3 pr-3 text-left font-medium max-sm:p-0 ' + tbl.full}>
-                      <a href={`/app/produk/${p.id}`} className="inline-flex items-center gap-3 font-medium text-ink no-underline transition-colors hover:text-accent">
-                        <ProductLogo id={p.id} name={p.name} hasLogo={p.hasLogo} size="sm" />
-                        {p.name}
-                      </a>
-                      {p.archivedAt && <Badge className="ml-2">{t('archivedBadge')}</Badge>}
-                    </th>
-                    <td role="cell" data-label={t('colVersion')} className={'py-3 pr-3 text-ink tabular-nums max-sm:p-0 ' + tbl.label}>{p.currentVersion ?? t('noValue')}</td>
-                    <td role="cell" data-label={t('colPackages')} className={'py-3 pr-3 text-right text-ink tabular-nums max-sm:p-0 max-sm:text-left ' + tbl.label}>{p.packageCount}</td>
-                    <td role="cell" data-label={t('colDeployments')} className={'py-3 pr-3 text-right text-ink tabular-nums max-sm:p-0 max-sm:text-left ' + tbl.label}>{p.deploymentCount}</td>
-                    <td role="cell" data-label={t('colBehind')} className={'py-3 text-right max-sm:p-0 max-sm:text-left ' + tbl.label}>
-                      {p.behindCount > 0 ? <Badge tone="warn">{p.behindCount}</Badge> : <span className="text-muted">{t('noValue')}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            label={t('productsTitle')}
+            rows={list.value.data.products}
+            rowKey={(p) => p.id}
+            search={(p) => `${p.name} ${p.currentVersion ?? ''}`}
+            minWidth="40rem"
+            columns={[
+              {
+                id: 'name',
+                header: t('fName'),
+                sortValue: (p) => p.name,
+                full: true,
+                cell: (p) => (
+                  <>
+                    <a href={`/app/produk/${p.id}`} className="inline-flex items-center gap-3 font-medium text-ink no-underline transition-colors hover:text-accent">
+                      <ProductLogo id={p.id} name={p.name} hasLogo={p.hasLogo} size="sm" />
+                      {p.name}
+                    </a>
+                    {p.archivedAt && <Badge className="ml-2">{t('archivedBadge')}</Badge>}
+                  </>
+                ),
+              },
+              { id: 'version', header: t('colVersion'), sortValue: (p) => p.currentVersion, cell: (p) => <span className="tabular-nums">{p.currentVersion ?? t('noValue')}</span> },
+              { id: 'packages', header: t('colPackages'), align: 'right', sortValue: (p) => p.packageCount, cell: (p) => <span className="tabular-nums">{p.packageCount}</span> },
+              { id: 'deployments', header: t('colDeployments'), align: 'right', sortValue: (p) => p.deploymentCount, cell: (p) => <span className="tabular-nums">{p.deploymentCount}</span> },
+              { id: 'behind', header: t('colBehind'), align: 'right', sortValue: (p) => p.behindCount, cell: (p) => (p.behindCount > 0 ? <Badge tone="warn">{p.behindCount}</Badge> : <span className="text-muted">{t('noValue')}</span>) },
+            ]}
+          />
         )}
       </Panel>
     </div>

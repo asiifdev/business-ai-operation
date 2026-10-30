@@ -8,10 +8,10 @@ import { useT } from '../../lib/use-t';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Icon } from '../shell/Icon';
 import { buttonClasses } from '../ui/Button';
+import { DataTable } from '../ui/DataTable';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import * as tbl from '../ui/table';
 import { DocumentStatusBadge, KIND_LABEL } from './status';
 
 type Row = Jsonify<DocumentRow>;
@@ -44,35 +44,32 @@ export function DocumentsPage({ canWrite }: { canWrite: boolean }) {
         {list.value.state === 'error' && <ErrorBox onRetry={list.retry}>{t(errorKey(list.value.error))}</ErrorBox>}
         {list.value.state === 'ready' && list.value.data.documents.length === 0 && <EmptyState action={!kind && !status ? newLink : undefined}>{kind || status ? t('noDocumentMatch') : t('emptyDocuments')}</EmptyState>}
         {list.value.state === 'ready' && list.value.data.documents.length > 0 && (
-          <div className="overflow-x-auto">
-            <table role="table" className={tbl.table + ' sm:min-w-[46rem]'}>
-              <thead className={tbl.thead}>
-                <tr className="text-left text-muted">
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('docColTitle')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('docColKind')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('docColFor')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right font-medium">{t('colTotal')}</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">{t('docColValid')}</th>
-                  <th scope="col" className="py-2 font-medium">{t('colStatus')}</th>
-                </tr>
-              </thead>
-              <tbody className={tbl.tbody}>
-                {list.value.data.documents.map((d) => (
-                  <tr key={d.id} role="row" className={tbl.row}>
-                    <td data-label={t('docColTitle')} className={`py-3 pr-3 ${tbl.label} ${tbl.full}`}>
-                      <a href={`/app/dokumen/${d.id}`} className="font-medium text-ink no-underline hover:text-accent">{d.title}</a>
-                      <span className="ml-2 font-mono text-xs text-muted">{d.number ?? ''}{d.version > 1 ? ` · ${t('docVersionN', { n: d.version })}` : ''}</span>
-                    </td>
-                    <td data-label={t('docColKind')} className={`py-3 pr-3 ${tbl.label}`}>{t(KIND_LABEL[d.kind])}</td>
-                    <td data-label={t('docColFor')} className={`py-3 pr-3 ${tbl.label}`}>{d.clientName ?? d.leadName ?? '—'}</td>
-                    <td data-label={t('colTotal')} className={`py-3 pr-3 font-mono tabular-nums sm:text-right ${tbl.label}`}>{d.kind === 'minutes' ? '—' : formatRupiah(d.total)}</td>
-                    <td data-label={t('docColValid')} className={`py-3 pr-3 ${tbl.label}`}>{d.validUntil ? formatDate(d.validUntil) : '—'}</td>
-                    <td data-label={t('colStatus')} className={`py-3 ${tbl.label}`}><DocumentStatusBadge status={d.status} aiDraft={d.isAiDraft} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            label={t('docTitle')}
+            rows={list.value.data.documents}
+            rowKey={(d) => d.id}
+            search={(d) => `${d.title} ${d.number ?? ''} ${d.clientName ?? ''} ${d.leadName ?? ''}`}
+            minWidth="46rem"
+            columns={[
+              {
+                id: 'title',
+                header: t('docColTitle'),
+                sortValue: (d) => d.title,
+                full: true,
+                cell: (d) => (
+                  <>
+                    <a href={`/app/dokumen/${d.id}`} className="font-medium text-ink no-underline hover:text-accent">{d.title}</a>
+                    <span className="ml-2 font-mono text-xs text-muted">{d.number ?? ''}{d.version > 1 ? ` · ${t('docVersionN', { n: d.version })}` : ''}</span>
+                  </>
+                ),
+              },
+              { id: 'kind', header: t('docColKind'), sortValue: (d) => t(KIND_LABEL[d.kind]), cell: (d) => t(KIND_LABEL[d.kind]) },
+              { id: 'for', header: t('docColFor'), sortValue: (d) => d.clientName ?? d.leadName, cell: (d) => d.clientName ?? d.leadName ?? '—' },
+              { id: 'total', header: t('colTotal'), align: 'right', sortValue: (d) => (d.kind === 'minutes' ? null : d.total), cell: (d) => <span className="font-mono tabular-nums">{d.kind === 'minutes' ? '—' : formatRupiah(d.total)}</span> },
+              { id: 'valid', header: t('docColValid'), sortValue: (d) => d.validUntil, cell: (d) => (d.validUntil ? formatDate(d.validUntil) : '—') },
+              { id: 'status', header: t('colStatus'), cell: (d) => <DocumentStatusBadge status={d.status} aiDraft={d.isAiDraft} /> },
+            ]}
+          />
         )}
       </Panel>
     </div>
