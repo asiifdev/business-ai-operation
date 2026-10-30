@@ -185,7 +185,7 @@ function BrandLogoEditor({ saved, hasLogo, canEdit, onChanged }: { saved: boolea
       {hasLogo && (
         <div className="flex items-center gap-3">
           <img src={`/api/marketing/brand-kit/logo?v=${version}`} alt="" className="size-16 rounded-input border border-rule-2 bg-paper object-contain" />
-          {canEdit && <ConfirmButton variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
+          {canEdit && <ConfirmButton message={t('cfmRemoveLogo')} variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
         </div>
       )}
       {canEdit && (saved ? <FileInput accept={LOGO_TYPES} maxSize={LOGO_MAX_BYTES} disabled={busy} onChange={(files) => files[0] && void send(files[0])} onReject={() => setError(t('pLogoBad'))} /> : <p className="m-0 text-sm text-muted">{t('mkBrandLogoNeedsKit')}</p>)}
@@ -393,7 +393,7 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
         <Button size="sm" onClick={() => setReviseOpen((v) => !v)}>{t('mkRevise')}</Button>
         <a href={`${file}?download=1`} className={buttonClasses('secondary', 'sm')}>{t('mkDownload')}</a>
         {asset.hasLogo && <a href={`/api/marketing/assets/${asset.id}/logo?download=1`} className={buttonClasses('secondary', 'sm')}>{t('mkDownloadLogo')}</a>}
-        {canDelete && <ConfirmButton variant="danger" busy={busy === 'delete'} onConfirm={remove}>{t('delete')}</ConfirmButton>}
+        {canDelete && <ConfirmButton message={t('cfmDeleteImage')} variant="danger" busy={busy === 'delete'} onConfirm={remove}>{t('delete')}</ConfirmButton>}
       </div>
     </li>
   );

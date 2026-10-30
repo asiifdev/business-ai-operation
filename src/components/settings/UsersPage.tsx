@@ -82,7 +82,7 @@ export function UsersPage({ currentUserId, isOwner }: { currentUserId: string; i
                       </td>
                       <td data-label={t('usersColJoined')} className={`py-3 pr-3 ${tbl.label}`}>{formatDate(u.createdAt.slice(0, 10))}</td>
                       <td className="py-3 sm:text-right">
-                        {u.isActive && !locked && <ConfirmButton variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('POST', `/api/users/${u.id}/deactivate`))}>{t('usersDeactivate')}</ConfirmButton>}
+                        {u.isActive && !locked && <ConfirmButton message={t('cfmDeactivateUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('POST', `/api/users/${u.id}/deactivate`))}>{t('usersDeactivate')}</ConfirmButton>}
                       </td>
                     </tr>
                   );

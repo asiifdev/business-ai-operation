@@ -94,8 +94,8 @@ export function InvoiceDetail({ id, timezone }: { id: string; timezone: string }
               ]}
             />
             {draft && <Button size="sm" onClick={() => setEditing(true)}>{t('edit')}</Button>}
-            {draft && <ConfirmButton variant="primary" busy={busy} onConfirm={() => act(() => api('POST', `/api/invoices/${id}/send`))}>{t('markSent')}</ConfirmButton>}
-            {draft && <ConfirmButton variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/invoices/${id}`), () => window.location.assign('/app/invoice'))}>{t('deleteDraft')}</ConfirmButton>}
+            {draft && <ConfirmButton message={t('cfmSendInvoice')} variant="primary" busy={busy} onConfirm={() => act(() => api('POST', `/api/invoices/${id}/send`))}>{t('markSent')}</ConfirmButton>}
+            {draft && <ConfirmButton message={t('cfmDeleteInvoice')} variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/invoices/${id}`), () => window.location.assign('/app/invoice'))}>{t('deleteDraft')}</ConfirmButton>}
           </div>
         </div>
         {draft && <p className="m-0 text-sm text-muted">{invoice.isAiDraft ? `${t('aiDraftBanner')} ` : ''}{t('markSentHelp')}</p>}

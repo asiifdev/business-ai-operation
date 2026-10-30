@@ -176,7 +176,7 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
             <a href={`/app/setup/baru?flowId=${data.flow.id}`} className={buttonClasses('secondary', 'sm')}><Icon name="send" className="size-4" />{t('flowRun')}</a>
             {!locked && <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={!dirty && data.version === data.flow.currentVersion}>{t('flowSave')}</Button>}
             {!locked && (
-              <ConfirmButton variant="danger" onConfirm={async () => { await api('DELETE', `/api/flows/${data.flow.id}`); window.location.assign('/app/flow'); }}>{t('flowArchive')}</ConfirmButton>
+              <ConfirmButton message={t('cfmArchiveFlow')} variant="danger" onConfirm={async () => { await api('DELETE', `/api/flows/${data.flow.id}`); window.location.assign('/app/flow'); }}>{t('flowArchive')}</ConfirmButton>
             )}
           </div>
         </div>
@@ -306,7 +306,7 @@ function NodeInspector({ node, tool, slots, refs, locked, onPatch, onRemove, onA
         <p className="m-0 text-xs text-muted">{t('flowOutputs')}: {tool.outputs.map((o) => <code key={o} className="mr-1 font-mono">{`{{nodes.${node.id}.${o}}}`}</code>)}</p>
       )}
       {tool.producesSecretFrom && typeof node.data.config[tool.producesSecretFrom] === 'string' && <p className="m-0 text-xs text-muted">{t('flowSecretMade')}: <code className="font-mono">{`{{secrets.${node.data.config[tool.producesSecretFrom]}}}`}</code></p>}
-      {!locked && <div><ConfirmButton variant="danger" onConfirm={onRemove}>{t('flowRemoveNode')}</ConfirmButton></div>}
+      {!locked && <div><ConfirmButton message={t('cfmRemoveNode')} variant="danger" onConfirm={onRemove}>{t('flowRemoveNode')}</ConfirmButton></div>}
     </div>
   );
 }

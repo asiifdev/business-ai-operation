@@ -123,7 +123,7 @@ export function MeetingDetail({ id, timezone, canSeeHistory = false }: { id: str
       {m.canChange && !m.contentDeleted && m.status !== 'processing' && (
         <Panel className="flex flex-col items-start gap-2">
           <p className="m-0 max-w-prose text-sm text-muted">{t('mtDeleteHelp')}</p>
-          <ConfirmButton variant="danger" busy={busy === 'delete'} disabled={busy !== null} onConfirm={() => act('delete', () => api('DELETE', `/api/meetings/${id}/content`))}>{t('mtDeleteContent')}</ConfirmButton>
+          <ConfirmButton message={t('cfmDeleteRecording')} variant="danger" busy={busy === 'delete'} disabled={busy !== null} onConfirm={() => act('delete', () => api('DELETE', `/api/meetings/${id}/content`))}>{t('mtDeleteContent')}</ConfirmButton>
         </Panel>
       )}
       {canSeeHistory && <AuditTimeline entityType="meeting" entityId={id} timezone={timezone} />}

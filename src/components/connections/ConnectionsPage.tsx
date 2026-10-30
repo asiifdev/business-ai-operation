@@ -129,7 +129,7 @@ function ConnectionCard({ c, canWrite, onChange }: { c: Conn; canWrite: boolean;
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => test()} loading={busy}>{busy ? t('connTesting') : t('connTest')}</Button>
             <Button size="sm" onClick={() => setEditing((v) => !v)}>{t('edit')}</Button>
-            <ConfirmButton variant="danger" busy={busy} onConfirm={async () => { setBusy(true); try { await api('DELETE', `/api/connections/${c.id}`); await onChange(); } catch (e) { setError(e); } finally { setBusy(false); } }}>{t('connDelete')}</ConfirmButton>
+            <ConfirmButton message={t('cfmDeleteConnection')} variant="danger" busy={busy} onConfirm={async () => { setBusy(true); try { await api('DELETE', `/api/connections/${c.id}`); await onChange(); } catch (e) { setError(e); } finally { setBusy(false); } }}>{t('connDelete')}</ConfirmButton>
           </div>
         )}
       </div>

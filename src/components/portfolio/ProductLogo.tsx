@@ -60,7 +60,7 @@ export function LogoEditor({ productId, name, hasLogo, onChanged }: { productId:
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <ProductLogo id={productId} name={name} hasLogo={hasLogo} size="lg" version={version} />
-        {hasLogo && <ConfirmButton variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
+        {hasLogo && <ConfirmButton message={t('cfmRemoveLogo')} variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
       </div>
       <FileInput accept={LOGO_TYPES} maxSize={LOGO_MAX_BYTES} disabled={busy} onChange={(files) => files[0] && void send(files[0])} onReject={() => setError(t('pLogoBad'))} />
       <p className="m-0 text-sm text-muted">{t('pLogoHelp')}</p>

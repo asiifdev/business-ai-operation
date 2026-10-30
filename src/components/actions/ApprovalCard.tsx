@@ -89,7 +89,7 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
         </p>
       ) : approval.canDecide ? (
         <div className="flex flex-wrap items-center gap-2">
-          <ConfirmButton variant="primary" busy={busy} onConfirm={() => decide('approve')}>{t('apApprove')}</ConfirmButton>
+          <ConfirmButton message={t('cfmApprove')} variant="primary" busy={busy} onConfirm={() => decide('approve')}>{t('apApprove')}</ConfirmButton>
           <Button size="sm" onClick={() => decide('reject')} disabled={busy}>{t('apReject')}</Button>
         </div>
       ) : (

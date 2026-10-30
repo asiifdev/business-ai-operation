@@ -81,7 +81,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
             {lead.archivedAt && <Badge>{t('archivedBadge')}</Badge>}
           </h1>
           {isManager && (
-            <ConfirmButton busy={busy} onConfirm={() => act(() => api('POST', `/api/leads/${id}/archive`, { archived: !lead.archivedAt }))}>{lead.archivedAt ? t('restore') : t('archive')}</ConfirmButton>
+            <ConfirmButton message={t(lead.archivedAt ? 'cfmRestore' : 'cfmArchive')} busy={busy} onConfirm={() => act(() => api('POST', `/api/leads/${id}/archive`, { archived: !lead.archivedAt }))}>{lead.archivedAt ? t('restore') : t('archive')}</ConfirmButton>
           )}
         </div>
         {lead.stage === 'lost' && lead.lostReason && <p className="m-0 text-muted">{t('leadLostBecause', { reason: lead.lostReason })}</p>}
@@ -136,7 +136,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
           ) : (
             <>
               <p className="m-0 max-w-prose text-ink">{t('leadConvertHelp')}</p>
-              <ConfirmButton variant="primary" busy={busy} onConfirm={() => act(() => api<{ clientId: string }>('POST', `/api/leads/${id}/convert`, { confirm: true, mode: 'create' }).then((r) => window.location.assign(`/app/klien/${r.clientId}`)), () => undefined)}>{t('leadConvert')}</ConfirmButton>
+              <ConfirmButton message={t('cfmConvertLead')} variant="primary" busy={busy} onConfirm={() => act(() => api<{ clientId: string }>('POST', `/api/leads/${id}/convert`, { confirm: true, mode: 'create' }).then((r) => window.location.assign(`/app/klien/${r.clientId}`)), () => undefined)}>{t('leadConvert')}</ConfirmButton>
               {nameTaken && <LinkExisting leadId={id} name={lead.name} />}
             </>
           )}

@@ -76,7 +76,7 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
           {canRun && (
             <div className="flex flex-wrap gap-2">
               {data.status === 'paused' && <Button variant="primary" size="sm" onClick={() => act('retry')} loading={busy}>{t('runRetry')}</Button>}
-              {['paused', 'running', 'awaiting_approval'].includes(data.status) && <ConfirmButton variant="danger" busy={busy} onConfirm={() => act('cancel')}>{t('runCancel')}</ConfirmButton>}
+              {['paused', 'running', 'awaiting_approval'].includes(data.status) && <ConfirmButton message={t('cfmCancelRun')} variant="danger" busy={busy} onConfirm={() => act('cancel')}>{t('runCancel')}</ConfirmButton>}
             </div>
           )}
         </div>

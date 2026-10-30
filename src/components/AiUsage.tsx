@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FeatureUsage, AiRunRow } from '../domain/ai/service';
+import { api } from '../lib/api-client';
 import type { MessageKey } from '../lib/i18n';
 import { formatUsd } from '../lib/usd';
 import { useLocale, useT } from '../lib/use-t';
@@ -131,8 +132,7 @@ function BudgetRow({ row, isOwner, onSaved }: { row: FeatureUsage; isOwner: bool
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/ai/budgets', { method: 'PUT', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ feature: row.feature, limitUsd: value }) });
-      if (!res.ok) throw new Error(String(res.status));
+      await api('PUT', '/api/ai/budgets', { feature: row.feature, limitUsd: value });
       setMessage({ text: t('saved'), bad: false });
       await onSaved();
     } catch {

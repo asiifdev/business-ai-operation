@@ -59,7 +59,7 @@ export function SubscriptionDetail({ id }: { id: string }) {
           {active && (
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" aria-expanded={editing} onClick={() => setEditing((v) => !v)}>{t('editSubscription')}</Button>
-              <ConfirmButton variant="danger" busy={busy} onConfirm={stop}>{t('stopSubscription')}</ConfirmButton>
+              <ConfirmButton message={t('cfmStopSubscription')} variant="danger" busy={busy} onConfirm={stop}>{t('stopSubscription')}</ConfirmButton>
             </div>
           )}
         </div>

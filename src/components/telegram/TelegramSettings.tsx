@@ -79,7 +79,7 @@ export function TelegramSettings({ timezone }: { timezone: string }) {
                 <Button variant={code ? 'secondary' : 'primary'} loading={busy === 'code'} disabled={busy !== null} onClick={createCode}>
                   {code || load.value.data.linked ? t('tgNewCode') : t('tgCreateCode')}
                 </Button>
-                {load.value.data.linked && <ConfirmButton variant="danger" busy={busy === 'unlink'} disabled={busy !== null} onConfirm={unlink}>{t('tgUnlinkButton')}</ConfirmButton>}
+                {load.value.data.linked && <ConfirmButton message={t('cfmUnlinkTelegram')} variant="danger" busy={busy === 'unlink'} disabled={busy !== null} onConfirm={unlink}>{t('tgUnlinkButton')}</ConfirmButton>}
               </div>
             </div>
           )}

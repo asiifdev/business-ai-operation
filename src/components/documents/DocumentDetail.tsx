@@ -94,9 +94,9 @@ export function DocumentDetail({ id, canWrite, canFinalize, timezone, canSeeHist
               {t('downloadPdf')}
             </a>
             {draft && canWrite && priced && <Button size="sm" onClick={() => setEditing(true)}>{t('edit')}</Button>}
-            {draft && canFinalize && <ConfirmButton variant="primary" busy={busy} onConfirm={() => act(() => api('POST', `/api/documents/${id}/finalize`))}>{t('docFinalize')}</ConfirmButton>}
-            {!draft && canWrite && latest && <ConfirmButton variant="secondary" busy={busy} onConfirm={() => act(async () => { const r = await api<{ id: string }>('POST', `/api/documents/${id}/revise`); window.location.assign(`/app/dokumen/${r.id}`); }, () => undefined)}>{t('docRevise')}</ConfirmButton>}
-            {draft && canWrite && priced && <ConfirmButton variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/documents/${id}`), () => window.location.assign('/app/dokumen'))}>{t('deleteDraft')}</ConfirmButton>}
+            {draft && canFinalize && <ConfirmButton message={t('cfmFinalize')} variant="primary" busy={busy} onConfirm={() => act(() => api('POST', `/api/documents/${id}/finalize`))}>{t('docFinalize')}</ConfirmButton>}
+            {!draft && canWrite && latest && <ConfirmButton message={t('cfmRevise')} variant="secondary" busy={busy} onConfirm={() => act(async () => { const r = await api<{ id: string }>('POST', `/api/documents/${id}/revise`); window.location.assign(`/app/dokumen/${r.id}`); }, () => undefined)}>{t('docRevise')}</ConfirmButton>}
+            {draft && canWrite && priced && <ConfirmButton message={t('cfmDeleteDraft')} variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/documents/${id}`), () => window.location.assign('/app/dokumen'))}>{t('deleteDraft')}</ConfirmButton>}
           </div>
         </div>
         {draft ? <p className="m-0 text-sm text-muted">{d.isAiDraft ? `${t('aiDraftBanner')} ` : ''}{t('docFinalizeHelp')}</p> : <p className="m-0 text-sm text-muted">{t('docLocked')} {latest && canWrite ? t('docReviseHelp') : ''}</p>}

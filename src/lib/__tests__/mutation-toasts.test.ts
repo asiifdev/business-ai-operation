@@ -19,6 +19,12 @@ describe('mutationToastKey', () => {
     expect(mutationToastKey('POST', '/api/approvals/01ABC/decide')).toBe('toastDone');
   });
 
+  it('calls settings and budget writes a save, whatever the method', () => {
+    expect(mutationToastKey('POST', '/api/settings/org')).toBe('toastSaved');
+    expect(mutationToastKey('PUT', '/api/ai/budgets')).toBe('toastSaved');
+    expect(mutationToastKey('POST', '/api/profile/password')).toBe('toastSaved');
+  });
+
   it('stays silent for chat, sign-in and screens that raise their own toast', () => {
     expect(mutationToastKey('POST', '/api/assistant/chat')).toBeNull();
     expect(mutationToastKey('POST', '/api/auth/sign-in/email')).toBeNull();

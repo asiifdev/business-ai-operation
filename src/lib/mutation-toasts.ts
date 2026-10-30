@@ -16,6 +16,7 @@ export function mutationToastKey(method: string, url: string): MessageKey | null
   if (method === 'GET') return null;
   const path = url.split('?')[0]!;
   if (OWN_TOAST.some((re) => re.test(path))) return null;
+  if (SAVES.test(path)) return 'toastSaved';
   if (method === 'DELETE') return ONE.test(path) || CONTENT.test(path) ? 'toastDeleted' : null;
   if (method === 'PATCH' || method === 'PUT') return ONE.test(path) ? 'toastSaved' : null;
   if (method === 'POST') {
@@ -24,6 +25,9 @@ export function mutationToastKey(method: string, url: string): MessageKey | null
   }
   return null;
 }
+
+/** Settings screens save with POST or PUT to a fixed path; that is a save, not a create. */
+const SAVES = /^\/api\/(?:settings|profile|ai\/budgets)(?:\/|$)/;
 
 /** Calls whose screen already says something specific. */
 const OWN_TOAST: RegExp[] = [/^\/api\/runs\//];

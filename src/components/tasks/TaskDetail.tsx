@@ -77,7 +77,7 @@ export function TaskDetail({ id, timezone, canSeeHistory = false }: { id: string
           {task.canEdit && (
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" loading={busy === 'accept'} disabled={busy !== null} onClick={() => act('accept', () => api('POST', `/api/tasks/${id}/accept`))}>{t('taskAccept')}</Button>
-              <ConfirmButton busy={busy === 'discard'} disabled={busy !== null} onConfirm={() => act('discard', () => api('POST', `/api/tasks/${id}/discard`), () => window.location.assign('/app/task'))}>{t('taskDiscard')}</ConfirmButton>
+              <ConfirmButton message={t('cfmDiscardDraft')} busy={busy === 'discard'} disabled={busy !== null} onConfirm={() => act('discard', () => api('POST', `/api/tasks/${id}/discard`), () => window.location.assign('/app/task'))}>{t('taskDiscard')}</ConfirmButton>
             </div>
           )}
         </Panel>

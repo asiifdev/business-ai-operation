@@ -169,7 +169,7 @@ export function FindingCard({ finding, timezone, onChanged }: { finding: Card; t
             </FormField>
             <Button size="sm" loading={busy === 'snooze'} disabled={busy !== null} onClick={() => move({ action: 'snooze', days: Number(days) })}>{t('snooze')}</Button>
           </div>
-          <ConfirmButton busy={busy === 'ignore'} disabled={busy !== null} onConfirm={() => move({ action: 'ignore' })}>{t('ignore')}</ConfirmButton>
+          <ConfirmButton message={t('cfmIgnoreFinding')} busy={busy === 'ignore'} disabled={busy !== null} onConfirm={() => move({ action: 'ignore' })}>{t('ignore')}</ConfirmButton>
           {card.href && <a href={card.href} className="ml-auto text-sm text-accent no-underline hover:underline">{t(OPEN_LABEL[card.facts.kind])}</a>}
         </footer>
       ) : (

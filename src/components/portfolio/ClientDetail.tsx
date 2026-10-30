@@ -76,9 +76,9 @@ export function ClientDetail({ id, role }: { id: string; role: Role }) {
           </h1>
           {isManager && (
             <div className="flex flex-wrap items-center gap-2">
-              <ConfirmButton busy={busy} onConfirm={() => act(() => api('POST', `/api/clients/${id}/archive`, { archived: !archived }))}>{archived ? t('restore') : t('archive')}</ConfirmButton>
+              <ConfirmButton message={t(archived ? 'cfmRestore' : 'cfmArchive')} busy={busy} onConfirm={() => act(() => api('POST', `/api/clients/${id}/archive`, { archived: !archived }))}>{archived ? t('restore') : t('archive')}</ConfirmButton>
               {deployments.length === 0 && (
-                <ConfirmButton variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/clients/${id}`), () => window.location.assign('/app/klien'))}>{t('delete')}</ConfirmButton>
+                <ConfirmButton message={t('cfmDeleteClient')} variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/clients/${id}`), () => window.location.assign('/app/klien'))}>{t('delete')}</ConfirmButton>
               )}
             </div>
           )}
@@ -207,7 +207,7 @@ function Deployments({ clientId, deployments, canAdd, isManager, onChanged }: { 
                     <td role="cell" className="py-3 max-sm:col-span-2 max-sm:p-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <Button size="sm" onClick={() => setEditing(d.id)}>{t('edit')}</Button>
-                        {isManager && <ConfirmButton variant="danger" onConfirm={() => remove(d)}>{t('delete')}</ConfirmButton>}
+                        {isManager && <ConfirmButton message={t('cfmDeleteDeployment')} variant="danger" onConfirm={() => remove(d)}>{t('delete')}</ConfirmButton>}
                       </div>
                     </td>
                   </tr>

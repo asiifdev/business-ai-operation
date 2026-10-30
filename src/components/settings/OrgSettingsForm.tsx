@@ -8,7 +8,7 @@ import { FormField } from '../forms/FormField';
 import { NumberInput } from '../forms/NumberInput';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
-import { Button } from '../ui/Button';
+import { Button, buttonClasses } from '../ui/Button';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
@@ -106,6 +106,11 @@ function Form({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
         {num('stagnantDays', 1, 365, 'orgStagnantDays', 'orgStagnantDaysHelp')}
         {num('approvalTtlHours', 1, 720, 'orgApprovalTtl', 'orgApprovalTtlHelp')}
       </Section>
+      <Panel className="flex flex-col gap-3">
+        <h2 className="m-0 text-lg font-semibold text-ink">{t('orgSectionAi')}</h2>
+        <p className="m-0 max-w-prose text-sm text-muted">{t('orgAiBudgetHelp')}</p>
+        <a href="/app/ai?tab=budget" className={buttonClasses('secondary') + ' self-start'}>{t('orgAiBudgetLink')}</a>
+      </Panel>
       {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
       {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
       {canEdit && (
