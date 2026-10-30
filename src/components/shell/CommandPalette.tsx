@@ -13,16 +13,17 @@ interface Entry {
   hint?: string;
   href: string;
   icon: IconName;
-  group: 'navigate' | 'actions' | 'clients';
+  group: 'navigate' | 'actions' | 'clients' | 'ask';
 }
 
-const GROUP_KEY = { navigate: 'cmdNavigate', actions: 'cmdActions', clients: 'cmdClients' } as const satisfies Record<Entry['group'], MessageKey>;
+const GROUP_KEY = { navigate: 'cmdNavigate', actions: 'cmdActions', clients: 'cmdClients', ask: 'cmdAsk' } as const satisfies Record<Entry['group'], MessageKey>;
 
 /**
  * The ⌘K search and jump box. It lists the pages and quick actions the person may use, and looks up clients as they
- * type. Everything is a plain link, so the palette adds no way to change data: it only takes you to where you can.
+ * type. Everything is a plain link, so the palette adds no way to change data: it only takes you to where you can. A
+ * typed question can also go to the assistant (chat-first): `onAsk` opens the side panel, otherwise the assistant page.
  */
-export function CommandPalette({ open, onClose, role }: { open: boolean; onClose: () => void; role: Role }) {
+export function CommandPalette({ open, onClose, role, onAsk }: { open: boolean; onClose: () => void; role: Role; onAsk?: (question: string) => void }) {
   const t = useT();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
@@ -78,8 +79,10 @@ export function CommandPalette({ open, onClose, role }: { open: boolean; onClose
     const term = q.trim().toLowerCase();
     const matched = term ? base.filter((e) => e.label.toLowerCase().includes(term)) : base;
     const found: Entry[] = clients.map((c) => ({ id: `client-${c.id}`, label: c.name, hint: c.contactName ?? undefined, href: `/app/klien/${c.id}`, icon: 'clients', group: 'clients' }));
-    return [...found, ...matched];
-  }, [q, base, clients]);
+    const question = q.trim();
+    const ask: Entry[] = question.length >= 3 ? [{ id: 'ask', label: t('cmdAskQuestion', { q: question }), href: `/app/asisten?${new URLSearchParams({ q: question })}`, icon: 'assistant', group: 'ask' }] : [];
+    return [...found, ...matched, ...ask];
+  }, [q, base, clients, t]);
 
   useEffect(() => setActive(0), [q, clients]);
   useEffect(() => {
@@ -91,7 +94,8 @@ export function CommandPalette({ open, onClose, role }: { open: boolean; onClose
   const go = (entry: Entry | undefined) => {
     if (!entry) return;
     onClose();
-    window.location.assign(entry.href);
+    if (entry.group === 'ask' && onAsk) onAsk(q.trim());
+    else window.location.assign(entry.href);
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
@@ -129,7 +133,7 @@ export function CommandPalette({ open, onClose, role }: { open: boolean; onClose
             lastGroup = e.group;
             return (
               <li key={e.id} role="presentation">
-                {heading && <p className="m-0 px-3 pt-3 pb-1 text-xs font-medium tracking-wide text-muted uppercase">{t(GROUP_KEY[e.group])}</p>}
+                {heading && <p className="m-0 px-3 pt-3 pb-1 text-sm text-muted">{t(GROUP_KEY[e.group])}</p>}
                 <a
                   id={`palette-${e.id}`}
                   data-index={i}

@@ -18,6 +18,7 @@ import * as tbl from '../ui/table';
 import { AuditTimeline } from '../audit/AuditTimeline';
 import { LogoEditor, ProductLogo, SOURCE_LABEL } from './ProductLogo';
 import { ProductSetup } from './ProductSetup';
+import { OpsBadges } from './OpsBadges';
 import { VersionBadge } from './VersionBadge';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -123,7 +124,7 @@ export function ProductDetail({ id, role, timezone }: { id: string; role: Role; 
                     <td role="cell" data-label={t('colEnvironment')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{d.environment}</td>
                     <td role="cell" data-label={t('colDomain')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{d.domain ?? t('noValue')}</td>
                     <td role="cell" data-label={t('colInstalled')} className={'py-3 pr-3 text-ink tabular-nums max-sm:p-0 ' + tbl.label}>{d.installedVersion ?? t('noValue')}</td>
-                    <td role="cell" data-label={t('colVersion')} className={'py-3 max-sm:p-0 ' + tbl.label}><VersionBadge state={d.versionState} /></td>
+                    <td role="cell" data-label={t('colVersion')} className={'py-3 max-sm:p-0 ' + tbl.label}><span className="inline-flex flex-wrap items-center gap-1.5"><VersionBadge state={d.versionState} /><OpsBadges behindBy={d.behindBy} uptimeState={d.uptimeState} /></span></td>
                   </tr>
                 ))}
               </tbody>

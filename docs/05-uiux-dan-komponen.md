@@ -11,6 +11,7 @@ Pola dan kontrak boleh diadopsi, **kode tidak boleh disalin** dari repo mana pun
 - Token (warna, tipografi, spacing, radius, bayangan) dideklarasikan di `:root` dan dipakai semua komponen. Tidak ada warna/font literal di luar token (aturan lantai Hallmark).
 - Mode terang dan gelap wajib di setiap halaman; toggle tema tersedia, tidak hanya `prefers-color-scheme`.
 - Arah visual ditentukan lewat `hallmark` pada tahap UI; hasilnya dicatat di DECISIONS dan token dikunci sebelum halaman kedua dibangun.
+- Palet saat ini (D-071): warna dari logo Orbyte. Kerangka netral condong navy, satu aksen kobalt (aksi utama, pilihan aktif), mint untuk asisten dan hal buatan AI, teal logo untuk seri kedua grafik, amber hanya untuk peringatan. Kerangka aplikasi memakai token `frame`, konten di atas lembar `paper`.
 - Bahasa UI: **ID dan EN** dengan pengalih (`LocaleSwitch`), semua teks lewat kamus i18n dan hook `useT` (D-013). Bahasa awal: pilihan tersimpan, lalu bahasa browser, lalu Indonesia.
 
 ## 3. Kontrak komponen form (kontrak umum komponen form reusable)
@@ -32,7 +33,7 @@ Aturan: **dilarang kontrol mentah di halaman** (`<select>`, `<input type=checkbo
 | `FileInput` | Drag-and-drop + klik, validasi tipe via **MIME** (bukan hanya ekstensi), batas ukuran, pratinjau, progres, pesan error jelas; mendukung audio (rekaman rapat) dan gambar |
 | `InputError` | Daftar pesan dengan `role=alert` |
 
-Komponen UI umum (`src/components/ui/`): `Button` (primary/secondary/danger/link, `size`), `Card`, `Badge`, `Alert`, `Modal`, `Dropdown`, `Toast`, `Table` + toolbar (pencarian, filter, baris per halaman) + pagination, `Stat`, `Tabs`/`StepTabs`, `EmptyState`, `Skeleton`, `ThemeToggle`, `ApprovalCard` (khusus Action Center).
+Komponen UI umum (`src/components/ui/`): `Button` (primary/secondary/danger/link, `size`), `Card`, `Badge`, `Alert`, `Modal` (`placement` center/right/bottom, fokus terkunci, Escape/latar/tombol menutup), `Dropdown`, `Toast` (`toast(teks, nada)` dari mana saja, satu `Toaster` di kerangka aplikasi), `Steps` (progres langkah: `steps {id,label,note?,status}`, `orientation`, `onSelect` opsional; status dari data, bukan tebakan), `Table` + toolbar (pencarian, filter, baris per halaman) + pagination, `Stat`, `Tabs`/`StepTabs`, `EmptyState`, `Skeleton`, `ThemeToggle`, `ApprovalCard` (khusus Action Center).
 
 ## 4. Konvensi
 
@@ -50,6 +51,7 @@ Komponen UI umum (`src/components/ui/`): `Button` (primary/secondary/danger/link
 - **Draft dokumen:** pratinjau PDF/HTML sebelum "Finalisasi".
 - **Audit trail:** garis waktu per entitas (siapa/apa, kapan, hasil, biaya).
 - **Unggah rekaman:** progres STT, hasil per pembicara, tombol "buat lead/proposal/task" (semua draft).
+- **Asisten chat-first (D-069):** asisten selalu satu langkah dari halaman mana pun: "Tanya Orbyte" di sidebar dan bilah atas, tombol bulat di HP, Ctrl/⌘+J, bilah pertanyaan di dasbor, entri palet ⌘K. Panel samping dan `/app/asisten` berbagi satu percakapan. Bagian asisten di `src/components/assistant/`.
 
 ## 6. Daftar yang belum dibaca
 

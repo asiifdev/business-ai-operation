@@ -1,3 +1,4 @@
+import { AuditTimeline } from '../audit/AuditTimeline';
 import { useState } from 'react';
 import type { DocumentDetail as Detail } from '../../domain/documents/service';
 import { api, errorKey } from '../../lib/api-client';
@@ -19,7 +20,7 @@ type Doc = Jsonify<Detail>;
 type Narrative = { ok: true; narrative: string } | { ok: false; message: string };
 
 /** One document: its words, its priced lines, and what can still be done with it. A final document is read-only. */
-export function DocumentDetail({ id, canWrite, canFinalize }: { id: string; canWrite: boolean; canFinalize: boolean }) {
+export function DocumentDetail({ id, canWrite, canFinalize, timezone, canSeeHistory = false }: { id: string; canWrite: boolean; canFinalize: boolean; timezone: string; /** Owner and Admin (`audit.read`) see the change history. */ canSeeHistory?: boolean }) {
   const t = useT();
   const load = useLoad(() => api<Doc>('GET', `/api/documents/${id}`), [id]);
   const [editing, setEditing] = useState(false);
@@ -174,6 +175,7 @@ export function DocumentDetail({ id, canWrite, canFinalize }: { id: string; canW
           </ul>
         </Panel>
       )}
+      {canSeeHistory && <AuditTimeline entityType="document" entityId={id} timezone={timezone} />}
     </div>
   );
 }

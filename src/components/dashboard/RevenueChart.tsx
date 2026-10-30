@@ -30,7 +30,7 @@ export function RevenueChart({ series }: { series: FinanceSummary['series'] }) {
       <SectionHeading title={t('chartTitle')} intro={t('chartIntro')} />
       <ul className="m-0 flex list-none gap-4 p-0 text-sm text-ink-2">
         <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-sm bg-accent" />{t('legendReceived')}</li>
-        <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-sm bg-warm" />{t('legendInvoiced')}</li>
+        <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-sm bg-brand-node" />{t('legendInvoiced')}</li>
       </ul>
       {empty ? (
         <p className="m-0 py-10 text-center text-muted">{t('chartEmpty')}</p>
@@ -49,9 +49,9 @@ export function RevenueChart({ series }: { series: FinanceSummary['series'] }) {
               <ol aria-hidden="true" className="absolute inset-0 m-0 flex list-none items-end gap-1 p-0 sm:gap-3">
                 {series.map((s, i) => (
                   <li key={s.month} className="flex h-full min-w-0 flex-1 items-end justify-center gap-0.5 sm:gap-1">
-                    {([['received', s.received, 'bg-accent'], ['invoiced', s.invoiced, 'bg-warm']] as const).map(([k, v, color]) => (
+                    {([['received', s.received, 'bg-accent'], ['invoiced', s.invoiced, 'bg-brand-node']] as const).map(([k, v, color]) => (
                       <span key={k} className="relative flex h-full w-1/2 max-w-9 items-end">
-                        {i === last && v > 0 && <span className="absolute -top-5 left-1/2 -translate-x-1/2 font-mono text-[11px] whitespace-nowrap text-ink">{formatCompactRupiah(v)}</span>}
+                        {i === last && v > 0 && <span className="absolute left-1/2 mb-1 -translate-x-1/2 font-mono text-[11px] whitespace-nowrap text-ink" style={{ bottom: pct(v) }}>{formatCompactRupiah(v)}</span>}
                         <span className={cx('bar block w-full rounded-t', color, v === 0 && 'hidden')} style={{ height: pct(v), '--i': i } as React.CSSProperties} />
                       </span>
                     ))}

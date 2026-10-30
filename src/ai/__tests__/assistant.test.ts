@@ -77,9 +77,9 @@ describe('tools read this organization data and nothing else', () => {
   it('describe_capabilities lists only the tools the role has, so the assistant can explain itself from facts', async () => {
     const o = await makeOrg();
     const owner = await run(o.ownerCtx, 'describe_capabilities');
-    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'draft_invoice', 'draft_proposal', 'draft_task', 'finalize_document', 'find_similar_tasks', 'get_ai_usage', 'get_billing_summary', 'get_client_overview', 'get_flow', 'get_invoice', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_invoices', 'list_pending_approvals', 'list_products', 'list_recent_activity', 'list_setup_runs', 'list_subscriptions', 'list_tasks', 'list_team_members', 'plan_flow_run']);
+    expect(owner.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['convert_lead_to_client', 'describe_capabilities', 'draft_invoice', 'draft_proposal', 'draft_task', 'finalize_document', 'find_similar_tasks', 'get_ai_usage', 'get_billing_summary', 'get_business_summary', 'get_client_overview', 'get_code_status', 'get_flow', 'get_invoice', 'get_pipeline_summary', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_invoices', 'list_leads', 'list_pending_approvals', 'list_products', 'list_recent_activity', 'list_setup_runs', 'list_subscriptions', 'list_tasks', 'list_team_members', 'plan_flow_run']);
     const staff = await run(o.staffCtx, 'describe_capabilities');
-    expect(staff.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'draft_task', 'find_similar_tasks', 'get_client_overview', 'get_flow', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_pending_approvals', 'list_products', 'list_setup_runs', 'list_tasks']);
+    expect(staff.alat.map((t: { nama: string }) => t.nama).sort()).toEqual(['describe_capabilities', 'draft_task', 'find_similar_tasks', 'get_business_summary', 'get_client_overview', 'get_code_status', 'get_flow', 'get_pipeline_summary', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_leads', 'list_pending_approvals', 'list_products', 'list_setup_runs', 'list_tasks']);
   });
 
   it('formats money so a small spend never shows as zero', () => {
@@ -168,7 +168,7 @@ describe('askAssistant: answers only from this organization', () => {
     const o = await makeOrg();
     const fake = new FakeProvider({ chat: [callTools([{ name: 'describe_capabilities', args: {} }]), say('Saya bisa melihat persetujuan yang menunggu.')] });
     const reply = await ask(o.staffCtx, fake, 'Apa yang bisa kamu lakukan?');
-    expect(fake.chatCalls[0].tools?.map((t) => t.name).sort()).toEqual(['describe_capabilities', 'draft_task', 'find_similar_tasks', 'get_client_overview', 'get_flow', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_pending_approvals', 'list_products', 'list_setup_runs', 'list_tasks', 'report_out_of_scope']);
+    expect(fake.chatCalls[0].tools?.map((t) => t.name).sort()).toEqual(['describe_capabilities', 'draft_task', 'find_similar_tasks', 'get_business_summary', 'get_client_overview', 'get_code_status', 'get_flow', 'get_pipeline_summary', 'get_product_packages', 'get_setup_run', 'list_clients', 'list_connections', 'list_deployments', 'list_documents', 'list_flows', 'list_leads', 'list_pending_approvals', 'list_products', 'list_setup_runs', 'list_tasks', 'report_out_of_scope']);
     expect(reply.costMicroUsd).toBeNull();
     expect(reply.ok).toBe(true);
   });

@@ -170,6 +170,9 @@ export interface ClientDeploymentRow {
   installedVersion: string | null;
   status: 'active' | 'inactive';
   versionState: VersionState;
+  /** M17 readings, null until checked. */
+  behindBy: number | null;
+  uptimeState: 'up' | 'down' | null;
 }
 
 export interface TimelineEntry {
@@ -198,6 +201,8 @@ export async function getClient360(ctx: Ctx, id: string) {
       domain: deployments.domain,
       installedVersion: deployments.installedVersion,
       status: deployments.status,
+      behindBy: deployments.behindBy,
+      uptimeState: deployments.uptimeState,
     })
     .from(deployments)
     .innerJoin(products, and(eq(products.orgId, deployments.orgId), eq(products.id, deployments.productId)))

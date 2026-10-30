@@ -6,11 +6,12 @@ import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useT } from '../../lib/use-t';
 import { InvoiceStatusBadge } from '../billing/status';
+import { STAGE_LABEL } from '../pipeline/stages';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 
-const TOOL_LABEL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun' };
+const TOOL_LABEL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun', convert_lead_to_client: 'toolConvertLead' };
 
 /**
  * One risky action waiting for a person (BR-M08-04): what it is, the record it touches, the exact arguments that will
@@ -45,7 +46,16 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
       </header>
       <p className="m-0 text-sm text-ink-2">{approval.rationale}</p>
 
-      {target && (
+      {target?.kind === 'lead' && (
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className="text-muted">{t('apTarget')}</span>
+          <a href={`/app/lead/${target.leadId}`} className="font-medium text-ink no-underline hover:text-accent">{target.name}</a>
+          <Badge>{t(STAGE_LABEL[target.stage])}</Badge>
+          {target.estimatedValue != null && <span className="font-mono tabular-nums text-ink">{formatRupiah(target.estimatedValue)}</span>}
+          {target.converted && <Badge tone="warn">{t('apLeadConverted')}</Badge>}
+        </p>
+      )}
+      {target?.kind === 'invoice' && (
         <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <span className="text-muted">{t('apTarget')}</span>
           <a href={`/app/invoice/${target.invoiceId}`} className="font-medium text-ink no-underline hover:text-accent">{target.number ?? t('factDraftNumber')}</a>
@@ -56,7 +66,7 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
       )}
 
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium tracking-wide text-muted uppercase">{t('apArgs')}</span>
+        <span className="text-sm text-muted">{t('apArgs')}</span>
         <code className="block overflow-x-auto rounded bg-paper-2 px-3 py-2 font-mono text-xs whitespace-pre text-ink">{JSON.stringify(approval.args, null, 2)}</code>
       </div>
 

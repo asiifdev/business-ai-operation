@@ -14,6 +14,7 @@ import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import { ApprovalCard } from './ApprovalCard';
 import { FindingCard } from './FindingCard';
+import { Tabs } from '../ui/Tabs';
 
 type Data = { today: string; findings: Jsonify<Finding>[]; approvals: Jsonify<Approval>[] };
 
@@ -76,23 +77,7 @@ export function ActionCenterPage({ role, timezone }: { role: Role; timezone: str
       )}
 
       <section className="flex flex-col gap-4" aria-label={t('acFindingsTitle')}>
-        <div role="tablist" aria-label={t('acViews')} className="flex gap-1 border-b border-rule">
-          {VIEWS.map((item) => (
-            <button
-              key={item.id}
-              role="tab"
-              type="button"
-              aria-selected={view === item.id}
-              onClick={() => choose(item.id)}
-              className={
-                'inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium transition-colors duration-(--duration-micro) ' +
-                (view === item.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink')
-              }
-            >
-              {t(item.label)}
-            </button>
-          ))}
-        </div>
+        <Tabs label={t('acViews')} items={VIEWS.map((item) => ({ id: item.id, label: t(item.label) }))} value={view} onChange={choose} />
 
         {load.value.state === 'loading' && <Panel aria-busy="true"><Skeleton rows={5} /></Panel>}
         {load.value.state === 'error' && <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>}

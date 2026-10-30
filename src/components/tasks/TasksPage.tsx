@@ -17,6 +17,7 @@ import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
 import { KIND_LABEL, moveLabel, PRIORITY_LABEL, STATUS_LABEL, TaskBadges } from './labels';
 import { TaskForm, taskPayload } from './TaskForm';
+import { Tabs } from '../ui/Tabs';
 
 type Task = Jsonify<TaskRow>;
 type Data = { tasks: Task[]; summary: TaskSummary };
@@ -133,20 +134,13 @@ export function TasksPage() {
 
       <Panel className="flex flex-col gap-4" aria-busy={list.value.state === 'loading'}>
         <div className="flex flex-wrap items-end gap-3">
-          <div role="tablist" aria-label={t('taskViews')} className="mr-auto flex gap-1 border-b border-rule">
-            {(['list', 'board'] as const).map((v) => (
-              <button
-                key={v}
-                role="tab"
-                type="button"
-                aria-selected={f.view === v}
-                onClick={() => update({ view: v })}
-                className={'inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium transition-colors duration-(--duration-micro) ' + (f.view === v ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink')}
-              >
-                {t(v === 'list' ? 'taskViewList' : 'taskViewBoard')}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            label={t('taskViews')}
+            items={[{ id: 'list', label: t('taskViewList') }, { id: 'board', label: t('taskViewBoard') }] as const}
+            value={f.view}
+            onChange={(v) => update({ view: v })}
+            className="mr-auto"
+          />
           {f.view === 'list' && (
             <FormField label={t('taskFilterStatus')} className="w-40">
               <SelectMenu size="sm" searchable={false} value={f.status} onChange={(v) => update({ status: v })} includeAll={t('all')} options={TASK_STATUSES.map((s) => ({ value: s, label: t(STATUS_LABEL[s]) }))} />

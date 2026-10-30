@@ -19,10 +19,11 @@ import { recordAudit } from '../audit/service';
 import { listInvoices } from '../billing/invoices';
 import { userCtx, type Ctx } from '../ctx';
 import { DomainError } from '../errors';
+import { getBusinessSummary } from '../metrics/summary';
 import { can } from '../permissions';
 import { MAX_DURATION_MS } from '../meetings/rules';
 import { createMeeting } from '../meetings/service';
-import { getTaskSummary, listTasks } from '../tasks/service';
+import { listTasks } from '../tasks/service';
 import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
@@ -215,16 +216,20 @@ function helpText(locale: Locale): string {
 /** `/status`: the same counts as the web, through the same services, limited to what this person may see. */
 async function statusText(ctx: Ctx, locale: Locale): Promise<string> {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
-  const [findings, pending, tasks] = await Promise.all([countOpenFindings(ctx), listPendingApprovals(ctx), getTaskSummary(ctx)]);
+  // The business numbers come from the one summary the dashboard, the briefing and the assistant read (BR-M12-01).
+  const [findings, pending, summary] = await Promise.all([countOpenFindings(ctx), listPendingApprovals(ctx), getBusinessSummary(ctx)]);
+  const { tasks, pipeline, money } = summary;
   const lines = [
     `<b>${escapeHtml(t('tgStatusTitle'))}</b>`,
     `${escapeHtml(t('briefingOpenFindings'))}: ${findings}`,
     `${escapeHtml(t('briefingPending'))}: ${pending.filter((p) => p.canDecide).length}`,
-    `${escapeHtml(t('taskSumLate'))}: ${tasks.late} · ${escapeHtml(t('taskSumMine'))}: ${tasks.mine}`,
+    `${escapeHtml(t('tgStatusTasks'))}: ${tasks.open} · ${escapeHtml(t('taskSumLate'))}: ${tasks.late} · ${escapeHtml(t('taskSumMine'))}: ${tasks.mine}`,
+    `${escapeHtml(t('tgStatusPipeline'))}: ${formatRupiah(pipeline.value)}`,
   ];
-  if (can(ctx.role, 'billing.read')) {
-    const overdue = (await listInvoices(ctx, { overdue: true })).filter((i) => i.overdue);
-    lines.push(`${escapeHtml(t('tgOverdueCount'))}: ${overdue.length} · ${formatRupiah(overdue.reduce((sum, i) => sum + i.balance, 0))}`);
+  if (money) {
+    lines.push(`${escapeHtml(t('tgStatusMrr'))}: ${formatRupiah(money.mrr)}`);
+    lines.push(`${escapeHtml(t('tgStatusOutstanding'))}: ${money.outstanding.count} · ${formatRupiah(money.outstanding.amount)}`);
+    lines.push(`${escapeHtml(t('tgOverdueCount'))}: ${money.overdue.count} · ${formatRupiah(money.overdue.amount)}`);
   }
   return lines.join('\n');
 }

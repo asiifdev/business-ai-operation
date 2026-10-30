@@ -10,6 +10,8 @@ import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
+import { Steps, type StepStatus } from '../ui/Steps';
+import { toast } from '../ui/Toast';
 import { FlowCanvas, toCanvas, toolLabelKey, type Catalog, type NodeStatus } from './shared';
 
 type RunStatus = 'planned' | 'awaiting_approval' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
@@ -18,6 +20,7 @@ interface RunDto { id: string; status: RunStatus; error: string | null; summary:
 
 export const RUN_TONE: Record<RunStatus, 'neutral' | 'success' | 'warn' | 'danger' | 'accent'> = { planned: 'neutral', awaiting_approval: 'warn', running: 'accent', paused: 'warn', done: 'success', failed: 'danger', cancelled: 'neutral' };
 const LIVE: RunStatus[] = ['running'];
+const STEP_STATUS: Record<NodeStatus, StepStatus> = { pending: 'upcoming', running: 'current', done: 'done', failed: 'failed', skipped: 'skipped' };
 
 /** The diagram of a run with each step coloured by what happened, refreshed while it runs (BR-M17-22). */
 export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
@@ -40,12 +43,13 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
   const statuses = useMemo(() => Object.fromEntries((data?.steps ?? []).map((s) => [s.node, s.status])), [data]);
   const canvas = useMemo(() => (data?.definition && cat ? toCanvas(data.definition, cat, statuses) : null), [data, cat, statuses]);
 
-  async function act(path: string) {
+  async function act(path: 'retry' | 'cancel') {
     setBusy(true);
     setError(null);
     try {
       await api('POST', `/api/runs/${id}/${path}`, {});
       await run.reload();
+      toast(t(path === 'retry' ? 'toastRunRetried' : 'toastRunCancelled'));
     } catch (err) {
       setError(err);
     } finally {
@@ -87,6 +91,13 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
           <FlowCanvas label={t('flowCanvas')} nodes={canvas.nodes} edges={canvas.edges} readOnly onNodeClick={setPicked} />
         </ReactFlowProvider>
         <Panel className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto !p-3" aria-live="polite">
+          <Steps
+            label={t('runStepsTitle')}
+            steps={[...data.steps].sort((a, b) => a.position - b.position).map((s) => ({ id: s.node, label: t(toolLabelKey(s.tool)), status: STEP_STATUS[s.status], note: s.status === 'failed' || s.status === 'running' ? t(`flowStatus_${s.status}` as MessageKey) : undefined }))}
+            selected={step?.node ?? null}
+            onSelect={setPicked}
+          />
+          <hr className="m-0 border-rule" />
           {step ? (
             <>
               <div>

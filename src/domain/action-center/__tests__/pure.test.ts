@@ -128,3 +128,37 @@ describe('task_late (BR-M05-03 through the Action Center)', () => {
     expect(priorityOf('task_late', task({ daysLate: 300 }), '2027-08-21').score).toBe(aMonth); // capped at 30 days
   });
 });
+
+const lead = (over: Partial<Extract<FindingFacts, { kind: 'lead' }>> = {}): FindingFacts => ({
+  kind: 'lead',
+  leadId: 'lead-1',
+  name: 'Toko Sinar',
+  stage: 'proposal',
+  estimatedValue: 5_000_000,
+  stageChangedAt: '2026-10-01T03:00:00.000Z',
+  daysInStage: 20,
+  stagnantDays: 14,
+  stagnant: true,
+  assigneeName: null,
+  ...over,
+});
+
+describe('lead_stagnant (BR-M04-08 through the Action Center, D-073)', () => {
+  const since = '2026-10-01T03:00:00.000Z';
+  it('stays open while the lead sits in the same stage past the threshold, and closes once it moves or ends', () => {
+    expect(stillApplies('lead_stagnant', since, lead())).toBe(true);
+    // Moved to another stage: a new quiet spell starts, so this card closes.
+    expect(stillApplies('lead_stagnant', since, lead({ stage: 'negotiation', stageChangedAt: '2026-10-21T03:00:00.000Z', daysInStage: 0, stagnant: false }))).toBe(false);
+    expect(stillApplies('lead_stagnant', since, lead({ stage: 'won', stagnant: false }))).toBe(false);
+    expect(stillApplies('lead_stagnant', since, { kind: 'missing' })).toBe(false);
+  });
+
+  it('ranks a bigger deal and a longer silence higher, with a cap on the days', () => {
+    const base = priorityOf('lead_stagnant', lead(), '2026-10-21').score;
+    expect(priorityOf('lead_stagnant', lead({ estimatedValue: 50_000_000 }), '2026-10-21').score).toBeGreaterThan(base);
+    const longer = priorityOf('lead_stagnant', lead({ daysInStage: 40 }), '2026-11-10').score;
+    expect(longer).toBeGreaterThan(base);
+    expect(priorityOf('lead_stagnant', lead({ daysInStage: 400 }), '2027-11-10').score).toBe(priorityOf('lead_stagnant', lead({ daysInStage: 44 }), '2026-11-14').score); // capped at 30 days past
+    expect(priorityOf('lead_stagnant', lead({ estimatedValue: null }), '2026-10-21').level).toBe('low');
+  });
+});

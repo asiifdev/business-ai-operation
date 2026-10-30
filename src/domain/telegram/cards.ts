@@ -24,7 +24,7 @@ const RULE: Record<FindingRule, MessageKey> = {
   deployment_down: 'ruleDeploymentDown',
 };
 
-const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun' };
+const ACT_TOOL: Record<string, MessageKey> = { mark_invoice_sent: 'toolMarkInvoiceSent', finalize_document: 'toolFinalizeDocument', start_flow_run: 'toolStartFlowRun', convert_lead_to_client: 'toolConvertLead' };
 
 /** A link into the web app, or nothing when the app address is unknown. */
 const appLink = (appUrl: string | undefined, path: string | null, label: string) =>
@@ -33,7 +33,7 @@ const appLink = (appUrl: string | undefined, path: string | null, label: string)
 const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 /** The figures of a finding, one or two short lines. */
-export function findingFactsLines(locale: Locale, card: Pick<FindingCard, 'facts'>): string[] {
+export function findingFactsLines(locale: Locale, card: Pick<FindingCard, 'facts' | 'rule'>): string[] {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const f = card.facts;
   if (f.kind === 'invoice') {
@@ -47,6 +47,14 @@ export function findingFactsLines(locale: Locale, card: Pick<FindingCard, 'facts
   if (f.kind === 'task') {
     const parts = [f.dueDate ? `${t('fDueDate')}: ${formatDate(f.dueDate)}` : null, f.late ? t('tgDaysLate', { n: f.daysLate }) : null, `${t('factAssignee')}: ${escapeHtml(f.assigneeName ?? t('factNoAssignee'))}`];
     return [`${escapeHtml(f.title)}${f.clientName ? ` · ${escapeHtml(f.clientName)}` : ''}`, parts.filter(Boolean).join(' · ')];
+  }
+  if (f.kind === 'deployment') {
+    const detail = card.rule === 'deployment_down' ? t('uptimeDown') : f.behindBy != null ? `${t('factBehindBy')}: ${t('factCommits', { n: f.behindBy })}` : '';
+    return [`${escapeHtml(f.clientName)} · ${escapeHtml(f.productName)} (${escapeHtml(f.environment)})`, [f.domain ? escapeHtml(f.domain) : null, detail || null].filter(Boolean).join(' · ')];
+  }
+  if (f.kind === 'lead') {
+    const parts = [t('factDaysOfLimit', { n: f.daysInStage, limit: f.stagnantDays }), f.estimatedValue != null ? `${t('factEstimatedValue')}: ${formatRupiah(f.estimatedValue)}` : null, `${t('factAssignee')}: ${escapeHtml(f.assigneeName ?? t('factNoAssignee'))}`];
+    return [escapeHtml(f.name), parts.filter(Boolean).join(' · ')];
   }
   return [t('factMissing')];
 }
@@ -65,7 +73,8 @@ export function findingMessage(locale: Locale, card: Pick<FindingCard, 'rule' | 
 export function approvalMessage(locale: Locale, a: Pick<ApprovalCard, 'id' | 'tool' | 'rationale' | 'target' | 'expiresAt'>, timezoneFormat: (d: Date) => string): { text: string; keyboard: InlineKeyboard } {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const lines = [`<b>${escapeHtml(t('apTitle'))}</b>`, escapeHtml(ACT_TOOL[a.tool] ? t(ACT_TOOL[a.tool]) : a.tool), escapeHtml(cut(a.rationale, 600))];
-  if (a.target) lines.push(`${escapeHtml(a.target.number ?? t('factDraftNumber'))} · ${escapeHtml(a.target.clientName)} · ${formatRupiah(a.target.total)}`);
+  if (a.target?.kind === 'invoice') lines.push(`${escapeHtml(a.target.number ?? t('factDraftNumber'))} · ${escapeHtml(a.target.clientName)} · ${formatRupiah(a.target.total)}`);
+  if (a.target?.kind === 'lead') lines.push(`${escapeHtml(a.target.name)}${a.target.estimatedValue != null ? ` · ${formatRupiah(a.target.estimatedValue)}` : ''}`);
   lines.push('', `<i>${escapeHtml(t('apByAi'))}</i> · ${escapeHtml(t('apExpires', { when: timezoneFormat(a.expiresAt) }))}`);
   return {
     text: lines.join('\n'),

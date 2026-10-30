@@ -6,6 +6,7 @@ import { explainPendingFindings } from '../domain/action-center/explain';
 import { runActionCenterRules, sweepActionCenter } from '../domain/action-center/rules';
 import { runBillingRules } from '../domain/billing/rules';
 import { todayIn } from '../domain/billing/dates';
+import { runOperationChecks } from '../domain/operations/checks';
 import { notifyLinkedUsers } from '../domain/telegram/notify';
 import { type Clock, systemClock } from '../lib/clock';
 import { appUrl, telegramClient, telegramEnabled } from './telegram';
@@ -38,6 +39,8 @@ export interface TickHooks {
   sweep?: (orgId: string, now: Date) => Promise<unknown>;
   afterDaily?: (orgId: string, clock: Clock) => Promise<unknown>;
   briefing?: (orgId: string, clock: Clock) => Promise<unknown>;
+  /** Every tick, per organization, after the lock is released: uptime and code checks (M17), each deployment only when due. */
+  operations?: (orgId: string, clock: Clock) => Promise<unknown>;
   /** Every tick, per organization, after the lock is released: sends Telegram cards (network calls stay out of the lock). */
   notify?: (orgId: string, clock: Clock) => Promise<unknown>;
 }
@@ -92,6 +95,10 @@ export async function runTick(state: TickState, clock: Clock = systemClock, runR
     }
   }
   for (const orgId of seen) {
+    if (!hooks.operations) break;
+    await hooks.operations(orgId, clock).catch((err) => console.error(`ticker: operation checks failed for ${orgId}`, err instanceof Error ? err.message : err));
+  }
+  for (const orgId of seen) {
     if (!hooks.notify) break;
     await hooks.notify(orgId, clock).catch((err) => console.error(`ticker: notify failed for ${orgId}`, err instanceof Error ? err.message : err));
   }
@@ -111,6 +118,7 @@ export function ensureTicker(): void {
     sweep: sweepActionCenter,
     afterDaily: (orgId, clock) => explainPendingFindings(orgId, clock, AUTO_EXPLAIN_PER_DAY),
     briefing: (orgId, clock) => generateDailyBriefing(orgId, clock),
+    operations: (orgId, clock) => runOperationChecks(orgId, clock.now()),
     ...(telegramEnabled() ? { notify: (orgId: string, clock: Clock) => notifyLinkedUsers(orgId, { client: telegramClient(), clock, appUrl: appUrl() }) } : {}),
   };
   const tick = () => void runTick(state, systemClock, runDailyRules, hooks).catch((err) => console.error('ticker failed', err instanceof Error ? err.message : err));

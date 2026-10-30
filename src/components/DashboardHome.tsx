@@ -8,6 +8,8 @@ import type { MessageKey } from '../lib/i18n';
 import { BILLING_PAGES_READY } from '../lib/nav';
 import { formatUsd } from '../lib/usd';
 import { useT } from '../lib/use-t';
+import { AssistantMark, Composer, startersFor } from './assistant/Conversation';
+import { askAssistant } from './assistant/useAssistant';
 import { CalendarCard } from './dashboard/CalendarCard';
 import { Composition } from './dashboard/Composition';
 import { CountPill, MaybeLink, SectionHeading, Stat, stagger } from './dashboard/primitives';
@@ -29,12 +31,13 @@ interface Props {
 }
 
 /**
- * The home screen. For managers it leads with money (received, recurring, unpaid, overdue), then what is late, then the
- * trend, the calendar and the to-do list. Staff see the portfolio side only. Every number comes from the data.
+ * The home screen. It opens with a question to the assistant (chat-first), then for managers money (received, recurring,
+ * unpaid, overdue), what is late, the trend, the calendar and the to-do list. Staff see the portfolio side only. Every
+ * number comes from the data.
  */
 export function DashboardHome({ name, role, overview, timezone, calendar }: Props) {
   const t = useT();
-  const { counts, finance } = overview;
+  const { counts, finance, summary } = overview;
   const greet = overview.localHour < 11 ? 'greetMorning' : overview.localHour < 18 ? 'greetAfternoon' : 'greetEvening';
 
   return (
@@ -52,9 +55,11 @@ export function DashboardHome({ name, role, overview, timezone, calendar }: Prop
         }
       />
 
+      <AskBar role={role} />
+
       {finance ? (
         <section aria-label={t('financeTitle', { month: formatMonthYear(finance.month) })} className="flex flex-col gap-3">
-          <SectionHeading title={t('financeTitle', { month: formatMonthYear(finance.month) })} />
+          <SectionHeading title={t('financeTitle', { month: formatMonthYear(finance.month) })} aside={<ComputedAt at={summary.computedAt} timezone={timezone} />} />
           <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 xl:grid-cols-4">
             <Stat index={0} label={t('financeReceived')} value={formatRupiah(finance.receivedThisMonth)} note={t('financeReceivedNote')} tone="good" />
             <Stat index={1} label={t('financeMrr')} value={formatRupiah(finance.mrr)} note={t('financeMrrNote', { n: finance.activeSubscriptions })} />
@@ -70,12 +75,14 @@ export function DashboardHome({ name, role, overview, timezone, calendar }: Prop
         </section>
       ) : (
         <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 xl:grid-cols-4">
-          <Stat index={0} href="/app/klien" icon="clients" label={t('kpiClients')} value={formatNumber(counts.clients)} />
+          <Stat index={0} href="/app/klien" icon="clients" label={t('kpiClientsAll')} value={formatNumber(counts.clients)} />
           <Stat index={1} href="/app/produk" icon="products" label={t('kpiProducts')} value={formatNumber(counts.products)} />
           <Stat index={2} icon="pulse" label={t('kpiDeployments')} value={formatNumber(counts.deployments)} />
           <Stat index={3} href="/app/produk" icon="alert" label={t('kpiBehind')} value={formatNumber(counts.behind)} tone={counts.behind > 0 ? 'warn' : 'good'} note={counts.behind === 0 ? t('kpiBehindNone') : undefined} />
         </ul>
       )}
+
+      <Operations summary={summary} timezone={timezone} showTime={!finance} />
 
       {finance && finance.overdue.count > 0 && <OverdueBanner items={finance.overdue.items} count={finance.overdue.count} />}
 
@@ -113,8 +120,7 @@ export function DashboardHome({ name, role, overview, timezone, calendar }: Prop
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <AssistantCard />
+      <div className="grid gap-6 lg:grid-cols-2">
         {overview.ai && <AiCard ai={overview.ai} />}
         {overview.activity && <Recent entries={overview.activity.recent} timezone={timezone} />}
       </div>
@@ -247,18 +253,60 @@ function Attention({ rows, total }: { rows: DashboardOverview['behind']; total: 
   );
 }
 
-function AssistantCard() {
+/** When the headline numbers were computed (BR-M12-10). They are read live, so this is the moment the page was built. */
+function ComputedAt({ at, timezone }: { at: string; timezone: string }) {
   const t = useT();
+  return <span className="text-xs text-muted">{t('summaryComputedAt', { time: formatDateTime(at, timezone) })}</span>;
+}
+
+/**
+ * Pipeline, clients and tasks from the business summary (BRD-M12). Same numbers as the pipeline board, the task page,
+ * the briefing, Telegram /status and the assistant, because they all read `buildBusinessSummary`.
+ */
+function Operations({ summary, timezone, showTime }: { summary: DashboardOverview['summary']; timezone: string; showTime: boolean }) {
+  const t = useT();
+  const { pipeline, clients, tasks } = summary;
   return (
-    <Panel className="rise relative flex flex-col items-start overflow-hidden" style={stagger(12)}>
-      <div aria-hidden="true" className="pointer-events-none absolute -top-10 -right-10 size-40 rounded-full bg-accent/15 blur-2xl" />
-      <span className="grid size-9 place-items-center rounded-lg bg-accent text-accent-ink"><Icon name="assistant" className="size-5" /></span>
-      <h2 className="mt-3 mb-1 text-base font-semibold text-ink">{t('assistantCardTitle')}</h2>
-      <p className="m-0 text-sm text-muted">{t('dashboardAssistantHint')}</p>
-      <a href="/app/asisten" className={buttonClasses('primary', 'sm', 'mt-4')}>
-        {t('askAssistantCta')}
-        <Icon name="arrow" className="size-4" />
-      </a>
+    <section aria-label={t('opsTitle')} className="flex flex-col gap-3">
+      <SectionHeading title={t('opsTitle')} aside={showTime ? <ComputedAt at={summary.computedAt} timezone={timezone} /> : undefined} />
+      <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 xl:grid-cols-4">
+        <Stat index={4} href="/app/pipeline" label={t('pipelineValue')} value={formatRupiah(pipeline.value)} note={t('kpiPipelineNote', { n: pipeline.openLeads })} />
+        <Stat index={5} href="/app/klien" label={t('kpiClients')} value={formatNumber(clients.active)} note={t('kpiActiveClientsNote')} />
+        <Stat index={6} href="/app/task" label={t('kpiTasksOpen')} value={formatNumber(tasks.open)} note={t('kpiTasksMine', { n: tasks.mine })} />
+        <Stat index={7} href="/app/task" label={t('kpiTasksLate')} value={formatNumber(tasks.late)} note={tasks.late === 0 ? t('kpiTasksLateNone') : undefined} tone={tasks.late > 0 ? 'bad' : 'neutral'} />
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * The question bar at the top of the home screen. A question opens the assistant beside the page and asks it; the
+ * starters are the same ones the assistant offers, so a first-time user sees what it can do.
+ */
+function AskBar({ role }: { role: Role }) {
+  const t = useT();
+  const send = (question: string) => {
+    if (question.trim()) askAssistant(question);
+  };
+  return (
+    <Panel className="rise flex flex-col gap-3" style={stagger(0)} aria-label={t('askBarTitle')}>
+      <div className="flex items-center gap-3">
+        <AssistantMark />
+        <div className="min-w-0">
+          <h2 className="m-0 text-base font-semibold text-ink">{t('askBarTitle')}</h2>
+          <p className="m-0 text-sm text-muted">{t('dashboardAssistantHint')}</p>
+        </div>
+      </div>
+      <Composer busy={false} onSend={send} rows={1} />
+      <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label={t('assistantTryAsking')}>
+        {startersFor(role).slice(0, 4).map((key) => (
+          <li key={key}>
+            <button type="button" onClick={() => send(t(key))} className="min-h-8 rounded-full border border-rule bg-paper px-3 text-sm text-ink-2 transition-colors duration-(--duration-micro) hover:border-accent/50 hover:bg-accent-wash hover:text-ink active:bg-paper-3">
+              {t(key)}
+            </button>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }
@@ -290,7 +338,7 @@ function Recent({ entries, timezone }: { entries: NonNullable<DashboardOverview[
               <span aria-hidden="true" className={cx('relative mt-1.5 size-[11px] shrink-0 rounded-full border-2 border-key-face', e.actor === 'ai' ? 'bg-accent' : e.actor === 'system' ? 'bg-warm' : 'bg-rule-2')} />
               <div className="min-w-0">
                 <p className="m-0 text-sm text-ink">{AUDIT_LABEL[e.action] ? t(AUDIT_LABEL[e.action]) : e.action.replace('.', ' ').replace(/_/g, ' ')}</p>
-                <p className="m-0 text-xs text-muted">{t(ACTOR_KEY[e.actor])} · <time dateTime={e.at}>{formatDateTime(e.at, timezone)}</time></p>
+                <p className="m-0 flex flex-wrap gap-x-2 text-xs text-muted"><span>{t(ACTOR_KEY[e.actor])}</span><time dateTime={e.at}>{formatDateTime(e.at, timezone)}</time></p>
               </div>
             </li>
           ))}

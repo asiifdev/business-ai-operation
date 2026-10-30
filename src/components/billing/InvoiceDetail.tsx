@@ -13,10 +13,13 @@ import { MoneyInput } from '../forms/MoneyInput';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { Icon } from '../shell/Icon';
-import { Button, buttonClasses } from '../ui/Button';
+import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
+import { Dropdown } from '../ui/Dropdown';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
+import { toast } from '../ui/Toast';
+import { Steps, type StepItem } from '../ui/Steps';
 import * as tbl from '../ui/table';
 import { InvoiceForm } from './InvoiceForm';
 import { InvoiceStatusBadge, PAYMENT_METHODS } from './status';
@@ -30,7 +33,6 @@ export function InvoiceDetail({ id, timezone }: { id: string; timezone: string }
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
-  const [copied, setCopied] = useState(false);
 
   async function act(fn: () => Promise<unknown>, after?: () => void) {
     setBusy(true);
@@ -66,10 +68,9 @@ export function InvoiceDetail({ id, timezone }: { id: string; timezone: string }
   async function copyMessage() {
     try {
       await navigator.clipboard.writeText(message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      toast(t('copied'));
     } catch {
-      /* Clipboard can be blocked; the message is shown nowhere else, so say nothing rather than claim success. */
+      toast(t('copyBlocked'), 'danger');
     }
   }
 
@@ -86,11 +87,12 @@ export function InvoiceDetail({ id, timezone }: { id: string; timezone: string }
             <p className="mt-1 mb-0 text-muted"><a href={`/app/klien/${client.id}`} className="text-ink no-underline hover:text-accent">{client.name}</a></p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <a href={`/api/invoices/${id}/pdf`} download className={buttonClasses('secondary', 'sm')}>
-              <Icon name="invoice" className="size-4" />
-              {t('downloadPdf')}
-            </a>
-            {(sent || draft) && <Button size="sm" onClick={copyMessage}>{copied ? t('copied') : t('copyMessage')}</Button>}
+            <Dropdown
+              items={[
+                { id: 'pdf', href: `/api/invoices/${id}/pdf`, download: true, label: <><Icon name="invoice" className="size-4" />{t('downloadPdf')}</> },
+                ...(sent || draft ? [{ id: 'copy', onSelect: () => void copyMessage(), label: t('copyMessage') }] : []),
+              ]}
+            />
             {draft && <Button size="sm" onClick={() => setEditing(true)}>{t('edit')}</Button>}
             {draft && <ConfirmButton variant="primary" busy={busy} onConfirm={() => act(() => api('POST', `/api/invoices/${id}/send`))}>{t('markSent')}</ConfirmButton>}
             {draft && <ConfirmButton variant="danger" busy={busy} onConfirm={() => act(() => api('DELETE', `/api/invoices/${id}`), () => window.location.assign('/app/invoice'))}>{t('deleteDraft')}</ConfirmButton>}
@@ -100,6 +102,7 @@ export function InvoiceDetail({ id, timezone }: { id: string; timezone: string }
         {!draft && invoice.status !== 'void' && <p className="m-0 text-sm text-muted">{t('invoiceLocked')}</p>}
         {invoice.status === 'void' && <p className="m-0 text-sm text-danger">{t('invoiceVoidReason', { reason: invoice.voidReason ?? '' })}</p>}
         {actionError ? <p role="alert" className="m-0 text-danger">{t(errorKey(actionError))}</p> : null}
+        {invoice.status !== 'void' && <Steps orientation="horizontal" label={t('invLifecycle')} steps={lifecycle(invoice.status, derived.overdue, t)} className="max-w-xl pt-2" />}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -287,4 +290,20 @@ function CancelForm({ onCancel, busy, blocked }: { onCancel: (reason: string) =>
       </div>
     </form>
   );
+}
+
+/**
+ * Where the invoice is in its life: draft, sent, paid. Read from the stored status only (code decides it, never the AI);
+ * an overdue sent invoice says so under the step. A voided invoice shows its reason instead.
+ */
+function lifecycle(status: 'draft' | 'sent' | 'paid' | 'void', overdue: boolean, t: ReturnType<typeof useT>): StepItem[] {
+  const order = ['draft', 'sent', 'paid'] as const;
+  const at = order.indexOf(status as (typeof order)[number]);
+  const label = { draft: t('invStatusDraft'), sent: t('invStatusSent'), paid: t('invStatusPaid') };
+  return order.map((s, i) => ({
+    id: s,
+    label: label[s],
+    status: i < at || (s === 'paid' && status === 'paid') ? 'done' : i === at ? 'current' : 'upcoming',
+    note: i === at && overdue ? t('invOverdueStep') : undefined,
+  }));
 }

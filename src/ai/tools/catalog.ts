@@ -9,6 +9,9 @@ import { getFlow, getRun, listFlows, listRuns, planRun } from '../../domain/flow
 import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
+import { getBusinessSummary } from '../../domain/metrics/summary';
+import { getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
+import { STAGES } from '../../domain/pipeline/stages';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
 import { listDeployments } from '../../domain/portfolio/deployments';
 import { getProduct, listProducts } from '../../domain/portfolio/products';
@@ -17,7 +20,7 @@ import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../d
 import { formatRupiah } from '../../lib/format';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
-import { finalizeDocumentTool } from './actions';
+import { convertLeadToClientTool, finalizeDocumentTool } from './actions';
 import { ToolRegistry, defineTool } from './registry';
 
 export { formatUsd };
@@ -247,6 +250,37 @@ export function buildAssistantRegistry(): ToolRegistry {
     }),
   );
 
+  // Business summary (M12): the headline numbers from the one service the dashboard, briefing and Telegram read
+  // (BR-M12-01). Everyone may ask; the money part is only there for those who see the financial dashboard.
+  registry.register(
+    defineTool({
+      name: 'get_business_summary',
+      description: 'Shows the business at a glance: monthly recurring revenue, unpaid and overdue totals (managers only), open pipeline value, clients with an active subscription, and open and late tasks, with the time the numbers were computed. Drafts are not counted.',
+      tier: 'read',
+      permission: 'dashboard.read_nonfinancial',
+      args: z.object({}),
+      run: async (ctx) => {
+        const s = await getBusinessSummary(ctx);
+        return {
+          tanggal: s.today,
+          dihitungPada: s.computedAt,
+          ...(s.money
+            ? {
+                pendapatanBerulangPerBulan: money(s.money.mrr),
+                langgananAktif: s.money.activeSubscriptions,
+                belumDibayar: { jumlahInvoice: s.money.outstanding.count, total: money(s.money.outstanding.amount) },
+                lewatJatuhTempo: { jumlahInvoice: s.money.overdue.count, total: money(s.money.overdue.amount) },
+                diterimaBulanIni: money(s.money.receivedThisMonth),
+              }
+            : { keuangan: 'tidak ditampilkan untuk peran ini' }),
+          pipeline: { nilaiTerbuka: money(s.pipeline.value), leadTerbuka: s.pipeline.openLeads, leadStagnan: s.pipeline.stagnant },
+          klienDenganLanggananAktif: s.clients.active,
+          tugas: { terbuka: s.tasks.open, terlambat: s.tasks.late, untukSaya: s.tasks.mine },
+        };
+      },
+    }),
+  );
+
   registry.register(
     defineTool({
       name: 'list_invoices',
@@ -335,6 +369,57 @@ export function buildAssistantRegistry(): ToolRegistry {
   );
 
   // Tasks (M05): reading is open to everyone; the assistant can only DRAFT a task, which a person accepts or discards.
+  // Pipeline (M04): read-only lists for the assistant. Moving a stage stays with people (BRD-M04 section 2); turning a won
+  // lead into a client is the `act` tool `convert_lead_to_client`, which waits for approval.
+  const stageLabel = { new: 'baru', exploring: 'penjajakan', proposal: 'proposal', negotiation: 'negosiasi', won: 'menang', lost: 'kalah' } as const;
+
+  registry.register(
+    defineTool({
+      name: 'list_leads',
+      description: 'Lists sales leads with their id, stage (new, exploring, proposal, negotiation, won, lost), estimated value, days in the stage, whether they are stagnant, whether they already became a client, and AI drafts waiting for review. Can filter by stage. Archived leads are left out.',
+      tier: 'read',
+      permission: 'lead.read',
+      args: z.object({ stage: z.enum(STAGES).optional() }),
+      run: async (ctx, args) => {
+        const rows = await listLeads(ctx, { stage: args.stage });
+        return {
+          jumlah: rows.length,
+          dipotong: rows.length > LIMIT,
+          lead: rows.slice(0, LIMIT).map((l) => ({
+            id: l.id,
+            nama: l.name,
+            kontak: l.contactName,
+            tahap: stageLabel[l.stage],
+            nilaiEstimasi: l.estimatedValue != null ? money(l.estimatedValue) : 'belum diisi',
+            hariDiTahapIni: l.daysInStage,
+            stagnan: l.isStagnant,
+            sudahJadiKlien: l.convertedClientId !== null,
+            drafAI: l.isDraft,
+          })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_pipeline_summary',
+      description: 'Shows the sales pipeline: the number of leads and their estimated value per open stage, the total open pipeline value, how many leads are stagnant and how many AI drafts wait for review. Drafts are not counted in the value.',
+      tier: 'read',
+      permission: 'lead.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const s = await getPipelineSummary(ctx);
+        return {
+          nilaiPipelineTerbuka: money(s.value),
+          perTahap: s.perStage.map((x) => ({ tahap: stageLabel[x.stage], jumlahLead: x.count, nilai: money(x.value) })),
+          leadStagnan: s.stagnant,
+          drafAI: s.drafts,
+        };
+      },
+    }),
+  );
+
   const taskKind = { task: 'tugas', bug: 'bug', feature: 'fitur', maintenance: 'maintenance' } as const;
   const taskStatus = { open: 'terbuka', in_progress: 'dikerjakan', done: 'selesai' } as const;
   const taskPriority = { low: 'rendah', medium: 'sedang', high: 'tinggi', urgent: 'mendesak' } as const;
@@ -455,6 +540,29 @@ export function buildAssistantRegistry(): ToolRegistry {
   );
 
   registry.register(finalizeDocumentTool);
+  registry.register(convertLeadToClientTool);
+
+  // Operations (M17): what the scheduled checks last saw. Read only; an update is a flow run that waits for approval.
+  registry.register(
+    defineTool({
+      name: 'get_code_status',
+      description: 'Shows the deployments whose installed code is behind the tip of their branch (with the number of commits) and the ones whose site is down, as last seen by the scheduled checks, plus how many were checked. Nothing is changed.',
+      tier: 'read',
+      permission: 'setup.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const rows = (await listDeployments(ctx)).filter((d) => d.status === 'active');
+        const label = (d: (typeof rows)[number]) => ({ id: d.id, klien: d.clientName, produk: d.productName, lingkungan: d.environment, domain: d.domain });
+        return {
+          deploymentAktif: rows.length,
+          kodeDicek: rows.filter((d) => d.behindBy !== null).length,
+          situsDicek: rows.filter((d) => d.uptimeState !== null).length,
+          kodeTertinggal: rows.filter((d) => (d.behindBy ?? 0) > 0).map((d) => ({ ...label(d), tertinggalCommit: d.behindBy })),
+          situsMati: rows.filter((d) => d.uptimeState === 'down').map(label),
+        };
+      },
+    }),
+  );
 
   registry.register(
     defineTool({

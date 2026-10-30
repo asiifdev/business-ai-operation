@@ -1,11 +1,12 @@
 ---
 import AppShell from '../../../layouts/AppShell.astro';
 import { TaskDetail } from '../../../components/tasks/TaskDetail';
+import { can } from '../../../domain/permissions';
 
 export const prerender = false;
 const { id } = Astro.params;
 ---
 
 <AppShell title="Tugas" current="tasks">
-  <TaskDetail client:load id={id!} timezone={Astro.locals.timezone} />
+  <TaskDetail client:load id={id!} timezone={Astro.locals.timezone} canSeeHistory={can(Astro.locals.user!.role, 'audit.read')} />
 </AppShell>

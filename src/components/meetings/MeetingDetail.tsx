@@ -1,3 +1,4 @@
+import { AuditTimeline } from '../audit/AuditTimeline';
 import { useEffect, useState } from 'react';
 import { stamp } from '../../domain/meetings/rules';
 import type { MeetingDetail as Detail } from '../../domain/meetings/service';
@@ -20,7 +21,7 @@ type Meeting = Jsonify<Detail>;
 const POLL_MS = 4000;
 
 /** One recording: progress while it is processed, then the transcript by speaker, the minutes and the drafts (PRD M09). */
-export function MeetingDetail({ id, timezone }: { id: string; timezone: string }) {
+export function MeetingDetail({ id, timezone, canSeeHistory = false }: { id: string; timezone: string; /** Owner and Admin (`audit.read`) see the change history. */ canSeeHistory?: boolean }) {
   const t = useT();
   const load = useLoad(() => api<Meeting>('GET', `/api/meetings/${id}`), [id]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -125,6 +126,7 @@ export function MeetingDetail({ id, timezone }: { id: string; timezone: string }
           <ConfirmButton variant="danger" busy={busy === 'delete'} disabled={busy !== null} onConfirm={() => act('delete', () => api('DELETE', `/api/meetings/${id}/content`))}>{t('mtDeleteContent')}</ConfirmButton>
         </Panel>
       )}
+      {canSeeHistory && <AuditTimeline entityType="meeting" entityId={id} timezone={timezone} />}
     </div>
   );
 }

@@ -128,6 +128,9 @@ export interface DeploymentRow {
   productVersion: string | null;
   status: 'active' | 'inactive';
   versionState: VersionState;
+  /** M17 readings: commits behind the branch tip (from GitHub) and the site's state (from the uptime check). Null until checked. */
+  behindBy: number | null;
+  uptimeState: 'up' | 'down' | null;
 }
 
 /** Deployments with the derived "behind" state (BR-M02-05): computed on read, never stored. */
@@ -146,6 +149,8 @@ export async function listDeployments(ctx: Ctx, filter: { clientId?: string; pro
       installedVersion: deployments.installedVersion,
       productVersion: products.currentVersion,
       status: deployments.status,
+      behindBy: deployments.behindBy,
+      uptimeState: deployments.uptimeState,
     })
     .from(deployments)
     .innerJoin(clients, and(eq(clients.orgId, deployments.orgId), eq(clients.id, deployments.clientId)))

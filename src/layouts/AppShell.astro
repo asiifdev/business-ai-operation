@@ -18,17 +18,18 @@ const today = todayIn(Astro.locals.timezone, new Date());
 ---
 
 <Base title={title}>
+  <div aria-hidden="true" class="fixed inset-0 -z-10 hidden bg-frame lg:block"></div>
   <AppChrome client:load organizationName={organizationName} userName={user.name} role={user.role} current={current} today={today} counts={counts} />
   <main
     id="content"
     class:list={[
-      'lg:pl-64 lg:pt-14',
+      'bg-paper lg:mt-14 lg:mr-2 lg:mb-2 lg:ml-64 lg:rounded-card lg:border lg:border-rule lg:shadow-card',
       fill
-        ? 'flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-3.5rem-env(safe-area-inset-bottom))] flex-col lg:h-dvh'
-        : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0',
+        ? 'flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-3.5rem-env(safe-area-inset-bottom))] flex-col lg:h-[calc(100dvh-4rem)] lg:overflow-hidden'
+        : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:min-h-[calc(100dvh-4rem)] lg:pb-0',
     ]}
   >
-    <div class:list={['wrap min-h-0 py-5 lg:py-8', fill && 'flex w-full flex-1 flex-col']}>
+    <div class:list={['mx-auto min-h-0 w-full max-w-[80rem] px-4 py-5 sm:px-6 lg:px-8 lg:py-7', fill && 'flex flex-1 flex-col']}>
       <slot />
     </div>
   </main>

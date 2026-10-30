@@ -14,6 +14,12 @@ import { RadioGroup } from './forms/RadioGroup';
 import { Toggle } from './forms/Toggle';
 import { FileInput } from './forms/FileInput';
 import { formatRupiah } from '../lib/format';
+import { DataTable } from './ui/DataTable';
+import { Dropdown } from './ui/Dropdown';
+import { Modal } from './ui/Modal';
+import { Tabs } from './ui/Tabs';
+import { Steps } from './ui/Steps';
+import { toast, Toaster } from './ui/Toast';
 
 const statuses = [
   { value: 'lead', label: 'Lead' },
@@ -37,6 +43,8 @@ export function ComponentGallery() {
   const [date, setDate] = useState('2026-11-04');
   const [status, setStatus] = useState('proposal');
   const [pct, setPct] = useState(35);
+  const [dialog, setDialog] = useState(false);
+  const [tab, setTab] = useState<'open' | 'snoozed' | 'closed'>('open');
 
   useEffect(() => {
     const id = setInterval(() => setPct((p) => (p >= 100 ? 0 : p + 5)), 600);
@@ -183,6 +191,63 @@ export function ComponentGallery() {
         <FormField label="Logo" help="PNG or JPEG, up to 2 MB.">
           <FileInput accept={['image/png', 'image/jpeg']} maxSize={2 * 1024 * 1024} multiple maxFiles={3} />
         </FormField>
+      </Section>
+
+      <Section title="Tabs, menu and table" note="Tabs: arrow keys move between views. Menu: arrow keys, Escape returns to the button. Table: search, sort by a column, pages; the state lives in the URL.">
+        <div className="flex flex-col gap-4 md:col-span-2">
+          <div className="flex items-end justify-between gap-3">
+            <Tabs label="Findings" value={tab} onChange={setTab} items={[{ id: 'open', label: 'Open', count: 3 }, { id: 'snoozed', label: 'Snoozed', count: 1 }, { id: 'closed', label: 'Closed' }]} className="flex-1" />
+            <Dropdown items={[{ id: 'pdf', href: '#', label: 'Download PDF' }, { id: 'copy', onSelect: () => toast('Copied.'), label: 'Copy the reminder' }, { id: 'off', onSelect: () => undefined, label: 'Archive (not allowed)', disabled: true }]} />
+          </div>
+          <DataTable
+            label="Invoices"
+            rows={clients.map((c, i) => ({ id: c.value, client: c.label, total: (i + 1) * 350_000, due: `2026-11-${String(10 + i).padStart(2, '0')}` }))}
+            rowKey={(r) => r.id}
+            search={(r) => r.client}
+            columns={[
+              { id: 'client', header: 'Client', sortValue: (r) => r.client, cell: (r) => r.client },
+              { id: 'due', header: 'Due', sortValue: (r) => r.due, cell: (r) => r.due },
+              { id: 'total', header: 'Total', align: 'right', sortValue: (r) => r.total, cell: (r) => <span className="font-mono tabular-nums">{formatRupiah(r.total)}</span> },
+            ]}
+          />
+        </div>
+      </Section>
+
+      <Section title="Step progress" note="Status comes from the data. The mark's shape and a hidden word say the state, never colour alone.">
+        <Steps
+          label="Setup steps"
+          steps={[
+            { id: 'repo', label: 'Clone the repository', status: 'done', note: '12 s' },
+            { id: 'env', label: 'Write the environment file', status: 'done' },
+            { id: 'build', label: 'Build the app', status: 'failed', note: 'npm exited with code 1' },
+            { id: 'deploy', label: 'Start the service', status: 'upcoming' },
+          ]}
+        />
+        <Steps
+          orientation="horizontal"
+          label="Invoice progress"
+          steps={[
+            { id: 'draft', label: 'Draft', status: 'done' },
+            { id: 'sent', label: 'Sent', status: 'current', note: 'Past the due date' },
+            { id: 'paid', label: 'Paid', status: 'upcoming' },
+          ]}
+        />
+      </Section>
+
+      <Section title="Dialog and toast" note="Focus moves into the dialog and back on close. Escape, the backdrop and the close button all close it.">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setDialog(true)}>Open a dialog</Button>
+          <Button onClick={() => toast('Saved. The page shows the new state as well.')}>Show a toast</Button>
+          <Button variant="danger" onClick={() => toast('The server did not answer. Try again.', 'danger')}>Show an error toast</Button>
+        </div>
+        <Modal open={dialog} onClose={() => setDialog(false)} title="Archive this client?">
+          <p className="mt-0 text-ink">Archived clients keep their invoices and history but leave the active lists.</p>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setDialog(false)}>Keep</Button>
+            <Button variant="primary" onClick={() => { setDialog(false); toast('Client archived.'); }}>Archive</Button>
+          </div>
+        </Modal>
+        <Toaster />
       </Section>
     </main>
   );

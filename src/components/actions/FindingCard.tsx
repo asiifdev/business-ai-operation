@@ -8,6 +8,7 @@ import { getLocale, type MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useT } from '../../lib/use-t';
 import { InvoiceStatusBadge } from '../billing/status';
+import { STAGE_LABEL } from '../pipeline/stages';
 import { KIND_LABEL, TaskBadges } from '../tasks/labels';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
@@ -35,7 +36,7 @@ const PRIORITY: Record<PriorityLevel, { label: MessageKey; tone: 'danger' | 'war
 };
 const CLOSED_LABEL = { handled: 'findStatusHandled', ignored: 'findStatusIgnored', auto_resolved: 'findStatusAuto' } as const;
 const SNOOZE_DAYS = ['1', '3', '7'] as const;
-const OPEN_LABEL = { invoice: 'openInvoice', subscription: 'openSubscription', task: 'openTask', missing: 'openInvoice' } as const satisfies Record<Card['facts']['kind'], MessageKey>;
+const OPEN_LABEL = { invoice: 'openInvoice', subscription: 'openSubscription', task: 'openTask', lead: 'openLead', deployment: 'openClient', missing: 'openInvoice' } as const satisfies Record<Card['facts']['kind'], MessageKey>;
 
 /**
  * One finding (BRD-M08 section 4): the facts read live from the record, the AI explanation saved once and labelled, the
@@ -105,7 +106,7 @@ export function FindingCard({ finding, timezone, onChanged }: { finding: Card; t
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h3 className="m-0 text-lg font-semibold text-ink">{t(RULE_LABEL[card.rule])}</h3>
-          <Facts card={card} />
+          <Facts card={card} timezone={timezone} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {open && <Badge tone={prio.tone}>{t(prio.label)}</Badge>}
@@ -183,7 +184,7 @@ export function FindingCard({ finding, timezone, onChanged }: { finding: Card; t
 }
 
 /** The figures of the card, straight from the record (BR-M08-03). */
-function Facts({ card }: { card: Card }) {
+function Facts({ card, timezone }: { card: Card; timezone: string }) {
   const t = useT();
   const f = card.facts;
   if (f.kind === 'missing') return <p className="m-0 text-sm text-muted">{t('factMissing')}</p>;
@@ -198,6 +199,39 @@ function Facts({ card }: { card: Card }) {
         <dl className="m-0 flex flex-wrap gap-x-5 gap-y-1">
           <Fact label={t('fKind')} value={t(KIND_LABEL[f.taskKind])} mono={false} />
           {f.dueDate && <Fact label={t('fDueDate')} value={formatDate(f.dueDate)} />}
+          <Fact label={t('factAssignee')} value={f.assigneeName ?? t('factNoAssignee')} mono={false} />
+        </dl>
+      </div>
+    );
+  }
+  if (f.kind === 'deployment') {
+    return (
+      <div className="flex flex-col gap-1 text-sm">
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a href={`/app/klien/${f.clientId}`} className="font-medium text-ink no-underline hover:text-accent">{f.clientName}</a>
+          <span className="text-ink-2">{f.productName}</span>
+          <Badge>{f.environment}</Badge>
+          {card.rule === 'deployment_down' && <Badge tone={f.uptimeState === 'down' ? 'danger' : 'success'}>{t(f.uptimeState === 'down' ? 'uptimeDown' : 'uptimeUp')}</Badge>}
+        </p>
+        <dl className="m-0 flex flex-wrap gap-x-5 gap-y-1">
+          {f.domain && <Fact label={t('colDomain')} value={f.domain} />}
+          {card.rule === 'deployment_outdated' && f.behindBy != null && <Fact label={t('factBehindBy')} value={t('factCommits', { n: f.behindBy })} mono={false} />}
+          {card.rule === 'deployment_outdated' && f.branch && <Fact label={t('factBranch')} value={f.branch} />}
+          {card.rule === 'deployment_down' && f.uptimeChangedAt && <Fact label={t('factDownSince')} value={formatDateTime(f.uptimeChangedAt, timezone)} mono={false} />}
+        </dl>
+      </div>
+    );
+  }
+  if (f.kind === 'lead') {
+    return (
+      <div className="flex flex-col gap-1 text-sm">
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a href={`/app/lead/${f.leadId}`} className="font-medium text-ink no-underline hover:text-accent [overflow-wrap:anywhere]">{f.name}</a>
+          <Badge>{t(STAGE_LABEL[f.stage])}</Badge>
+        </p>
+        <dl className="m-0 flex flex-wrap gap-x-5 gap-y-1">
+          <Fact label={t('factDaysInStage')} value={t('factDaysOfLimit', { n: f.daysInStage, limit: f.stagnantDays })} mono={false} />
+          {f.estimatedValue != null && <Fact label={t('factEstimatedValue')} value={formatRupiah(f.estimatedValue)} />}
           <Fact label={t('factAssignee')} value={f.assigneeName ?? t('factNoAssignee')} mono={false} />
         </dl>
       </div>

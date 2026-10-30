@@ -8,6 +8,7 @@ import { getAiOverview } from '../ai/service';
 import { can } from '../permissions';
 import { listDeployments } from '../portfolio/deployments';
 import { getFinanceSummary, type FinanceSummary } from '../billing/summary';
+import { buildBusinessSummary, type BusinessSummary } from '../metrics/summary';
 
 /** The few fields a dashboard row needs from an invoice. */
 export type InvoiceBriefLike = { id: string; number: string | null; clientId: string; clientName: string; dueDate: string; balance: number; daysOverdue: number };
@@ -20,6 +21,8 @@ export interface DashboardOverview {
   behind: { id: string; clientId: string; clientName: string; productName: string; environment: string; installedVersion: string | null; productVersion: string | null }[];
   /** How the active and inactive deployments split by version state, for the composition bar. */
   composition: { current: number; behind: number; unknown: number; inactive: number };
+  /** The headline numbers (BRD-M12), from the one summary service the briefing, Telegram and the assistant read too. */
+  summary: BusinessSummary;
   /** Managers only: money figures, overdue and due-soon lists. */
   finance: FinanceSummary | null;
   /** Managers only. Null for staff, who do not see financial or approval figures. */
@@ -53,7 +56,7 @@ export async function getDashboardOverview(ctx: Ctx): Promise<DashboardOverview>
     else if (x.versionState === 'unknown') composition.unknown++;
     else composition.current++;
   }
-  const base: DashboardOverview = {
+  const base: Omit<DashboardOverview, 'summary'> = {
     localHour: Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(ctx.clock.now())) % 24,
     counts: { clients: c.n, products: p.n, deployments: d.n, behind: behindAll.length },
     behind: behindAll.slice(0, 6).map((x) => ({ id: x.id, clientId: x.clientId, clientName: x.clientName, productName: x.productName, environment: x.environment, installedVersion: x.installedVersion, productVersion: x.productVersion })),
@@ -63,7 +66,7 @@ export async function getDashboardOverview(ctx: Ctx): Promise<DashboardOverview>
     ai: null,
     activity: null,
   };
-  if (!manager) return base;
+  if (!manager) return { ...base, summary: await buildBusinessSummary(ctx) };
 
   const today = todayIn(tz, ctx.clock.now());
   const first = addDays(today, -(ACTIVITY_DAYS - 1));
@@ -81,6 +84,7 @@ export async function getDashboardOverview(ctx: Ctx): Promise<DashboardOverview>
   const byDay = new Map(perDay.map((r) => [r.day, r.n]));
   return {
     ...base,
+    summary: await buildBusinessSummary(ctx, finance),
     finance,
     pendingApprovals: pending.n,
     ai: {

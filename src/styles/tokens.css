@@ -1,33 +1,41 @@
-/* Hallmark · component: form-controls · genre: modern-minimal · theme: Cobalt (provisional, see DECISIONS D-021)
+/* Hallmark · component: app system · genre: modern-minimal · theme: Orbyte logo (brand, D-071) · redesign: restyle
+ * palette: neutral chrome tinted toward the logo's navy, one cobalt accent (the ring), mint for the assistant (the nodes)
  * states: default · hover · focus · active · disabled · loading · error · success
  * Every colour and font in components comes from these tokens (BR-M14-01).
  */
 @theme {
-  --color-paper: oklch(97.5% 0.007 95);
-  --color-paper-2: oklch(95.5% 0.01 95);
-  --color-paper-3: oklch(92.5% 0.013 95);
-  --color-ink: oklch(24% 0.03 262);
-  --color-ink-2: oklch(38% 0.025 260);
-  --color-muted: oklch(47% 0.02 258);
-  --color-rule: oklch(90% 0.01 95);
-  --color-rule-2: oklch(80% 0.014 95);
-  --color-accent: oklch(52% 0.19 258);
-  --color-accent-ink: oklch(98.5% 0.005 95);
-  --color-accent-wash: oklch(95% 0.028 256);
-  --color-accent-edge: oklch(39% 0.16 260);
-  --color-focus: oklch(52% 0.19 258);
-  --color-danger: oklch(50% 0.19 27);
-  --color-danger-wash: oklch(96% 0.025 27);
-  --color-success: oklch(48% 0.12 155);
-  --color-key-face: oklch(99.5% 0.003 95);
-  --color-warm: oklch(65% 0.15 55); /* dekorasi: lencana, ikon, garis (kontras ~3:1) */
-  --color-warm-ink: oklch(48% 0.14 50); /* varian aman untuk teks (>= 4.5:1) */
-  --color-key-edge: oklch(80% 0.016 95);
+  /* Content sheet (paper), quiet fills (paper-2/3), white raised surfaces (key-face), and the app frame around them. */
+  --color-paper: #fcfcfd;
+  --color-paper-2: #f3f5f8;
+  --color-paper-3: #e8ebf1;
+  --color-frame: #eef1f5;
+  --color-ink: #0b1324;
+  --color-ink-2: #2f3a50;
+  --color-muted: #5b6579;
+  --color-rule: #e3e7ee;
+  --color-rule-2: #cdd3de;
+  /* Cobalt from the logo ring: the primary action and the current selection. */
+  --color-accent: #2554d0;
+  --color-accent-ink: #ffffff;
+  --color-accent-wash: #ebf0fc;
+  --color-accent-edge: #1f4f9e;
+  --color-focus: #2554d0;
+  /* Mint from the logo nodes: the assistant and AI-made things. Decoration as `mint`, text as `mint-ink`. */
+  --color-mint: #8bd9d1;
+  --color-mint-ink: #0b7068;
+  --color-mint-wash: #e6f6f4;
+  --color-danger: #c42b2b;
+  --color-danger-wash: #fcebea;
+  --color-success: #17784a;
+  --color-key-face: #ffffff;
+  --color-warm: #bf7606; /* amber: warnings as marks and lines (>= 3:1) */
+  --color-warm-ink: #965a04; /* amber safe for text (>= 4.5:1) */
+  --color-key-edge: #cdd3de;
   /* Logo colours, contrast-corrected per theme (>= 3:1 against paper; checked by tests/brand-contrast.test.ts). */
   --color-brand-ring: #1f4f9e;
   --color-brand-node: #0e8a82;
-  /* Dark band surface (closing call to action). Same in both themes, so its text colours are fixed too. */
-  --color-band: #061331;
+  /* Dark band surface (closing call to action): the logo's navy. Same in both themes, so its text colours are fixed too. */
+  --color-band: #030b1b;
   --color-band-ink: #f4f7ff;
   --color-band-muted: #b9c6e4;
   --color-band-accent: #8bd9d1;
@@ -38,52 +46,57 @@
   --font-wordmark: "Krona One", "Familjen Grotesk Variable", system-ui, sans-serif;
 
   --radius-card: 12px;
-  --radius-input: 6px;
+  --radius-input: 8px;
 
-  --shadow-card: 0 1px 2px oklch(21% 0.028 262 / 0.06);
-  --shadow-pop: 0 8px 24px -8px oklch(21% 0.028 262 / 0.28), 0 1px 2px oklch(21% 0.028 262 / 0.08);
+  --shadow-card: 0 1px 2px oklch(20% 0.03 262 / 0.05);
+  --shadow-pop: 0 16px 36px -14px oklch(20% 0.04 262 / 0.3), 0 1px 2px oklch(20% 0.03 262 / 0.08);
   --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.9);
-  /* Flat, modern buttons and surfaces for the signed-in app: a hairline ring plus a soft drop, no chunky edge. */
-  --shadow-btn: 0 1px 2px oklch(21% 0.028 262 / 0.08), 0 0 0 1px oklch(21% 0.028 262 / 0.02);
-  --shadow-btn-accent: 0 1px 2px oklch(39% 0.16 260 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.18);
-  --shadow-soft: 0 1px 2px oklch(21% 0.028 262 / 0.04), 0 4px 16px -6px oklch(21% 0.028 262 / 0.1);
+  /* Flat buttons and surfaces for the signed-in app: a hairline plus a short soft drop, nothing chunky. */
+  --shadow-btn: 0 1px 2px oklch(20% 0.03 262 / 0.07);
+  --shadow-btn-accent: 0 1px 2px oklch(30% 0.12 262 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.16);
+  --shadow-soft: 0 1px 2px oklch(20% 0.03 262 / 0.04), 0 6px 18px -10px oklch(20% 0.04 262 / 0.14);
   --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.22);
-  --shadow-key-press: inset 0 1px 2px oklch(21% 0.028 262 / 0.18);
+  --shadow-key-press: inset 0 1px 2px oklch(20% 0.03 262 / 0.16);
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-micro: 120ms;
 }
 
+/* Dark: the logo's navy as the base, the sheet one step lighter than the frame. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-paper: oklch(21.5% 0.02 262);
-  --color-paper-2: oklch(25% 0.022 262);
-  --color-paper-3: oklch(29% 0.024 262);
-  --color-ink: oklch(94% 0.008 95);
-  --color-ink-2: oklch(83% 0.012 95);
-  --color-muted: oklch(72% 0.02 256);
-  --color-rule: oklch(32% 0.022 262);
-  --color-rule-2: oklch(42% 0.024 260);
-  --color-accent: oklch(72% 0.14 258);
-  --color-accent-ink: oklch(18% 0.03 262);
-  --color-accent-wash: oklch(28% 0.05 258);
-  --color-accent-edge: oklch(55% 0.15 258);
-  --color-focus: oklch(78% 0.12 256);
-  --color-danger: oklch(70% 0.17 25);
-  --color-danger-wash: oklch(27% 0.06 25);
-  --color-success: oklch(72% 0.13 155);
-  --color-warm: oklch(80% 0.12 65);
-  --color-warm-ink: oklch(80% 0.12 65);
-  --color-key-face: oklch(27% 0.024 262);
-  --color-key-edge: oklch(15% 0.02 262);
+  --color-paper: #0b1220;
+  --color-paper-2: #111a2c;
+  --color-paper-3: #1a2540;
+  --color-frame: #060b16;
+  --color-ink: #e9eef8;
+  --color-ink-2: #bcc6da;
+  --color-muted: #8d99b1;
+  --color-rule: #1c2740;
+  --color-rule-2: #2c3a5a;
+  --color-accent: #7aa2ff;
+  --color-accent-ink: #04102a;
+  --color-accent-wash: #15244a;
+  --color-accent-edge: #3b78d8;
+  --color-focus: #9ab8ff;
+  --color-mint: #8bd9d1;
+  --color-mint-ink: #8bd9d1;
+  --color-mint-wash: #0f2a2c;
+  --color-danger: #ff8b84;
+  --color-danger-wash: #3a1619;
+  --color-success: #5fd39b;
+  --color-warm: #f2b13c;
+  --color-warm-ink: #f2b13c;
+  --color-key-face: #0f1729;
+  --color-key-edge: #040814;
   --color-brand-ring: #3b78d8;
   --color-brand-node: #8bd9d1;
   --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.4);
-  --shadow-pop: 0 8px 24px -8px oklch(0% 0 0 / 0.6), 0 1px 2px oklch(0% 0 0 / 0.4);
+  --shadow-pop: 0 16px 36px -14px oklch(0% 0 0 / 0.75), 0 1px 2px oklch(0% 0 0 / 0.4);
   --shadow-key: 0 3px 0 0 var(--color-key-edge), inset 0 1px 0 oklch(100% 0 0 / 0.06);
   --shadow-btn: 0 1px 2px oklch(0% 0 0 / 0.4);
   --shadow-btn-accent: 0 1px 2px oklch(0% 0 0 / 0.45), inset 0 1px 0 oklch(100% 0 0 / 0.2);
-  --shadow-soft: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px -8px oklch(0% 0 0 / 0.55);
+  --shadow-soft: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px -10px oklch(0% 0 0 / 0.6);
   --shadow-key-accent: 0 3px 0 0 var(--color-accent-edge), inset 0 1px 0 oklch(100% 0 0 / 0.2);
   --shadow-key-press: inset 0 1px 2px oklch(0% 0 0 / 0.5);
 }

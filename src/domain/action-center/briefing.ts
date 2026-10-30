@@ -12,6 +12,7 @@ import { recordAudit } from '../audit/service';
 import { automationOnce } from '../automation/once';
 import { todayIn } from '../billing/dates';
 import { getFinanceSummary } from '../billing/summary';
+import { buildBusinessSummary } from '../metrics/summary';
 import type { Ctx } from '../ctx';
 import { assertCan } from '../permissions';
 import { listPendingApprovals } from './approvals';
@@ -31,6 +32,11 @@ export interface BriefingFacts {
   openFindings: number;
   highPriorityFindings: number;
   pendingApprovals: number;
+  /** From the business summary (BRD-M12). Optional: briefings written before M12 do not have them. */
+  pipelineValue?: number;
+  activeClients?: number;
+  openTasks?: number;
+  lateTasks?: number;
 }
 
 export interface BriefingView {
@@ -46,6 +52,8 @@ const NARRATIVE_MAX = 1500;
 
 export async function collectBriefingFacts(ctx: Ctx): Promise<BriefingFacts> {
   const [finance, open, waiting] = await Promise.all([getFinanceSummary(ctx), listFindings(ctx, 'open'), listPendingApprovals(ctx)]);
+  // The same summary the dashboard, Telegram and the assistant read (BR-M12-01), built on this very finance summary.
+  const summary = await buildBusinessSummary(ctx, finance);
   return {
     date: finance.today,
     receivedThisMonth: finance.receivedThisMonth,
@@ -58,6 +66,10 @@ export async function collectBriefingFacts(ctx: Ctx): Promise<BriefingFacts> {
     openFindings: open.findings.length,
     highPriorityFindings: open.findings.filter((f) => f.priority.level === 'high').length,
     pendingApprovals: waiting.length,
+    pipelineValue: summary.pipeline.value,
+    activeClients: summary.clients.active,
+    openTasks: summary.tasks.open,
+    lateTasks: summary.tasks.late,
   };
 }
 
@@ -76,6 +88,9 @@ function factsForModel(f: BriefingFacts) {
     temuanTerbuka: f.openFindings,
     temuanPrioritasTinggi: f.highPriorityFindings,
     persetujuanMenunggu: f.pendingApprovals,
+    ...(f.pipelineValue !== undefined ? { nilaiPipelineTerbuka: rp(f.pipelineValue) } : {}),
+    ...(f.activeClients !== undefined ? { klienDenganLanggananAktif: f.activeClients } : {}),
+    ...(f.openTasks !== undefined ? { tugasTerbuka: f.openTasks, tugasTerlambat: f.lateTasks } : {}),
   };
 }
 

@@ -9,5 +9,5 @@ const role = Astro.locals.user!.role;
 ---
 
 <AppShell title="Dokumen" current="documents">
-  <DocumentDetail client:load id={id!} canWrite={can(role, 'document.write')} canFinalize={can(role, 'document.finalize')} />
+  <DocumentDetail client:load id={id!} canWrite={can(role, 'document.write')} canFinalize={can(role, 'document.finalize')} timezone={Astro.locals.timezone} canSeeHistory={can(role, 'audit.read')} />
 </AppShell>

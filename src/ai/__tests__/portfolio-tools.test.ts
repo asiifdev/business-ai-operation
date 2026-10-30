@@ -82,7 +82,7 @@ describe('portfolio tools read the real data of the organization', () => {
     expect(names.filter((n) => /^(create|update|delete|archive|set|add|remove)_/.test(n))).toEqual([]);
     // The only tools that are not read-only are drafts (an unsent invoice, a task, a proposal) and the document finalization,
     // an `act` tool that only becomes a pending approval: they touch no portfolio data.
-    expect(buildAssistantRegistry().list().filter((t) => t.tier !== 'read').map((t) => [t.name, t.tier])).toEqual([['draft_invoice', 'draft'], ['draft_task', 'draft'], ['draft_proposal', 'draft'], ['finalize_document', 'act'], ['plan_flow_run', 'draft']]);
+    expect(buildAssistantRegistry().list().filter((t) => t.tier !== 'read').map((t) => [t.name, t.tier])).toEqual([['draft_invoice', 'draft'], ['draft_task', 'draft'], ['draft_proposal', 'draft'], ['finalize_document', 'act'], ['convert_lead_to_client', 'act'], ['plan_flow_run', 'draft']]);
   });
 });
 

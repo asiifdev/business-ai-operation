@@ -18,6 +18,7 @@ import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 import * as tbl from '../ui/table';
 import { ClientFields, type ClientValues } from './ClientsPage';
+import { OpsBadges } from './OpsBadges';
 import { VersionBadge } from './VersionBadge';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -196,7 +197,10 @@ function Deployments({ clientId, deployments, canAdd, isManager, onChanged }: { 
                     <td role="cell" data-label={t('colDomain')} className={'py-3 pr-3 text-ink max-sm:p-0 ' + tbl.label}>{d.domain ?? t('noValue')}</td>
                     <td role="cell" data-label={t('colInstalled')} className={'py-3 pr-3 text-ink tabular-nums max-sm:p-0 ' + tbl.label}>{d.installedVersion ?? t('noValue')}</td>
                     <td role="cell" data-label={t('colVersion')} className={'py-3 pr-3 max-sm:p-0 ' + tbl.label}>
-                      <VersionBadge state={d.versionState} />
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <VersionBadge state={d.versionState} />
+                        <OpsBadges behindBy={d.behindBy} uptimeState={d.uptimeState} />
+                      </span>
                       {d.productVersion && <span className="ml-2 text-sm text-muted tabular-nums">{d.productVersion}</span>}
                     </td>
                     <td role="cell" className="py-3 max-sm:col-span-2 max-sm:p-0">

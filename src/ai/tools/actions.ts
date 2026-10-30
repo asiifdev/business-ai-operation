@@ -4,6 +4,7 @@ import type { FindingRule } from '../../domain/action-center/facts';
 import { markInvoiceSent } from '../../domain/billing/invoices';
 import { finalizeDocument } from '../../domain/documents/service';
 import { startRun } from '../../domain/flows/service';
+import { convertLeadToClient } from '../../domain/pipeline/leads';
 import { formatRupiah } from '../../lib/format';
 import { ToolRegistry, defineTool } from './registry';
 
@@ -48,6 +49,24 @@ export const startFlowRunTool = defineTool({
   args: z.object({ runId: z.string().min(1).max(40), planHash: z.string().regex(/^[0-9a-f]{64}$/) }),
   execute: async (ctx, args) => startRun(ctx, args.runId, args.planHash),
   describe: () => 'Jalankan flow deploy yang sudah direncanakan: persis sesuai rencana yang ditampilkan (versi flow, parameter, dan koneksi). Langkah yang mengubah server berjalan satu per satu dengan progres yang terlihat.',
+});
+
+/**
+ * BR-M04 / BRD-M07: turning a won lead into a client is an `act` tool. In the assistant it becomes a pending approval; once
+ * approved it runs `convertLeadToClient`, the service behind the button on the lead page (new client, or linked to an
+ * existing one, plus the onboarding checklist). The service itself refuses a lead that is not won or already converted.
+ */
+export const convertLeadToClientTool = defineTool({
+  name: 'convert_lead_to_client',
+  description: 'Proposes to turn a WON lead into a client: a new client from the lead\'s details, or linked to an existing client when clientId is given, plus the onboarding checklist as tasks. Only for leads in the Won stage. It never runs by itself: a person must approve it first. Nothing is sent to anyone.',
+  tier: 'act',
+  permission: 'lead.convert',
+  args: z.object({ leadId: z.string().min(1).max(40), clientId: z.string().min(1).max(40).optional() }),
+  execute: async (ctx, args) => convertLeadToClient(ctx, args.leadId, args.clientId ? { mode: 'link', clientId: args.clientId } : { mode: 'create' }),
+  describe: (args) =>
+    args.clientId
+      ? 'Jadikan lead yang menang ini klien dengan menautkannya ke klien yang sudah ada, lalu buat checklist onboarding sebagai tugas. Tidak ada pesan yang dikirim.'
+      : 'Jadikan lead yang menang ini klien baru dari data lead, lalu buat checklist onboarding sebagai tugas. Tidak ada pesan yang dikirim.',
 });
 
 export interface ActionFinding {
@@ -106,6 +125,31 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
               klien: f.clientName ?? 'tidak terkait klien',
             };
           }
+          if (f.kind === 'deployment') {
+            return {
+              ...base,
+              klien: f.clientName,
+              produk: f.productName,
+              lingkungan: f.environment,
+              domain: f.domain ?? 'belum diisi',
+              repo: f.repo,
+              branch: f.branch,
+              tertinggalCommit: f.behindBy,
+              statusSitus: f.uptimeState === 'down' ? 'tidak dapat dijangkau' : f.uptimeState === 'up' ? 'dapat dijangkau' : 'belum dicek',
+              berubahSejak: f.uptimeChangedAt,
+            };
+          }
+          if (f.kind === 'lead') {
+            return {
+              ...base,
+              lead: f.name,
+              tahap: f.stage,
+              hariDiTahapIni: f.daysInStage,
+              batasStagnanHari: f.stagnantDays,
+              nilaiEstimasi: f.estimatedValue != null ? money(f.estimatedValue) : 'belum diisi',
+              penanggungJawab: f.assigneeName ?? 'belum ditetapkan',
+            };
+          }
           if (f.kind === 'subscription') {
             return { ...base, klien: f.clientName, produk: f.productName, paket: f.packageName, nominal: money(f.amount), jatuhTempoBerikutnya: f.nextDueDate, hariMenujuJatuhTempo: f.daysUntilDue };
           }
@@ -133,6 +177,7 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
   if (!finding) {
     registry.register(finalizeDocumentTool);
     registry.register(startFlowRunTool);
+    registry.register(convertLeadToClientTool);
   }
 
   return registry;

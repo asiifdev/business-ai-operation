@@ -9,6 +9,7 @@ import { Meter } from './ui/Meter';
 import { Panel } from './ui/Panel';
 import { ErrorBox, Skeleton } from './ui/states';
 import * as tbl from './ui/table';
+import { Tabs } from './ui/Tabs';
 
 type Role = 'owner' | 'admin' | 'staff';
 type Tab = 'budget' | 'runs';
@@ -63,23 +64,7 @@ export function AiUsage({ role }: { role: Role }) {
       </header>
 
       {tabs.length > 1 && (
-        <div role="tablist" aria-label={t('aiTabs')} className="flex gap-1 border-b border-rule">
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              role="tab"
-              type="button"
-              aria-selected={tab === item.id}
-              onClick={() => choose(item.id)}
-              className={
-                'inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium transition-colors duration-(--duration-micro) ' +
-                (tab === item.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink')
-              }
-            >
-              {t(item.label)}
-            </button>
-          ))}
-        </div>
+        <Tabs label={t('aiTabs')} items={tabs.map((item) => ({ id: item.id, label: t(item.label) }))} value={tab} onChange={choose} />
       )}
 
       {tab === 'budget' && isManager ? <BudgetTable isOwner={role === 'owner'} /> : <RunLog isManager={isManager} />}

@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { clients, findings, invoices, packages, payments, products, subscriptions, tasks, users } from '../../db/schema';
+import { clients, deployments, findings, invoices, leads, organizations, packages, payments, products, subscriptions, tasks, users } from '../../db/schema';
 import { recordAudit, type AuditWho } from '../audit/service';
 import { daysBetween, todayIn } from '../billing/dates';
 import { deriveInvoice } from '../billing/derived';
@@ -9,6 +9,7 @@ import { loadOrgBilling } from '../billing/invoices';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
+import { daysInStage, isStagnant } from '../pipeline/stages';
 import { daysLate, isLate } from '../tasks/rules';
 import { who } from '../portfolio/shared';
 import { FINANCIAL_RULES, priorityOf, stillApplies, type FindingFacts, type FindingRule, type FindingStatus, type PriorityLevel } from './facts';
@@ -50,10 +51,12 @@ function visibleRules(ctx: Ctx): FindingRule[] {
  * Reads the live facts behind a batch of findings in two queries. The same derivations as the invoice pages (CR-01), so
  * the card cannot disagree with them. Internal: callers check permissions first.
  */
-export async function loadFacts(orgId: string, today: string, rows: Pick<FindingRow, 'entityType' | 'entityId'>[]): Promise<Map<string, FindingFacts>> {
+export async function loadFacts(orgId: string, today: string, rows: Pick<FindingRow, 'entityType' | 'entityId'>[], now: Date): Promise<Map<string, FindingFacts>> {
   const invoiceIds = [...new Set(rows.filter((r) => r.entityType === 'invoice').map((r) => r.entityId))];
   const subscriptionIds = [...new Set(rows.filter((r) => r.entityType === 'subscription').map((r) => r.entityId))];
   const taskIds = [...new Set(rows.filter((r) => r.entityType === 'task').map((r) => r.entityId))];
+  const leadIds = [...new Set(rows.filter((r) => r.entityType === 'lead').map((r) => r.entityId))];
+  const deploymentIds = [...new Set(rows.filter((r) => r.entityType === 'deployment').map((r) => r.entityId))];
   const out = new Map<string, FindingFacts>();
 
   if (invoiceIds.length) {
@@ -129,6 +132,58 @@ export async function loadFacts(orgId: string, today: string, rows: Pick<Finding
       });
     }
   }
+
+  if (deploymentIds.length) {
+    const list = await db
+      .select({ d: deployments, clientName: clients.name, productName: products.name })
+      .from(deployments)
+      .innerJoin(clients, and(eq(clients.orgId, deployments.orgId), eq(clients.id, deployments.clientId)))
+      .innerJoin(products, and(eq(products.orgId, deployments.orgId), eq(products.id, deployments.productId)))
+      .where(and(eq(deployments.orgId, orgId), inArray(deployments.id, deploymentIds)));
+    for (const { d, clientName, productName } of list) {
+      out.set(`deployment:${d.id}`, {
+        kind: 'deployment',
+        deploymentId: d.id,
+        status: d.status,
+        clientId: d.clientId,
+        clientName,
+        productName,
+        environment: d.environment,
+        domain: d.domain,
+        repo: d.repo,
+        branch: d.branch,
+        deployedCommit: d.deployedCommit,
+        latestCommit: d.latestCommit,
+        behindBy: d.behindBy,
+        uptimeState: d.uptimeState,
+        uptimeChangedAt: d.uptimeChangedAt?.toISOString() ?? null,
+        uptimeCheckedAt: d.uptimeCheckedAt?.toISOString() ?? null,
+      });
+    }
+  }
+
+  if (leadIds.length) {
+    const [org] = await db.select({ stagnantDays: organizations.stagnantDays }).from(organizations).where(eq(organizations.id, orgId));
+    const list = await db
+      .select({ lead: leads, assigneeName: users.name })
+      .from(leads)
+      .leftJoin(users, and(eq(users.orgId, leads.orgId), eq(users.id, leads.assignedTo)))
+      .where(and(eq(leads.orgId, orgId), inArray(leads.id, leadIds)));
+    for (const { lead: l, assigneeName } of list) {
+      out.set(`lead:${l.id}`, {
+        kind: 'lead',
+        leadId: l.id,
+        name: l.name,
+        stage: l.stage,
+        estimatedValue: l.estimatedValue,
+        stageChangedAt: l.stageChangedAt.toISOString(),
+        daysInStage: daysInStage(l.stageChangedAt, now),
+        stagnantDays: org.stagnantDays,
+        stagnant: isStagnant(l, org.stagnantDays, now),
+        assigneeName,
+      });
+    }
+  }
   return out;
 }
 
@@ -136,7 +191,7 @@ export async function loadFacts(orgId: string, today: string, rows: Pick<Finding
  * Entity kinds this code can read facts for. The sweep never closes a finding of any other kind: a server still running an
  * older build must not mistake a newer rule's finding for one whose record is gone (seen with `task_late`, D-046).
  */
-const KNOWN_ENTITIES: ReadonlySet<string> = new Set(['invoice', 'subscription', 'task']);
+const KNOWN_ENTITIES: ReadonlySet<string> = new Set(['invoice', 'subscription', 'task', 'lead', 'deployment']);
 
 const factsOf = (facts: Map<string, FindingFacts>, row: Pick<FindingRow, 'entityType' | 'entityId'>): FindingFacts => facts.get(`${row.entityType}:${row.entityId}`) ?? { kind: 'missing' };
 
@@ -144,6 +199,8 @@ function hrefOf(facts: FindingFacts): string | null {
   if (facts.kind === 'invoice') return `/app/invoice/${facts.invoiceId}`;
   if (facts.kind === 'subscription') return `/app/langganan/${facts.subscriptionId}`;
   if (facts.kind === 'task') return `/app/task/${facts.taskId}`;
+  if (facts.kind === 'lead') return `/app/lead/${facts.leadId}`;
+  if (facts.kind === 'deployment') return `/app/klien/${facts.clientId}`;
   return null;
 }
 
@@ -191,7 +248,7 @@ export async function listFindings(ctx: Ctx, view: FindingView = 'open'): Promis
     .where(and(eq(findings.orgId, ctx.orgId), inArray(findings.rule, rules), statusFilter))
     .orderBy(desc(view === 'closed' ? findings.updatedAt : findings.createdAt))
     .limit(view === 'closed' ? CLOSED_LIMIT : 500);
-  const facts = await loadFacts(ctx.orgId, today, rows);
+  const facts = await loadFacts(ctx.orgId, today, rows, ctx.clock.now());
   const cards = rows.map((r) => toCard(r, factsOf(facts, r), today));
   if (view !== 'closed') cards.sort((a, b) => b.priority.score - a.priority.score);
   return { today, findings: cards };
@@ -202,7 +259,7 @@ export async function getFinding(ctx: Ctx, id: string): Promise<FindingCard> {
   const [row] = await db.select().from(findings).where(and(eq(findings.orgId, ctx.orgId), eq(findings.id, id)));
   if (!row || !canSeeRule(ctx, row.rule)) throw new DomainError('not_found', 'finding');
   const today = await orgToday(ctx);
-  const facts = await loadFacts(ctx.orgId, today, [row]);
+  const facts = await loadFacts(ctx.orgId, today, [row], ctx.clock.now());
   return toCard(row, factsOf(facts, row), today);
 }
 
@@ -280,7 +337,7 @@ export async function sweepFindings(orgId: string, now: Date): Promise<{ resolve
   const today = todayIn(org.timezone, now);
   const open = await db.select().from(findings).where(and(eq(findings.orgId, orgId), inArray(findings.status, OPEN)));
   if (open.length === 0) return { resolved: 0, woken: 0 };
-  const facts = await loadFacts(orgId, today, open);
+  const facts = await loadFacts(orgId, today, open, now);
   const audit: AuditWho = { orgId, actor: 'system:rule.finding_sweep' };
   let resolved = 0;
 

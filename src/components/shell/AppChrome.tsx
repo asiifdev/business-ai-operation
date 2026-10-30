@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AttentionCounts } from '../../domain/dashboard/overview';
 import type { Role } from '../../domain/permissions';
 import { api } from '../../lib/api-client';
@@ -8,10 +8,14 @@ import { BILLING_PAGES_READY } from '../../lib/nav';
 import { cx } from '../../lib/cx';
 import { GROUP_LABEL, groupedFor, itemsFor, TAB_LIMIT, type NavId, type NavItem } from '../../lib/nav';
 import { useT } from '../../lib/use-t';
+import { AskLauncher, AssistantDock } from '../assistant/AssistantDock';
+import { askAssistant } from '../assistant/useAssistant';
 import { LogoMark } from '../brand/LogoMark';
 import { Button, buttonClasses } from '../ui/Button';
 import { LocaleSwitch } from '../ui/LocaleSwitch';
+import { Modal } from '../ui/Modal';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { Toaster } from '../ui/Toast';
 import { CommandPalette } from './CommandPalette';
 import { Icon } from './Icon';
 import { CountPill } from '../dashboard/primitives';
@@ -34,9 +38,13 @@ const roleKey = { owner: 'roleOwner', admin: 'roleAdmin', staff: 'roleStaff' } a
 /**
  * The frame of every signed-in page. On a wide screen it is a sidebar plus a slim top bar with the ⌘K search. Under 64rem
  * it becomes a phone app: a top bar, a tab bar at the bottom, and a sheet for the rest (language, theme, sign out).
+ * The assistant is one step away everywhere (chat-first): "Ask Orbyte" in the sidebar and top bar, a round button on a
+ * phone, and Ctrl/⌘+J all open it beside the page. The assistant page itself has the conversation full screen instead.
  */
 export function AppChrome(chrome: ChromeProps) {
   const [palette, setPalette] = useState(false);
+  const [dock, setDock] = useState(false);
+  const withDock = chrome.current !== 'assistant';
   const [counts, setCounts] = useState(chrome.counts);
   const props = { ...chrome, counts };
   useEffect(() => {
@@ -50,17 +58,26 @@ export function AppChrome(chrome: ChromeProps) {
         e.preventDefault();
         setPalette((v) => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        if (withDock) setDock((v) => !v);
+        else document.querySelector<HTMLTextAreaElement>('#content textarea')?.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [withDock]);
   const openPalette = () => setPalette(true);
+  const openDock = useCallback(() => (withDock ? setDock(true) : window.location.assign('/app/asisten')), [withDock]);
   return (
     <>
-      <Sidebar {...props} />
+      <Sidebar {...props} onAsk={openDock} />
       <TopBar onSearch={openPalette} role={props.role} current={props.current} today={props.today} counts={props.counts} />
       <PhoneChrome {...props} onSearch={openPalette} />
-      <CommandPalette open={palette} onClose={() => setPalette(false)} role={props.role} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} role={props.role} onAsk={withDock ? askAssistant : undefined} />
+      {withDock && <AskLauncher variant="fab" onOpen={openDock} />}
+      {withDock && <AssistantDock role={props.role} open={dock} onOpenChange={setDock} />}
+      <Toaster />
     </>
   );
 }
@@ -111,13 +128,13 @@ function TopBar({ onSearch, role, current, today, counts }: { onSearch: () => vo
   const t = useT();
   const item = itemsFor(role).find((i) => i.id === current);
   return (
-    <header className="fixed top-0 right-0 left-64 z-20 hidden h-16 items-center gap-4 border-b border-rule bg-paper/85 px-8 backdrop-blur-md lg:flex">
-      <div className="min-w-0">
-        <p className="m-0 truncate font-display text-lg leading-tight font-semibold text-ink">{item ? t(item.label) : ''}</p>
-        <p className="m-0 truncate text-sm leading-tight text-muted">{formatFullDate(today)}</p>
+    <header className="fixed top-0 right-2 left-64 z-20 hidden h-14 items-center gap-4 bg-frame pr-1 pl-3 lg:flex">
+      <div className="flex min-w-0 items-baseline gap-3">
+        <p className="m-0 truncate text-base font-semibold text-ink">{item ? t(item.label) : ''}</p>
+        <p className="m-0 truncate text-sm text-muted">{formatFullDate(today)}</p>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <SearchTrigger onSearch={onSearch} className="w-56" />
+        <SearchTrigger onSearch={onSearch} className="w-44 xl:w-56" />
         <AttentionBell counts={counts} />
         <ThemeToggle />
       </div>
@@ -192,18 +209,19 @@ function AttentionBell({ counts }: { counts: AttentionCounts }) {
   );
 }
 
-function Sidebar({ organizationName, userName, role, current, counts }: ChromeProps) {
+function Sidebar({ organizationName, userName, role, current, counts, onAsk }: ChromeProps & { onAsk: () => void }) {
   const t = useT();
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-5 overflow-y-auto border-r border-rule bg-paper-2 px-3 py-4 lg:flex">
-      <a href="/app" className="flex h-10 items-center gap-3 rounded-input px-2 text-ink no-underline">
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent font-display text-sm font-semibold text-accent-ink">{(organizationName.trim()[0] ?? 'O').toUpperCase()}</span>
-        <span className="block min-w-0 truncate font-display text-base font-semibold">{organizationName}</span>
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-4 overflow-y-auto bg-frame px-3 py-3 lg:flex">
+      <a href="/app" className="flex h-10 items-center gap-2.5 rounded-input px-2 text-ink no-underline transition-colors duration-(--duration-micro) hover:bg-paper-3/70">
+        <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md bg-ink text-sm font-semibold text-paper">{(organizationName.trim()[0] ?? 'O').toUpperCase()}</span>
+        <span className="block min-w-0 truncate text-sm font-semibold">{organizationName}</span>
       </a>
-      <nav aria-label={t('navLabel')} className="flex flex-1 flex-col gap-5">
+      {current !== 'assistant' && <AskLauncher onOpen={onAsk} className="w-full" />}
+      <nav aria-label={t('navLabel')} className="flex flex-1 flex-col gap-4">
         {groupedFor(role).map(({ group, items }) => (
           <div key={group} className="flex flex-col gap-0.5">
-            <p className="m-0 px-3 pb-1 text-xs font-medium tracking-wide text-muted uppercase">{t(GROUP_LABEL[group])}</p>
+            <p className="m-0 px-2.5 pb-1 text-xs font-medium text-muted">{t(GROUP_LABEL[group])}</p>
             {items.map((item) => {
               const active = current === item.id;
               return (
@@ -212,11 +230,11 @@ function Sidebar({ organizationName, userName, role, current, counts }: ChromePr
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
                   className={cx(
-                    'group relative flex min-h-10 items-center gap-3 rounded-input px-3 text-base no-underline transition-colors duration-(--duration-micro)',
-                    active ? 'bg-accent-wash font-medium text-ink' : 'text-ink-2 hover:bg-paper-3 hover:text-ink',
+                    'group relative flex min-h-9 items-center gap-2.5 rounded-input px-2.5 text-sm no-underline transition-colors duration-(--duration-micro)',
+                    active ? 'bg-key-face font-medium text-ink shadow-btn ring-1 ring-rule' : 'text-ink-2 hover:bg-paper-3/70 hover:text-ink active:bg-paper-3',
                   )}
                 >
-                  <Icon name={item.icon} className={cx('size-5 transition-colors', active ? 'text-accent' : 'text-muted group-hover:text-ink')} />
+                  <Icon name={item.icon} className={cx('size-[18px] transition-colors', active ? 'text-accent' : 'text-muted group-hover:text-ink')} />
                   <span className="flex-1">{t(item.label)}</span>
                   {item.badge === 'behind' && counts.behindDeployments > 0 && <CountPill n={counts.behindDeployments} />}
                   {item.badge === 'findings' && counts.openFindings > 0 && <CountPill n={counts.openFindings} />}
@@ -226,7 +244,7 @@ function Sidebar({ organizationName, userName, role, current, counts }: ChromePr
           </div>
         ))}
       </nav>
-      <div className="border-t border-rule pt-3">
+      <div className="pt-1">
         <UserMenu userName={userName} role={role} />
       </div>
     </aside>
@@ -241,7 +259,7 @@ function PhoneChrome({ organizationName, userName, role, current, counts, onSear
 
   return (
     <div className="lg:hidden">
-      <header className="sticky top-0 z-30 flex items-center gap-1 border-b border-rule bg-paper/90 px-4 backdrop-blur-md pt-[env(safe-area-inset-top)] [min-height:calc(3.5rem+env(safe-area-inset-top))]">
+      <header className="sticky top-0 z-30 flex items-center gap-1 border-b border-rule bg-paper px-4 pt-[env(safe-area-inset-top)] [min-height:calc(3.5rem+env(safe-area-inset-top))]">
         <LogoMark size={26} />
         <p className="m-0 min-w-0 flex-1 truncate font-display text-base font-semibold text-ink">{organizationName}</p>
         <button type="button" onClick={onSearch} aria-label={t('searchPlaceholder')} className="grid size-11 place-items-center rounded-full text-ink-2">
@@ -276,7 +294,7 @@ function PhoneChrome({ organizationName, userName, role, current, counts, onSear
         </ul>
       </nav>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title={t('accountMenu')}>
+      <Modal open={open} onClose={() => setOpen(false)} title={t('accountMenu')} placement="bottom" bodyClassName="pb-5">
         <div className="flex flex-col gap-5">
           {items.length > TAB_LIMIT && (
             <ul className="m-0 flex list-none flex-col p-0">
@@ -289,7 +307,7 @@ function PhoneChrome({ organizationName, userName, role, current, counts, onSear
           )}
           <AccountBlock userName={userName} role={role} stacked />
         </div>
-      </Sheet>
+      </Modal>
     </div>
   );
 }
@@ -308,45 +326,5 @@ function TabLink({ item, active }: { item: NavItem; active: boolean }) {
         {t(item.label)}
       </a>
     </li>
-  );
-}
-
-/** A panel that rises from the bottom edge. Closes on Escape, on the backdrop, and on the close button. */
-function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  const t = useT();
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = overflow;
-      previous?.focus();
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-40">
-      <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-ink/40" />
-      <div role="dialog" aria-modal="true" aria-label={title} className="sheet absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t border-rule bg-paper px-4 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-        <div className="mb-3 flex items-center justify-between">
-          <span aria-hidden="true" className="mx-auto h-1 w-10 rounded-full bg-rule-2" />
-        </div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="m-0 text-lg font-semibold text-ink">{title}</h2>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label={t('closeMenu')} className="grid size-11 place-items-center rounded-full text-ink">
-            <Icon name="close" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

@@ -1,3 +1,4 @@
+import { AuditTimeline } from '../audit/AuditTimeline';
 import { useState } from 'react';
 import type { SimilarTask, TaskDetail as Detail, TaskFormOptions } from '../../domain/tasks/service';
 import { api, errorKey } from '../../lib/api-client';
@@ -16,7 +17,7 @@ import { TaskForm, taskPayload, type TaskValues } from './TaskForm';
 type Task = Jsonify<Detail>;
 
 /** One task: its state and next steps, the draft decision, its details, related tasks and suggestions of similar ones. */
-export function TaskDetail({ id, timezone }: { id: string; timezone: string }) {
+export function TaskDetail({ id, timezone, canSeeHistory = false }: { id: string; timezone: string; /** Owner and Admin (`audit.read`) see the change history. */ canSeeHistory?: boolean }) {
   const t = useT();
   const load = useLoad(() => api<Task>('GET', `/api/tasks/${id}`), [id]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export function TaskDetail({ id, timezone }: { id: string; timezone: string }) {
 
       <Related task={task} busy={busy} onUnlink={() => act('unlink', () => api('POST', `/api/tasks/${id}/link`, { relatedTo: null }))} />
       {task.canEdit && <Similar taskId={id} linkedTo={task.duplicateOfTaskId} onLinked={() => void load.reload()} />}
+      {canSeeHistory && <AuditTimeline entityType="task" entityId={id} timezone={timezone} />}
     </div>
   );
 }

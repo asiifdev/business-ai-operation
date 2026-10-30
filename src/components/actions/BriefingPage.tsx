@@ -69,6 +69,11 @@ function Briefing({ briefing, timezone }: { briefing: Jsonify<BriefingView>; tim
     { label: t('briefingDueToday'), value: f.dueToday, href: '/app/invoice' },
     { label: t('briefingRenewals'), value: f.renewalsSoon, href: '/app/langganan' },
     { label: t('briefingDrafts'), value: f.draftsToReview, href: '/app/invoice?status=draft' },
+    // Added with M12; a briefing written before it does not have these, so they only show when present.
+    ...(f.pipelineValue !== undefined ? [{ label: t('pipelineValue'), value: formatRupiah(f.pipelineValue), href: '/app/pipeline' }] : []),
+    ...(f.activeClients !== undefined ? [{ label: t('kpiClients'), value: f.activeClients, href: '/app/klien' }] : []),
+    ...(f.openTasks !== undefined ? [{ label: t('kpiTasksOpen'), value: f.openTasks, href: '/app/task' }] : []),
+    ...(f.lateTasks !== undefined ? [{ label: t('kpiTasksLate'), value: f.lateTasks, href: '/app/task' }] : []),
   ];
   return (
     <>

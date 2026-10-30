@@ -168,6 +168,9 @@ export interface ProductDeploymentRow {
   installedVersion: string | null;
   status: 'active' | 'inactive';
   versionState: ReturnType<typeof versionState>;
+  /** M17 readings, null until checked. */
+  behindBy: number | null;
+  uptimeState: 'up' | 'down' | null;
 }
 
 export async function getProduct(ctx: Ctx, id: string) {
@@ -179,7 +182,7 @@ export async function getProduct(ctx: Ctx, id: string) {
     .where(and(eq(packages.orgId, ctx.orgId), eq(packages.productId, id)))
     .orderBy(asc(sql`${packages.archivedAt} is not null`), asc(packages.monthlyPrice));
   const deploymentRows = await db
-    .select({ id: deployments.id, clientId: deployments.clientId, clientName: clients.name, environment: deployments.environment, label: deployments.label, domain: deployments.domain, installedVersion: deployments.installedVersion, status: deployments.status })
+    .select({ id: deployments.id, clientId: deployments.clientId, clientName: clients.name, environment: deployments.environment, label: deployments.label, domain: deployments.domain, installedVersion: deployments.installedVersion, status: deployments.status, behindBy: deployments.behindBy, uptimeState: deployments.uptimeState })
     .from(deployments)
     .innerJoin(clients, and(eq(clients.orgId, deployments.orgId), eq(clients.id, deployments.clientId)))
     .where(and(eq(deployments.orgId, ctx.orgId), eq(deployments.productId, id)))

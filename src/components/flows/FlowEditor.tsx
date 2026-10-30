@@ -193,7 +193,7 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
             if (!list.length) return null;
             return (
               <div key={g} className="flex flex-col gap-1">
-                <h2 className="m-0 text-xs font-semibold uppercase tracking-wide text-muted">{t(GROUP_LABEL[g])}</h2>
+                <h2 className="m-0 text-sm font-medium text-muted">{t(GROUP_LABEL[g])}</h2>
                 {list.map((x) => (
                   <button key={x.id} type="button" disabled={locked || !x.allowed || !x.available} onClick={() => addTool(x)} className="flex w-full items-center justify-between gap-2 rounded-input border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-ink hover:border-rule hover:bg-paper-2 disabled:cursor-not-allowed disabled:opacity-50" title={x.id}>
                     <span className="min-w-0 truncate">{t(toolLabelKey(x.id))}</span>

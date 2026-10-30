@@ -1,11 +1,12 @@
 ---
 import AppShell from '../../../layouts/AppShell.astro';
 import { MeetingDetail } from '../../../components/meetings/MeetingDetail';
+import { can } from '../../../domain/permissions';
 
 export const prerender = false;
 const { id } = Astro.params;
 ---
 
 <AppShell title="Rapat" current="meetings">
-  <MeetingDetail client:load id={id!} timezone={Astro.locals.timezone} />
+  <MeetingDetail client:load id={id!} timezone={Astro.locals.timezone} canSeeHistory={can(Astro.locals.user!.role, 'audit.read')} />
 </AppShell>

@@ -30,7 +30,8 @@ const RULE_TASK: Record<FindingRule, string> = {
     'Langganan klien ini mendekati jatuh tempo dan belum ada invoice untuk periodenya. Jelaskan dalam 2 sampai 3 kalimat dan sarankan langkahnya. Lalu tulis draf pesan pengingat perpanjangan yang ramah untuk klien.',
   task_late:
     'Tugas ini sudah lewat tenggat dan belum selesai. Jelaskan dalam 2 sampai 3 kalimat apa yang tertunda dan sarankan langkahnya (misalnya tetapkan penanggung jawab, naikkan prioritas, atau sepakati tenggat baru). Bila tugas ini Bug atau Maintenance untuk seorang klien, tulis draf kabar perkembangan singkat untuk klien itu; selain itu tulis "-" sebagai draf pesan.',
-  lead_stagnant: 'Jelaskan temuan ini dalam 2 sampai 3 kalimat dan sarankan langkahnya.',
+  lead_stagnant:
+    'Lead ini sudah lama tidak berpindah tahap. Jelaskan dalam 2 sampai 3 kalimat sudah berapa lama dan di tahap apa, lalu sarankan langkah berikutnya (misalnya hubungi kembali, kirim proposal, atau tandai Kalah dengan alasan bila sudah tidak berjalan). Lalu tulis draf pesan tindak lanjut yang sopan untuk calon klien (akan disalin manual oleh pengguna, tidak dikirim otomatis).',
   deployment_outdated: 'Kode yang terpasang di deployment ini tertinggal dari branch-nya. Jelaskan dalam 2 sampai 3 kalimat dampaknya dan sarankan memperbarui lewat run yang perlu persetujuan.',
   deployment_down: 'Domain deployment ini tidak dapat dijangkau. Jelaskan dalam 2 sampai 3 kalimat apa yang perlu dicek lebih dulu dan sarankan langkahnya.',
 };

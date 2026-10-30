@@ -57,6 +57,41 @@ export type FindingFacts =
       clientId: string | null;
       clientName: string | null;
     }
+  | {
+      kind: 'lead';
+      leadId: string;
+      name: string;
+      stage: 'new' | 'exploring' | 'proposal' | 'negotiation' | 'won' | 'lost';
+      estimatedValue: number | null;
+      /** ISO time the lead entered its stage: the start of the quiet spell, and the finding's period key. */
+      stageChangedAt: string;
+      daysInStage: number;
+      /** The organization's threshold (BR-M04-08, `organizations.stagnant_days`). */
+      stagnantDays: number;
+      /** Derived by `isStagnant` from the pipeline module, never stored (CR-01). */
+      stagnant: boolean;
+      assigneeName: string | null;
+    }
+  | {
+      kind: 'deployment';
+      deploymentId: string;
+      status: 'active' | 'inactive';
+      clientId: string;
+      clientName: string;
+      productName: string;
+      environment: string;
+      domain: string | null;
+      repo: string | null;
+      branch: string | null;
+      deployedCommit: string | null;
+      latestCommit: string | null;
+      /** Commits the server is behind the tip of its branch, as last read from GitHub (BR-M17-12). */
+      behindBy: number | null;
+      uptimeState: 'up' | 'down' | null;
+      /** ISO time the site last went up or down: the period of a `deployment_down` finding. */
+      uptimeChangedAt: string | null;
+      uptimeCheckedAt: string | null;
+    }
   | { kind: 'missing' };
 
 /**
@@ -74,8 +109,16 @@ export function stillApplies(rule: FindingRule, periodKey: string, facts: Findin
     case 'task_late':
       // A new due date makes a new period: the old card closes and a later lateness raises a fresh one.
       return facts.kind === 'task' && facts.late && facts.dueDate === periodKey;
+    case 'deployment_outdated':
+      // A newer push makes a new period: this card closes and the newer tip raises its own.
+      return facts.kind === 'deployment' && facts.status === 'active' && (facts.behindBy ?? 0) > 0 && facts.latestCommit === periodKey;
+    case 'deployment_down':
+      return facts.kind === 'deployment' && facts.status === 'active' && facts.uptimeState === 'down' && facts.uptimeChangedAt === periodKey;
+    case 'lead_stagnant':
+      // Moving the lead to another stage ends the quiet spell: the card closes, and a new spell later raises a new one.
+      return facts.kind === 'lead' && facts.stagnant && facts.stageChangedAt === periodKey;
     default:
-      return facts.kind !== 'missing'; // lead_stagnant arrives with its rule
+      return facts.kind !== 'missing';
   }
 }
 
@@ -112,6 +155,12 @@ export function priorityOf(rule: FindingRule, facts: FindingFacts, today: string
     if (rule === 'invoice_draft_ready' && daysBetween(today, facts.dueDate) <= 3) score += 50;
   } else if (facts.kind === 'task') {
     score += Math.min(facts.daysLate, 30) * 5 + TASK_PRIORITY_POINTS[facts.priority];
+  } else if (facts.kind === 'deployment') {
+    // Two points per commit behind, at most 50 commits.
+    if (rule === 'deployment_outdated') score += Math.min(facts.behindBy ?? 0, 50) * 2;
+  } else if (facts.kind === 'lead') {
+    // Size of the deal, plus 2 points per day past the threshold (at most 30 days).
+    score += amountPoints(facts.estimatedValue ?? 0) + Math.min(Math.max(facts.daysInStage - facts.stagnantDays, 0), 30) * 2;
   } else if (facts.kind === 'subscription') {
     score += amountPoints(facts.amount) + Math.max(RENEWAL_WINDOW_DAYS - facts.daysUntilDue, 0) * 10;
   }

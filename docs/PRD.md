@@ -117,6 +117,7 @@ Sebagian sudah dibangun (token terang/gelap, form components, `Button`, `ThemeTo
 - **Komponen UI yang belum ada:** `Card`, `Badge`, `Alert`, `Modal`, `Dropdown`, `Toast`, `Table` (+ toolbar pencarian/filter/baris per halaman, pagination), `Stat`, `Tabs`, `EmptyState`, `Skeleton`, `ApprovalCard`, `AuditTimeline`, `AppShell` (navigasi samping, header, pengalih bahasa/tema).
 - **Aturan:** token di `:root` (BR-M14-01), tanpa kontrol mentah (dijaga tes yang sudah ada), tabel dan kartu memakai angka dari layanan.
 - **Ikon:** ⚠️ pustaka belum dipilih; default PRD: SVG inline buatan sendiri untuk ikon yang dipakai (tanpa dependensi).
+- **Amandemen BRD-M14 2026-10-29 (D-069):** asisten **chat-first**: panel asisten di samping setiap halaman (tombol "Tanya Orbyte", Ctrl/⌘+J, bilah pertanyaan di dasbor, entri palet ⌘K), percakapan sama dengan `/app/asisten`. Komponen `Steps` (progres langkah dari data) dipakai di run M17 dan progres invoice M03. `Modal` dan `Toast` tersedia untuk semua modul.
 
 ### M02 Portfolio (BRD-M02)
 

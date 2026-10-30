@@ -2,7 +2,7 @@ import { and, asc, eq, gt, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { buildActionRegistry, FINANCIAL_ACT_TOOLS } from '../../ai/tools/actions';
 import { db } from '../../db/client';
-import { approvals, findings, invoices, clients, users } from '../../db/schema';
+import { approvals, findings, invoices, clients, leads, users } from '../../db/schema';
 import { recordAudit, type AuditWho } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
@@ -29,7 +29,10 @@ export interface ApprovalCard {
   /** Whether this person may decide it (finance approvals need billing rights, BR-M08-07). */
   canDecide: boolean;
   /** The record the action touches, read live, so the approver sees what it is about and not only an id. */
-  target: { kind: 'invoice'; invoiceId: string; number: string | null; clientName: string; status: 'draft' | 'sent' | 'paid' | 'void'; total: number } | null;
+  target:
+    | { kind: 'invoice'; invoiceId: string; number: string | null; clientName: string; status: 'draft' | 'sent' | 'paid' | 'void'; total: number }
+    | { kind: 'lead'; leadId: string; name: string; stage: 'new' | 'exploring' | 'proposal' | 'negotiation' | 'won' | 'lost'; estimatedValue: number | null; converted: boolean }
+    | null;
 }
 
 /** Tool permission plus, for money, the finance-approval right. Staff therefore never approve a finance action. */
@@ -66,9 +69,17 @@ export async function listPendingApprovals(ctx: Ctx): Promise<ApprovalCard[]> {
       .where(and(eq(invoices.orgId, ctx.orgId), inArray(invoices.id, invoiceIds)));
     for (const i of list) targets.set(i.id, { kind: 'invoice', invoiceId: i.id, number: i.number, clientName: i.clientName, status: i.status, total: i.total });
   }
+  const leadIds = rows.map((r) => leadIdOf(r.a.args)).filter((x): x is string => x !== null);
+  if (leadIds.length) {
+    const list = await db
+      .select({ id: leads.id, name: leads.name, stage: leads.stage, estimatedValue: leads.estimatedValue, convertedClientId: leads.convertedClientId })
+      .from(leads)
+      .where(and(eq(leads.orgId, ctx.orgId), inArray(leads.id, leadIds)));
+    for (const l of list) targets.set(l.id, { kind: 'lead', leadId: l.id, name: l.name, stage: l.stage, estimatedValue: l.estimatedValue, converted: l.convertedClientId !== null });
+  }
 
   return rows.map(({ a, forName }) => {
-    const invoiceId = invoiceIdOf(a.args);
+    const targetId = invoiceIdOf(a.args) ?? leadIdOf(a.args);
     return {
       id: a.id,
       tool: a.tool,
@@ -82,13 +93,18 @@ export async function listPendingApprovals(ctx: Ctx): Promise<ApprovalCard[]> {
       createdAt: a.createdAt,
       financial: FINANCIAL_ACT_TOOLS.has(a.tool),
       canDecide: mayDecide(ctx, a.tool),
-      target: invoiceId ? (targets.get(invoiceId) ?? null) : null,
+      target: targetId ? (targets.get(targetId) ?? null) : null,
     };
   });
 }
 
 function invoiceIdOf(args: unknown): string | null {
   const id = (args as { invoiceId?: unknown } | null)?.invoiceId;
+  return typeof id === 'string' ? id : null;
+}
+
+function leadIdOf(args: unknown): string | null {
+  const id = (args as { leadId?: unknown } | null)?.leadId;
   return typeof id === 'string' ? id : null;
 }
 

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ComponentPropsWithRef } from 'react';
+import { useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { useT } from '../../lib/use-t';
 import { cx } from '../../lib/cx';
 import { useFieldControl } from './field';
@@ -12,9 +12,11 @@ interface Props extends Omit<ComponentPropsWithRef<'textarea'>, 'rows'> {
   counter?: boolean;
   error?: boolean;
   valid?: boolean;
+  /** A row of actions inside the box, under the text (a chat composer's send button). */
+  footer?: ReactNode;
 }
 
-export function Textarea({ rows = 3, maxHeight = 480, counter = false, error, valid, disabled, className, onChange, ref, ...rest }: Props) {
+export function Textarea({ rows = 3, maxHeight = 480, counter = false, error, valid, disabled, className, onChange, ref, footer, ...rest }: Props) {
   const t = useT();
   const field = useFieldControl({ id: rest.id, invalid: error, required: rest.required, 'aria-describedby': rest['aria-describedby'] });
   const el = useRef<HTMLTextAreaElement | null>(null);
@@ -31,7 +33,7 @@ export function Textarea({ rows = 3, maxHeight = 480, counter = false, error, va
 
   return (
     <div>
-      <div data-invalid={field.invalid || undefined} data-valid={(!field.invalid && valid) || undefined} data-disabled={disabled || undefined} className={cx(controlShell, 'items-stretch px-3 py-2')}>
+      <div data-invalid={field.invalid || undefined} data-valid={(!field.invalid && valid) || undefined} data-disabled={disabled || undefined} className={cx(controlShell, 'items-stretch px-3 py-2', footer != null && 'flex-col')}>
         <textarea
           {...rest}
           ref={(node) => {
@@ -48,6 +50,7 @@ export function Textarea({ rows = 3, maxHeight = 480, counter = false, error, va
           onChange={(e) => { setLength(e.currentTarget.value.length); onChange?.(e); }}
           className={cx('min-w-0 flex-1 resize-none bg-transparent text-base text-ink outline-none placeholder:text-muted disabled:cursor-not-allowed', className)}
         />
+        {footer != null && <div className="flex items-center gap-2">{footer}</div>}
       </div>
       {counter && rest.maxLength !== undefined && (
         <p aria-label={`${shown} / ${rest.maxLength} ${t('characters')}`} className={cx('mt-1 text-right text-xs tabular-nums', shown >= rest.maxLength ? 'text-danger' : 'text-muted')}>

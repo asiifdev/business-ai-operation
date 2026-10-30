@@ -5,6 +5,7 @@ import { recordAudit, type AuditWho } from '../audit/service';
 import { automationOnce } from '../automation/once';
 import { addDays, todayIn } from '../billing/dates';
 import { loadOrgBilling } from '../billing/invoices';
+import { listStagnantLeads } from '../pipeline/leads';
 import { listLateTasks } from '../tasks/service';
 import { expireApprovals } from './approvals';
 import { RENEWAL_WINDOW_DAYS } from './facts';
@@ -75,6 +76,33 @@ export async function emitTaskLate(orgId: string, now: Date): Promise<{ raised: 
   return { raised };
 }
 
+/**
+ * `rule.lead_stagnant` (BRD-M08 section 3, BR-M04-08): an open, accepted lead that has stayed in its stage longer than the
+ * organization's threshold raises ONE finding per quiet spell. The period is the moment the lead entered its stage
+ * (D-073), so moving it closes the card and a later spell raises a new one, while the same spell never raises two.
+ */
+export async function emitLeadStagnant(orgId: string, now: Date): Promise<{ raised: string[] }> {
+  const stagnant = await listStagnantLeads(orgId, now);
+  const audit: AuditWho = { orgId, actor: 'system:rule.lead_stagnant' };
+  const raised: string[] = [];
+  for (const lead of stagnant) {
+    const since = lead.stageChangedAt.toISOString();
+    await db.transaction(async (tx) => {
+      const once = await automationOnce(tx, orgId, 'lead_stagnant', `stagnant:${lead.id}:${since}`, async () => {
+        const [row] = await tx
+          .insert(findings)
+          .values({ orgId, rule: 'lead_stagnant', entityType: 'lead', entityId: lead.id, periodKey: since })
+          .onConflictDoNothing()
+          .returning({ id: findings.id });
+        if (row) await recordAudit(tx, audit, { action: 'finding.created', entityType: 'finding', entityId: row.id, summary: { rule: 'lead_stagnant', leadId: lead.id } });
+        return { findingId: row?.id ?? null };
+      });
+      if (once.ran) raised.push(lead.id);
+    });
+  }
+  return { raised };
+}
+
 /** Cheap housekeeping the ticker runs every minute: closes findings whose condition is gone, wakes snoozed ones, expires approvals. */
 export async function sweepActionCenter(orgId: string, now: Date) {
   const findingsSwept = await sweepFindings(orgId, now);
@@ -86,6 +114,7 @@ export async function sweepActionCenter(orgId: string, now: Date) {
 export async function runActionCenterRules(orgId: string, now: Date) {
   const upcoming = await emitRenewalUpcoming(orgId, now);
   const late = await emitTaskLate(orgId, now);
+  const stagnant = await emitLeadStagnant(orgId, now);
   const swept = await sweepActionCenter(orgId, now);
-  return { renewalUpcomingRaised: upcoming.raised.length, taskLateRaised: late.raised.length, ...swept };
+  return { renewalUpcomingRaised: upcoming.raised.length, taskLateRaised: late.raised.length, leadStagnantRaised: stagnant.raised.length, ...swept };
 }
