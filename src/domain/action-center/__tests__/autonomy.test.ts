@@ -97,6 +97,15 @@ describe('the assistant acts by itself for the person who asked (D-082)', () => 
     expect(viaClients.autoRan).toHaveLength(1);
   });
 
+  it('moves a lead by itself right after the lead list, which holds only ids, short names, numbers and stages', async () => {
+    const o = await makeOrg();
+    const { id } = await createLead(o.ownerCtx, { name: 'Lead Setelah Daftar' });
+    const reply = await ask(o.ownerCtx, new FakeProvider({ chat: [callTools([{ name: 'list_leads', args: {} }]), callTools([{ name: 'move_lead', args: { leadId: id, to: 'exploring' } }]), say('Dipindah.')] }));
+    expect(reply.autoRan).toHaveLength(1);
+    expect(reply.pendingApprovals).toHaveLength(0);
+    expect((await db.select().from(leads).where(eq(leads.id, id)))[0].stage).toBe('exploring');
+  });
+
   it('takes an edit back, and refuses when a person changed the record afterwards', async () => {
     const o = await makeOrg();
     const { id } = await createClient(o.ownerCtx, { name: 'Klien Asli', phone: '0811' });

@@ -110,7 +110,7 @@ const toJson = (value: unknown) => JSON.stringify(value);
  */
 const TRUSTED_READ_TOOLS: ReadonlySet<string> = new Set([
   'get_ai_usage', 'get_billing_summary', 'get_business_summary', 'get_pipeline_summary', 'list_team_members',
-  'list_clients', 'list_deployments', 'describe_capabilities', 'report_out_of_scope',
+  'list_clients', 'list_leads', 'list_deployments', 'describe_capabilities', 'report_out_of_scope',
 ]);
 
 /**
@@ -229,7 +229,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
         autoRan.push({ id: approval.id, tool: tool.name, summary, executed: outcome.executed, reason: outcome.reason, undoable: outcome.undoable === true });
         log(outcome.executed ? 'ok' : 'failed');
         return outcome.executed
-          ? toJson({ status: 'sudah_dijalankan', approvalId: approval.id, ringkasan: summary, catatan: 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan; pengguna bisa membatalkannya.' })
+          ? toJson({ status: 'sudah_dijalankan', approvalId: approval.id, ringkasan: summary, catatan: 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan. Jika bisa dibatalkan, pengguna memakai tombol Batalkan pada kartu "Sudah dikerjakan asisten" tepat di bawah jawabanmu; jangan menyebut halaman persetujuan atau tempat lain.' })
           : toJson({ status: 'ditolak_sistem', alasan: outcome.reason ?? 'ditolak', catatan: 'Aksi tidak dijalankan karena data sudah berubah atau aturan menolaknya.' });
       }
       pendingApprovals.push({ id: approval.id, tool: tool.name });
