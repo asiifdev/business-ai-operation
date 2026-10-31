@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssistantReply } from '../../ai/assistant';
 import { useLocale, useT } from '../../lib/use-t';
+import type { Chip } from './attachments';
 
 export type Turn =
-  | { id: number; kind: 'user'; text: string; at?: string }
+  | { id: number; kind: 'user'; text: string; at?: string; attachments?: Chip[] }
   | { id: number; kind: 'assistant'; reply: AssistantReply; at?: string }
-  | { id: number; kind: 'error'; text: string; retry: string };
+  | { id: number; kind: 'error'; text: string; retry: string; attachments?: Chip[] };
 
 export interface SessionSummary {
   id: string;
@@ -52,7 +53,10 @@ type StoredMessage = { seq: number; kind: 'user' | 'assistant' | 'error'; body: 
 function toTurns(messages: StoredMessage[]): Turn[] {
   const turns: Turn[] = [];
   for (const m of messages) {
-    if (m.kind === 'user') turns.push({ id: m.seq, kind: 'user', text: (m.body as { text?: string }).text ?? '', at: m.createdAt });
+    if (m.kind === 'user') {
+      const body = m.body as { text?: string; attachments?: Array<{ id: string; name: string; kind: string }> };
+      turns.push({ id: m.seq, kind: 'user', text: body.text ?? '', at: m.createdAt, attachments: body.attachments?.map((a) => ({ key: a.id, id: a.id, name: a.name, kind: a.kind, status: 'ready' as const })) });
+    }
     else if (m.kind === 'assistant') turns.push({ id: m.seq, kind: 'assistant', reply: m.body as AssistantReply, at: m.createdAt });
   }
   return turns;
@@ -116,10 +120,10 @@ export function useAssistant() {
 
   const nextId = () => turnsRef.current.reduce((max, turn) => Math.max(max, turn.id), 0) + 1;
 
-  async function ask(raw: string, history: Turn[] = turnsRef.current) {
+  async function ask(raw: string, history: Turn[] = turnsRef.current, attachments: Chip[] = []) {
     const question = raw.trim().slice(0, MAX_LENGTH);
     if (!question || busyRef.current) return;
-    const withQuestion: Turn[] = [...history, { id: nextId(), kind: 'user', text: question, at: new Date().toISOString() }];
+    const withQuestion: Turn[] = [...history, { id: nextId(), kind: 'user', text: question, at: new Date().toISOString(), ...(attachments.length ? { attachments } : {}) }];
     setTurnsNow(withQuestion);
     busyRef.current = true;
     setBusy(true);
@@ -133,7 +137,7 @@ export function useAssistant() {
     }
     const messages = all.slice(-10);
     try {
-      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale, sessionId: sessionRef.current ?? undefined }) });
+      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale, sessionId: sessionRef.current ?? undefined, attachmentIds: attachments.flatMap((a) => (a.id ? [a.id] : [])) }) });
       const body = await res.json().catch(() => null);
       if (res.ok && body?.ok) {
         const { sessionId: saved, ...reply } = body.data as AssistantReply & { sessionId?: string };
@@ -144,9 +148,9 @@ export function useAssistant() {
           setSession(saved);
         }
         setSessions(null); // the list is stale now: it is fetched again when it is next opened
-      } else setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: res.status === 429 ? t('rateLimited') : t('genericError'), retry: question }]);
+      } else setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: res.status === 429 ? t('rateLimited') : t('genericError'), retry: question, attachments }]);
     } catch {
-      setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: t('genericError'), retry: question }]);
+      setTurnsNow([...withQuestion, { id: nextId(), kind: 'error', text: t('genericError'), retry: question, attachments }]);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -156,7 +160,7 @@ export function useAssistant() {
   /** Ask the failed question again, dropping the error and the question it answered. */
   function retry(turn: Extract<Turn, { kind: 'error' }>) {
     const history = turnsRef.current.filter((x) => x.id !== turn.id).slice(0, -1);
-    void ask(turn.retry, history);
+    void ask(turn.retry, history, turn.attachments ?? []);
   }
 
   /** Ask the last question again as a new turn, keeping the earlier answer in the conversation. */
@@ -196,7 +200,7 @@ export function useAssistant() {
     sessionId,
     title,
     sessions,
-    ask: (q: string) => void ask(q),
+    ask: (q: string, attachments?: Chip[]) => void ask(q, undefined, attachments),
     askAgain,
     retry,
     newChat,

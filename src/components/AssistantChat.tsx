@@ -86,7 +86,7 @@ export function AssistantChat({ role }: { role: Role }) {
           <Conversation turns={a.turns} busy={a.busy || a.opening} role={role} onAsk={a.ask} onRetry={a.retry} />
         </section>
 
-        <Composer ref={composer} busy={a.busy} onSend={a.ask} />
+        <Composer ref={composer} busy={a.busy} onSend={a.ask} attachable />
       </div>
 
       <Modal open={drawer} onClose={() => setDrawer(false)} title={t('historyTitle')} placement="bottom" bodyClassName="flex min-h-[50dvh] flex-col">

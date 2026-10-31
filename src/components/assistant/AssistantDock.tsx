@@ -111,7 +111,7 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
             <Conversation turns={turns} busy={busy || a.opening} role={role} onAsk={ask} onRetry={retry} compact />
           </div>
           <div className="shrink-0 border-t border-rule bg-paper px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <Composer ref={composer} busy={busy} onSend={ask} rows={1} />
+            <Composer ref={composer} busy={busy} onSend={ask} rows={1} attachable />
             <p className="mt-2 mb-0 text-xs text-muted">{t('dockHint')}</p>
           </div>
         </>

@@ -10,7 +10,11 @@ import { LogoMark } from '../brand/LogoMark';
 import { Textarea } from '../forms/Textarea';
 import { Icon } from '../shell/Icon';
 import { Button } from '../ui/Button';
+import { AttachmentChips } from './AttachmentChips';
 import { AutoRanCard } from './AutoRanCard';
+import { ACCEPT, dropAttachment, readFile, readLink, type Chip } from './attachments';
+import { FilePickButton } from '../forms/FilePickButton';
+import { TextInput } from '../forms/TextInput';
 import { MAX_LENGTH, type Turn } from './useAssistant';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -202,6 +206,7 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
             <div className={cx(width, 'rounded-card rounded-br-sm bg-accent px-4 py-2.5 text-accent-ink')}>
               <p className="sr-only">{t('assistantYou')}</p>
               <p className="m-0 whitespace-pre-wrap text-base">{turn.text}</p>
+              {turn.attachments && turn.attachments.length > 0 && <div className="mt-2"><AttachmentChips chips={turn.attachments} onDark /></div>}
               {turn.at && <p className="m-0 mt-1 text-right text-xs text-accent-ink/70">{timeOf(turn.at, locale)}</p>}
             </div>
           )}
@@ -335,15 +340,24 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
   );
 }
 
-/** Where a question is typed. Enter sends, Shift+Enter adds a line; the send button sits inside the field's row. */
-export function Composer({ busy, onSend, rows = 2, ref }: { busy: boolean; onSend: (question: string) => void; rows?: number; ref?: Ref<HTMLTextAreaElement> }) {
+/** Where a question is typed. Enter sends, Shift+Enter adds a line; the send button sits inside the field's row. With `attachable` it also takes files (picked, dropped or pasted) and links, which the assistant reads (D-083). */
+export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { busy: boolean; onSend: (question: string, attachments?: Chip[]) => void; rows?: number; ref?: Ref<HTMLTextAreaElement>; attachable?: boolean }) {
   const t = useT();
   const [draft, setDraft] = useState('');
+  const [chips, setChips] = useState<Chip[]>([]);
+  const [linking, setLinking] = useState(false);
+  const [link, setLink] = useState('');
+  const [over, setOver] = useState(false);
+  const reading = chips.some((c) => c.status === 'reading');
+  const ready = chips.filter((c) => c.status === 'ready');
+  const canSend = !busy && !reading && (draft.trim() !== '' || ready.length > 0);
 
   function send() {
-    if (!draft.trim() || busy) return;
-    onSend(draft);
+    if (!canSend) return;
+    // Files with no words still mean something: ask for a reading of them.
+    onSend(draft.trim() || t('attDefaultQuestion'), ready);
     setDraft('');
+    setChips((all) => all.filter((c) => c.status === 'error'));
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -353,29 +367,78 @@ export function Composer({ busy, onSend, rows = 2, ref }: { busy: boolean; onSen
     }
   }
 
+  async function addFiles(files: File[]) {
+    const fresh: Chip[] = files.map((f) => ({ key: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 7)}`, name: f.name, status: 'reading' }));
+    setChips((all) => [...all, ...fresh]);
+    await Promise.all(
+      files.map(async (file, i) => {
+        const out = await readFile(file);
+        const key = fresh[i]!.key;
+        setChips((all) => all.map((c) => (c.key === key ? (out.ok ? { ...c, status: 'ready', id: out.attachment.id, kind: out.attachment.kind } : { ...c, status: 'error', error: out.reason }) : c)));
+      }),
+    );
+  }
+
+  async function addLink() {
+    const url = link.trim();
+    if (!url) return;
+    const key = `link-${Math.random().toString(36).slice(2, 8)}`;
+    setChips((all) => [...all, { key, name: url, status: 'reading', kind: 'link' }]);
+    setLink('');
+    setLinking(false);
+    const out = await readLink(url);
+    setChips((all) => all.map((c) => (c.key === key ? (out.ok ? { ...c, status: 'ready', id: out.attachment.id, name: out.attachment.name, kind: out.attachment.kind } : { ...c, status: 'error', error: out.reason }) : c)));
+  }
+
+  function remove(chip: Chip) {
+    setChips((all) => all.filter((c) => c.key !== chip.key));
+    if (chip.id) void dropAttachment(chip.id);
+  }
+
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         send();
       }}
-      className="shrink-0"
+      onDragOver={attachable ? (e) => { e.preventDefault(); setOver(true); } : undefined}
+      onDragLeave={attachable ? () => setOver(false) : undefined}
+      onDrop={attachable ? (e) => { e.preventDefault(); setOver(false); const files = Array.from(e.dataTransfer.files); if (files.length) void addFiles(files); } : undefined}
+      className={cx('flex shrink-0 flex-col gap-2 rounded-card transition-shadow', over && 'ring-2 ring-accent')}
     >
+      {attachable && chips.length > 0 && <AttachmentChips chips={chips} onRemove={remove} />}
+      {attachable && linking && (
+        <div className="flex items-center gap-2">
+          <TextInput value={link} onChange={(e) => setLink(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addLink(); } if (e.key === 'Escape') setLinking(false); }} placeholder={t('attLinkPlaceholder')} aria-label={t('attLink')} autoComplete="off" inputMode="url" autoFocus />
+          <Button size="sm" onClick={() => void addLink()} disabled={link.trim() === ''}>{t('attLinkAdd')}</Button>
+        </div>
+      )}
       <Textarea
         ref={ref}
         value={draft}
         onChange={(e) => setDraft(e.currentTarget.value)}
         onKeyDown={onKeyDown}
+        onPaste={attachable ? (e) => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void addFiles(files); } } : undefined}
         rows={rows}
         maxHeight={160}
         maxLength={MAX_LENGTH}
-        placeholder={t('assistantPlaceholder')}
+        placeholder={over ? t('attDrop') : t('assistantPlaceholder')}
         aria-label={t('assistantPlaceholder')}
         disabled={busy}
         footer={
           <>
             <span className="flex items-center gap-1.5 text-xs text-mint-ink"><LogoMark size={14} />{t('assistantName')}</span>
-            <Button type="submit" variant="primary" size="sm" loading={busy} disabled={draft.trim() === ''} aria-label={t('assistantSend')} className="ml-auto size-8 !px-0">
+            {attachable && (
+              <span className="ml-2 flex items-center gap-1">
+                <FilePickButton onPick={(files) => void addFiles(files)} accept={ACCEPT} disabled={busy} label={t('attAdd')} className="grid size-8 place-items-center rounded-input text-muted hover:bg-paper-2 hover:text-ink disabled:opacity-50">
+                  <Icon name="attach" className="size-4" />
+                </FilePickButton>
+                <button type="button" disabled={busy} aria-label={t('attLink')} title={t('attLink')} aria-pressed={linking} onClick={() => setLinking((v) => !v)} className="grid size-8 place-items-center rounded-input text-muted hover:bg-paper-2 hover:text-ink disabled:opacity-50">
+                  <Icon name="link" className="size-4" />
+                </button>
+              </span>
+            )}
+            <Button type="submit" variant="primary" size="sm" loading={busy} disabled={!canSend} aria-label={t('assistantSend')} className="ml-auto size-8 !px-0">
               {!busy && <Icon name="arrow" className="size-4 -rotate-90" />}
             </Button>
           </>

@@ -154,7 +154,7 @@ export async function createFromPrompt(ctx: Ctx, raw: FreeInput & { logo?: boole
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const made = await make(strictPrompt(logo ? `${imagePrompt}\nKeep the top-left corner calm and empty, with no text and no logo: the real logo is added there afterwards.` : imagePrompt, allowedText, attempt > 0));
+    const made = await make(strictPrompt(logo ? `${imagePrompt}\nReserve the top-left corner as a clean empty margin about 28% of the picture width and 20% of its height: no text, no graphics, no logo and nothing important in it, and start the headline below or to the right of that area. The real logo is added there afterwards.` : imagePrompt, allowedText, attempt > 0));
     if (!made.ok) return refusal(made.kind, made.message);
     const image = made.value.images[0]!;
     const seen = await readTexts(ctx, provider, [{ bytes: image.bytes, mime: image.mime }], facts.locale, 'Teks pada gambar jadi');

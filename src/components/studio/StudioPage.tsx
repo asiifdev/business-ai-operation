@@ -75,7 +75,6 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('mkTitle')} intro={t('mkIntro')} />
-      <BrandKitPanel brandKit={opts.brandKit} brandDefaults={opts.brandDefaults} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
       <FreeCreatePanel products={opts.products} hasLogo={opts.companyLogo} remaining={opts.quota.remaining} quota={opts.quota.quota} onDone={refresh} />
       <details className="group rounded-card border border-rule bg-paper">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-2 marker:hidden hover:text-ink">{t('mkAdvancedTitle')}</summary>
@@ -84,6 +83,7 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
         </div>
       </details>
       <VideoScriptPanel products={opts.products} />
+      <BrandKitPanel brandKit={opts.brandKit} brandDefaults={opts.brandDefaults} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
       <Panel className="flex flex-col gap-4">
         <h2 className="m-0 text-lg font-semibold text-ink">{t('mkGalleryTitle')}</h2>
         <div className="grid gap-3 sm:max-w-lg sm:grid-cols-2">

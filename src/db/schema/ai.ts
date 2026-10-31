@@ -82,6 +82,32 @@ export const assistantMessages = pgTable(
   ],
 );
 
+/** ERD 3.8, D-083. What a person attached to the assistant: the original is not kept, only what the model read from it. */
+export const assistantAttachments = pgTable(
+  'assistant_attachments',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    userId: text('user_id').notNull(),
+    sessionId: text('session_id'),
+    name: text('name').notNull(),
+    kind: text('kind').notNull(),
+    mime: text('mime'),
+    sizeBytes: integer('size_bytes').notNull().default(0),
+    sourceUrl: text('source_url'),
+    summary: text('summary').notNull(),
+    digest: text('digest').notNull(),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    unique('uq_assistant_attachments_org_id').on(t.orgId, t.id),
+    foreignKey({ columns: [t.orgId, t.userId], foreignColumns: [users.orgId, users.id], name: 'fk_assistant_attachments_user' }),
+    foreignKey({ columns: [t.orgId, t.sessionId], foreignColumns: [assistantSessions.orgId, assistantSessions.id], name: 'fk_assistant_attachments_session' }).onDelete('cascade'),
+    index('idx_assistant_attachments_session').on(t.orgId, t.sessionId),
+    check('assistant_attachments_kind_ck', sql`${t.kind} in ('pdf', 'image', 'video', 'audio', 'document', 'sheet', 'slides', 'text', 'link')`),
+  ],
+);
+
 /** Daily spending cap per feature, set by the Owner (CR-11, D-025). */
 export const aiBudgets = pgTable(
   'ai_budgets',

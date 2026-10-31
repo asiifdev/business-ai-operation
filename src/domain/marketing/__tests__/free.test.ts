@@ -129,7 +129,7 @@ describe('createFromPrompt (D-080)', () => {
     expect(r.ok).toBe(true);
     // No attachment, so the model draws from the prompt alone and is told to leave the corner empty.
     expect(provider.editCalls).toHaveLength(0);
-    expect(JSON.stringify(provider.imageCalls)).toContain('top-left corner');
+    expect(JSON.stringify(provider.imageCalls)).toContain('top-left corner as a clean empty margin');
     if (r.ok) expect(r.asset.backgroundFileId).not.toBeNull();
     const off = new FakeProvider({ chat: [sayJson(BRIEF), read('Diskon Akhir Tahun')], image: [pictures()] });
     const none = await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"', logo: false }, [], off);

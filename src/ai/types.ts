@@ -27,9 +27,29 @@ export interface InputImage {
   mime: 'image/png' | 'image/jpeg' | 'image/webp';
 }
 
+/** A document handed to the model to read. Chat Completions takes a PDF as a `file` part (text of the first 100 pages, pictures of the first 50). */
+export interface InputFile {
+  bytes: Uint8Array;
+  mime: 'application/pdf';
+  name: string;
+}
+
+/** A video the model watches. Only the Responses API reads it: a Chat `video_url` part is accepted and silently ignored (probed 2026-10-31). */
+export interface InputVideo {
+  bytes: Uint8Array;
+  mime: 'video/mp4';
+}
+
+export interface VideoReadRequest {
+  instruction: string;
+  video: InputVideo;
+  maxTokens: number;
+  model?: string;
+}
+
 export type ChatMessage =
   | { role: 'developer'; content: string }
-  | { role: 'user'; content: string; /** Pictures the model may look at (vision), for example to read the text on a finished poster. */ images?: InputImage[] }
+  | { role: 'user'; content: string; /** Pictures the model may look at (vision), for example to read the text on a finished poster. */ images?: InputImage[]; /** PDFs the model may read. */ files?: InputFile[] }
   | { role: 'assistant'; content: string | null; toolCalls?: ToolCall[] }
   | { role: 'tool'; toolCallId: string; content: string };
 

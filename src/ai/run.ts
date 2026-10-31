@@ -4,7 +4,7 @@ import type { Db } from '../db/client';
 import { AiProviderError, type AiErrorKind } from './errors';
 import { AI_LABEL, NOT_AI_LABEL, friendlyAiError, type Locale } from './messages';
 import type { AiProvider } from './provider';
-import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult } from './types';
+import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult, VideoReadRequest } from './types';
 
 export type AiOutcome<T> =
   | { ok: true; value: T; runId: string; costMicroUsd: number; label: string }
@@ -87,5 +87,14 @@ export function generateImagesOnce(options: Options & { request: ImageRequest })
     const result = await options.provider.generateImage(options.request);
     run.addImages(result.images.length);
     return { value: result, summary: `${result.images.length} gambar` };
+  });
+}
+
+/** One video read (Responses API). Recorded as an `agent` run: the model's tokens are counted like any chat call. */
+export function readVideoOnce(options: Options & { request: VideoReadRequest }): Promise<AiOutcome<ChatResult>> {
+  return guardedCall(options, { feature: 'agent', model: options.request.model ?? 'muse-spark-1.3' }, async (run) => {
+    const result = await options.provider.readVideo(options.request);
+    run.addChat(result.meta.model, result.usage);
+    return { value: result, summary: result.text ?? '' };
   });
 }

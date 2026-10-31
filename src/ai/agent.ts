@@ -63,6 +63,8 @@ export interface AgentInput {
    * the organization's autonomy level. Never used for a finding (Action Center) and never once the run has read text from a
    * source that is not the person (a document, a page, a message): those proposals wait for a click.
    */
+  /** True when the question came with text from outside the person (attachments): nothing in this run may run by itself (D-082, D-083). */
+  untrustedInput?: boolean;
   autoRun?: (approval: { id: string; tool: string }) => Promise<{ executed: boolean; reason?: string; undoable?: boolean } | null>;
 }
 
@@ -161,7 +163,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   const pendingApprovals: Array<{ id: string; tool: string }> = [];
   const autoRan: NonNullable<AgentResult['autoRan']> = [];
   /** Once the run has read text that came from somebody else, nothing it proposes may run by itself (D-082). */
-  let readUntrusted = false;
+  let readUntrusted = input.untrustedInput === true;
   const drafts: Array<{ tool: string; id: string }> = [];
   let invalidCalls = 0;
   let rejectedCall = false;

@@ -324,6 +324,8 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`assistant_messages`**: `id`, `org_id`, `session_id`, `seq integer` (urutan dalam sesi), `kind text` (`user`, `assistant`, `error`), `body jsonb` (user: `{text}`; assistant: jawaban lengkap beserta sumber, draf, dan persetujuan yang diajukan; error: `{text, retry}`), `created_at`. `FK (org_id, session_id) → assistant_sessions` `ON DELETE CASCADE`, `UNIQUE (session_id, seq)`. Isi percakapan adalah data pengguna: tidak masuk `audit_log` dan tidak dipakai melatih apa pun; menghapus sesi menghapus pesannya.
 
+**`assistant_attachments`** (lampiran konteks asisten: dokumen, gambar, video, suara, tautan; D-083) · BR-M07: `id`, `org_id`, `user_id` (pemilik, `FK (org_id, user_id) → users`), `session_id N` (kosong sampai pesan pertama yang memakainya tersimpan; `FK (org_id, session_id) → assistant_sessions` `ON DELETE CASCADE`), `name text`, `kind text` (`pdf`, `image`, `video`, `audio`, `document`, `sheet`, `slides`, `text`, `link`), `mime text N`, `size_bytes integer`, `source_url text N` (hanya `link`), `summary text` (satu sampai tiga kalimat), `digest text` (isi yang terbaca, dipotong), `created_at`. `UNIQUE (org_id, id)`, indeks `(org_id, session_id)`. **Berkas asli tidak disimpan**: hanya hasil bacaan (`digest`), yang adalah data tidak tepercaya (dibungkus `data_tidak_tepercaya` setiap kali masuk ke model). Menghapus sesi menghapus lampirannya; lampiran yang tidak pernah dipakai (`session_id` kosong) dihapus setelah 24 jam. Tidak masuk `audit_log` beserta isinya.
+
 **`briefings`**: `id`, `org_id`, `briefing_date date`, `content text`, `is_ai boolean` (false = angka saja, "bukan hasil AI", BR-M08-11), `ai_run_id N`, `created_at`. `UNIQUE (org_id, briefing_date)`.
 
 ### 3.9 Koneksi dan operasi deployment (M17)
@@ -372,7 +374,7 @@ Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); per
 | `marketing.ts` | `brand_kits`, `marketing_assets` |
 | `profile.ts` | `organization_profiles`, `org_services` (D-079) |
 | `operations.ts` | `connections`, `product_setups`, `playbook_runs`, `playbook_steps` |
-| `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings`, `assistant_sessions`, `assistant_messages` |
+| `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings`, `assistant_sessions`, `assistant_messages`, `assistant_attachments` |
 
 Total **42 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
 

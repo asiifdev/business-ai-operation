@@ -11,6 +11,7 @@ import type {
   TranscribeRequest,
   TranscribeResult,
   Usage,
+  VideoReadRequest,
 } from './types';
 
 // Priced like the real default model so cost and budget logic behave the same in tests.
@@ -47,6 +48,8 @@ export class FakeProvider implements AiProvider {
   readonly imageCalls: ImageRequest[] = [];
   /** Edits (with reference pictures) are recorded apart from plain generation; they share one image queue. */
   readonly editCalls: ImageEditRequest[] = [];
+  /** Videos read, recorded apart; the answers come from the chat queue. */
+  readonly videoCalls: VideoReadRequest[] = [];
 
   private readonly chatQueue: ChatStep[];
   private readonly transcribeQueue: Array<TranscribeResult | AiProviderError>;
@@ -61,6 +64,11 @@ export class FakeProvider implements AiProvider {
   async chat(request: ChatRequest): Promise<ChatResult> {
     this.chatCalls.push(structuredClone(request)); // a snapshot, like a real call: the agent keeps appending to its own array
     return next(this.chatQueue, 'chat');
+  }
+
+  async readVideo(request: VideoReadRequest): Promise<ChatResult> {
+    this.videoCalls.push(structuredClone(request));
+    return next(this.chatQueue, 'readVideo');
   }
 
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {

@@ -17,6 +17,7 @@ import type {
   TranscribeRequest,
   TranscribeResult,
   Usage,
+  VideoReadRequest,
 } from '../types';
 import { inspectWav } from '../wav';
 import { MetaHttp, type MetaHttpOptions } from './http';
@@ -56,6 +57,11 @@ const chatResponse = z.object({
     prompt_tokens_details: z.object({ cached_tokens: z.number().nullish() }).nullish(),
     completion_tokens_details: z.object({ reasoning_tokens: z.number().nullish() }).nullish(),
   }),
+});
+
+const responsesResponse = z.object({
+  output: z.array(z.object({ type: z.string(), content: z.array(z.object({ type: z.string(), text: z.string().nullish() })).nullish() })),
+  usage: z.object({ input_tokens: z.number().nullish(), output_tokens: z.number().nullish(), output_tokens_details: z.object({ reasoning_tokens: z.number().nullish() }).nullish() }).nullish(),
 });
 
 const transcribeResponse = z.object({
@@ -158,6 +164,31 @@ export class MetaProvider implements AiProvider {
     return { text, toolCalls, json, finishReason, usage, meta: { ...meta, model } };
   }
 
+  /** `/responses` with an `input_video` part: the only route that actually shows the model the video. */
+  async readVideo(request: VideoReadRequest): Promise<ChatResult> {
+    const model = request.model ?? this.models.chat;
+    this.assertModelAllowed(model);
+    if (request.maxTokens < MIN_MAX_TOKENS) throw new AiProviderError('bad_request', `maxTokens must be at least ${MIN_MAX_TOKENS}: reasoning uses the same budget`);
+    const body = {
+      model,
+      max_output_tokens: request.maxTokens,
+      input: [{ role: 'user', content: [{ type: 'input_text', text: request.instruction }, { type: 'input_video', video_url: `data:${request.video.mime};base64,${Buffer.from(request.video.bytes).toString('base64')}` }] }],
+    };
+    const { body: raw, meta } = await this.http.post<unknown>({ path: '/responses', json: body });
+    const parsed = responsesResponse.safeParse(raw);
+    if (!parsed.success) throw new AiProviderError('invalid_output', 'Video response did not have the expected shape');
+    const usage: Usage = { inputTokens: parsed.data.usage?.input_tokens ?? 0, outputTokens: parsed.data.usage?.output_tokens ?? 0, cachedTokens: 0, reasoningTokens: parsed.data.usage?.output_tokens_details?.reasoning_tokens ?? 0 };
+    const text = parsed.data.output
+      .filter((item) => item.type === 'message')
+      .flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === 'output_text')
+      .map((part) => part.text ?? '')
+      .join('')
+      .trim();
+    if (!text) throw new AiProviderError('empty', 'The model returned no text about the video', { usage });
+    return { text, toolCalls: [], finishReason: 'stop', usage, meta: { ...meta, model } };
+  }
+
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {
     const wav = inspectWav(request.wav);
     const settings: Record<string, unknown> = {
@@ -249,9 +280,17 @@ function toWireMessage(message: ChatMessage): Record<string, unknown> {
         : {}),
     };
   }
-  if (message.role === 'user' && message.images?.length) {
+  if (message.role === 'user' && (message.images?.length || message.files?.length)) {
     // Chat Completions takes pictures as `image_url` parts beside the text (a data URI keeps them off the network).
-    return { role: 'user', content: [{ type: 'text', text: message.content }, ...message.images.map((img) => ({ type: 'image_url', image_url: { url: toDataUri(img) } }))] };
+    return {
+      role: 'user',
+      content: [
+        { type: 'text', text: message.content },
+        ...(message.images ?? []).map((img) => ({ type: 'image_url', image_url: { url: toDataUri(img) } })),
+        // A PDF is a `file` part with inline base64 (the one document form Chat Completions documents).
+        ...(message.files ?? []).map((f) => ({ type: 'file', file: { filename: f.name, file_data: `data:${f.mime};base64,${Buffer.from(f.bytes).toString('base64')}` } })),
+      ],
+    };
   }
   return { role: message.role, content: message.content };
 }
