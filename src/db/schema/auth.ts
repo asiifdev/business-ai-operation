@@ -27,6 +27,8 @@ export const organizations = pgTable(
     taxRateBps: integer('tax_rate_bps').notNull().default(0),
     stagnantDays: smallint('stagnant_days').notNull().default(14),
     approvalTtlHours: smallint('approval_ttl_hours').notNull().default(24),
+    /** D-082: how much the assistant may do on its own for the person who asked. Risky actions always wait for a click. */
+    aiAutonomy: text('ai_autonomy', { enum: ['careful', 'balanced', 'autonomous'] }).notNull().default('balanced'),
     bankName: text('bank_name'),
     bankAccountName: text('bank_account_name'),
     bankAccountNumber: text('bank_account_number'),

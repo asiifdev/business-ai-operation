@@ -14,6 +14,7 @@ import { Badge } from '../ui/Badge';
 import { Button, buttonClasses } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { Panel } from '../ui/Panel';
 import { FreeCreatePanel } from './FreeCreatePanel';
 import { VideoScriptPanel } from './VideoScriptPanel';
@@ -44,7 +45,15 @@ type PosterCopy = { headline: string; subheadline: string | null; cta: string | 
 const ASPECT_LABEL = { square: 'mkAspectSquare', portrait: 'mkAspectPortrait', story: 'mkAspectStory', wide: 'mkAspectWide' } as const satisfies Record<string, MessageKey>;
 
 /** Brand kit, image maker, video script and gallery in one page (BRD-M10). No video or voice is made (BR-M10-10); the script is text only (D-079). */
-export function StudioPage({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
+export function StudioPage(props: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
+  return (
+    <ErrorBoundary>
+      <Studio {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
   const t = useT();
   const options = useLoad(() => api<Options>('GET', '/api/marketing/options'), []);
   const [productFilter, setProductFilter] = useState('');

@@ -16,6 +16,7 @@ import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { ErrorBox, Skeleton } from '../ui/states';
 
 type Service = { id: string; name: string; description: string | null };
@@ -25,6 +26,14 @@ const SOCIAL_LABEL: Record<(typeof SOCIAL_KEYS)[number], string> = { instagram: 
 
 /** The company profile (D-079): identity, contact, customers and strengths, and services. The AI reads all of it as facts. */
 export function CompanyProfilePage({ canEdit }: { canEdit: boolean }) {
+  return (
+    <ErrorBoundary>
+      <CompanyProfile canEdit={canEdit} />
+    </ErrorBoundary>
+  );
+}
+
+function CompanyProfile({ canEdit }: { canEdit: boolean }) {
   const t = useT();
   const load = useLoad(() => api<Data>('GET', '/api/settings/company'), []);
   return (
@@ -68,8 +77,15 @@ function ProfileForm({ initial, canEdit, onLogoChanged }: { initial: Data['profi
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<'saved' | 'nothing' | null>(null);
   const bad = badFields(error);
-  const set = (key: Exclude<keyof typeof v, 'socials'>) => (e: { currentTarget: { value: string } }) => setV((p) => ({ ...p, [key]: e.currentTarget.value }));
-  const setSocial = (key: (typeof SOCIAL_KEYS)[number]) => (e: { currentTarget: { value: string } }) => setV((p) => ({ ...p, socials: { ...p.socials, [key]: e.currentTarget.value } }));
+  // The value is read now: React empties `currentTarget` once the handler returns, and a state updater may run later.
+  const set = (key: Exclude<keyof typeof v, 'socials'>) => (e: { currentTarget: { value: string } }) => {
+    const value = e.currentTarget.value;
+    setV((p) => ({ ...p, [key]: value }));
+  };
+  const setSocial = (key: (typeof SOCIAL_KEYS)[number]) => (e: { currentTarget: { value: string } }) => {
+    const value = e.currentTarget.value;
+    setV((p) => ({ ...p, socials: { ...p.socials, [key]: value } }));
+  };
   const badSocial = (key: string) => bad[key] || bad[`socials.${key}`];
 
   async function submit(e: FormEvent) {

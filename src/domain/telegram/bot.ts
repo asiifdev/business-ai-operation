@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { approvals, telegramUpdates } from '../../db/schema';
-import { parseApprovalCallback, parsePosterCallback } from '../../integrations/telegram/callback';
+import { encodeApprovalCallback, parseApprovalCallback, parsePosterCallback } from '../../integrations/telegram/callback';
 import type { AiProvider } from '../../ai/provider';
 import type { InlineKeyboard, TelegramClient } from '../../integrations/telegram/client';
 import { TelegramError } from '../../integrations/telegram/errors';
@@ -14,6 +14,7 @@ import { formatDate, formatDateTime, formatRupiah } from '../../lib/format';
 import { translate, type Locale, type MessageKey } from '../../lib/i18n';
 import { limiter } from '../../lib/rate-limit';
 import { decideApproval, listPendingApprovals } from '../action-center/approvals';
+import { undoApproval } from '../action-center/autonomy';
 import { countOpenFindings } from '../action-center/findings';
 import { recordAudit } from '../audit/service';
 import { listInvoices } from '../billing/invoices';
@@ -29,6 +30,8 @@ import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from '
 import { pendingPictures, makePicture, pictureJpeg } from './picture';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
+export interface AutoRan { id: string; summary: string; undoable: boolean }
+
 /** What the handler needs from the outside world, so tests can pass fakes and never reach Telegram or a model. */
 export interface BotDeps {
   client: Pick<TelegramClient, 'sendMessage' | 'editMessageText' | 'answerCallbackQuery' | 'sendChatAction' | 'downloadFile'> & Partial<Pick<TelegramClient, 'sendVoice' | 'sendPhoto'>>;
@@ -38,7 +41,7 @@ export interface BotDeps {
   /** Public address of the web app, for links in messages. */
   appUrl?: string;
   /** Free text goes to the grounded assistant (M07). Left out, the bot answers with the command list instead. */
-  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean; /** Called for each picture the assistant made while answering; the bot then sends it as a photo (D-080). */ onPicture?: (assetId: string) => void }) => Promise<string>;
+  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean; /** Called for each picture the assistant made while answering; the bot then sends it as a photo (D-080). */ onPicture?: (assetId: string) => void; /** Called for each action the assistant ran by itself (D-082); the bot tells the person and offers Undo. */ onAutoRan?: (item: AutoRan) => void }) => Promise<string>;
   /** Reads an answer aloud (D-052). Left out, or returning null, the answer stays text only. */
   speak?: (text: string, locale: 'id' | 'en', ctx: Ctx, person: LinkedUser) => Promise<{ ogg: Uint8Array; durationMs: number } | null>;
   /** Short speech to text for a chat voice note (M09 STT). Left out, a voice note is treated as a meeting recording. */
@@ -140,8 +143,11 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
   // an approval that a person decides (CR-12).
   await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
   const pictures: string[] = [];
-  const answer = await deps.ask(ctx, text.slice(0, 2000), person, { onPicture: (id) => pictures.push(id) });
+  const autoRan: AutoRan[] = [];
+  const answer = await deps.ask(ctx, text.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item) });
   for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
+  await sendAutoRan(autoRan, person, deps);
+  await sendAutoRan(autoRan, person, deps);
   await sendPictures(pictures, ctx, person, deps);
 }
 
@@ -184,7 +190,8 @@ async function onVoiceChat(bytes: Uint8Array, ctx: Ctx, person: LinkedUser, deps
   const words = heard.text.trim().slice(0, 2000);
   if (!words) return send(deps, person.chatId, escapeHtml(t('tgVoiceUnclear')));
   const pictures: string[] = [];
-  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice), onPicture: (id) => pictures.push(id) });
+  const autoRan: AutoRan[] = [];
+  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice), onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item) });
   if (!(await replyAloud(answer, ctx, person, deps))) for (const part of answerToTelegramParts(answer)) await send(deps, person.chatId, part);
   await sendPictures(pictures, ctx, person, deps);
 }
@@ -362,6 +369,8 @@ async function onCallback(cb: Callback, updateId: number, deps: BotDeps) {
     return send(deps, person.chatId, row ? `${escapeHtml(row.rationale)}${link}` : escapeHtml(translate(locale, 'tgApprovalGone')));
   }
 
+  if (parsed.action === 'u') return onUndoCallback(cb, parsed.approvalId, person, locale, ctx, deps);
+
   const decision = parsed.action === 'y' ? 'approve' : 'reject';
   let outcome: DecisionOutcome;
   try {
@@ -381,6 +390,31 @@ async function onCallback(cb: Callback, updateId: number, deps: BotDeps) {
   const head = row ? `<b>${escapeHtml(translate(locale, 'apTitle'))}</b>\n${escapeHtml(row.rationale)}\n\n` : '';
   await deps.client.editMessageText({ chatId: cb.message.chat.id, messageId: cb.message.message_id, text: `${head}${line}`, parseMode: 'HTML' }).catch((err) => {
     if (!(err instanceof TelegramError && err.kind === 'bad_request')) throw err; // the card is gone or unchanged
+  });
+}
+
+/** What the assistant did by itself, one message each, with an Undo button while it can be taken back (D-082). */
+async function sendAutoRan(items: AutoRan[], person: LinkedUser, deps: BotDeps) {
+  for (const item of items) {
+    const keyboard: InlineKeyboard | undefined = item.undoable ? { inline_keyboard: [[{ text: translate(person.locale, 'tgAutoUndo'), callback_data: encodeApprovalCallback(item.id, 'u') }]] } : undefined;
+    await send(deps, person.chatId, `✅ ${escapeHtml(translate(person.locale, 'tgAutoDone', { what: item.summary }))}`, keyboard);
+  }
+}
+
+/** The Undo button. Goes through `undoApproval`, the function behind the web button, so rights and "changed since" are checked again. */
+async function onUndoCallback(cb: Callback, approvalId: string, person: LinkedUser, locale: Locale, ctx: Ctx, deps: BotDeps) {
+  let undone = false;
+  try {
+    undone = (await undoApproval(ctx, approvalId)).undone;
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+  }
+  const text = translate(locale, undone ? 'tgAutoUndone' : 'tgAutoUndoFailed');
+  await deps.client.answerCallbackQuery({ id: cb.id, text, showAlert: !undone });
+  if (!undone || !cb.message) return;
+  await recordAudit(db, { orgId: person.orgId, actor: `user:${person.userId}`, userId: person.userId }, { action: 'telegram.approval_undone', entityType: 'approval', entityId: approvalId, summary: {} });
+  await deps.client.editMessageText({ chatId: cb.message.chat.id, messageId: cb.message.message_id, text: `↩️ ${escapeHtml(text)}`, parseMode: 'HTML' }).catch((err) => {
+    if (!(err instanceof TelegramError && err.kind === 'bad_request')) throw err;
   });
 }
 

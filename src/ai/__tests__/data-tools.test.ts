@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../db/client';
-import { approvals, clients, leads } from '../../db/schema';
+import { approvals, clients, leads, organizations } from '../../db/schema';
 import { decideApproval } from '../../domain/action-center/approvals';
 import { makeOrg } from '../../domain/ai/__tests__/support';
 import type { Ctx } from '../../domain/ctx';
@@ -17,8 +17,11 @@ afterAll(async () => {
   await pg.end();
 });
 
-const ask = (ctx: Ctx, provider: FakeProvider, text: string) =>
-  askAssistant(db, ctx, { request: { messages: [{ role: 'user', content: text }] }, organizationName: 'Orbit Studio', locale: 'id', provider });
+// These tests cover the click-to-approve path, so the organization is `careful` (D-082). The automatic path is in autonomy.test.ts.
+const ask = async (ctx: Ctx, provider: FakeProvider, text: string) => {
+  await db.update(organizations).set({ aiAutonomy: 'careful' }).where(eq(organizations.id, ctx.orgId));
+  return askAssistant(db, ctx, { request: { messages: [{ role: 'user', content: text }] }, organizationName: 'Orbit Studio', locale: 'id', provider });
+};
 
 describe('data tools (D-077): the assistant adds and changes records only after a person approved', () => {
   it('registers every data tool as an act tool, in the assistant and in the registry approvals are decided from', () => {

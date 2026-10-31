@@ -9,6 +9,7 @@ import { NumberInput } from '../forms/NumberInput';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { Button, buttonClasses } from '../ui/Button';
+import { AutonomyCard } from './AutonomyCard';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
@@ -111,6 +112,7 @@ function Form({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
         <p className="m-0 max-w-prose text-sm text-muted">{t('orgAiBudgetHelp')}</p>
         <a href="/app/ai?tab=budget" className={buttonClasses('secondary') + ' self-start'}>{t('orgAiBudgetLink')}</a>
       </Panel>
+      <AutonomyCard canEdit={canEdit} />
       {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
       {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
       {canEdit && (

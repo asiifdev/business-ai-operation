@@ -65,7 +65,7 @@ export const startFlowRunTool = defineTool({
  */
 export const convertLeadToClientTool = defineTool({
   name: 'convert_lead_to_client',
-  description: 'Proposes to turn a WON lead into a client: a new client from the lead\'s details, or linked to an existing client when clientId is given, plus the onboarding checklist as tasks. Only for leads in the Won stage. It never runs by itself: a person must approve it first. Nothing is sent to anyone.',
+  description: 'Proposes to turn a WON lead into a client: a new client from the lead\'s details, or linked to an existing client when clientId is given, plus the onboarding checklist as tasks. Only for leads in the Won stage. The system decides whether it runs at once or waits for a person\'s approval. Nothing is sent to anyone.',
   tier: 'act',
   permission: 'lead.convert',
   args: z.object({ leadId: z.string().min(1).max(40), clientId: z.string().min(1).max(40).optional() }),
@@ -87,7 +87,7 @@ const text = (max: number) => z.string().trim().max(max);
  */
 export const createClientTool = defineTool({
   name: 'create_client',
-  description: 'Proposes to ADD a new client (name, and optionally contact person, email, phone, address, notes) from what the person asked. Check list_clients first: do not propose a client that already exists. It never runs by itself: a person must approve it first. Nothing is sent to anyone.',
+  description: 'Proposes to ADD a new client (name, and optionally contact person, email, phone, address, notes) from what the person asked. Check list_clients first: do not propose a client that already exists. The system decides whether it runs at once or waits for a person\'s approval. Nothing is sent to anyone.',
   tier: 'act',
   permission: 'client.write',
   args: z.object({ name: text(120).min(2), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
@@ -97,7 +97,7 @@ export const createClientTool = defineTool({
 
 export const updateClientTool = defineTool({
   name: 'update_client',
-  description: 'Proposes to CHANGE details of an existing client (name, contact person, email, phone, address, notes). Give only the fields that change; clientId from list_clients. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to CHANGE details of an existing client (name, contact person, email, phone, address, notes). Give only the fields that change; clientId from list_clients. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'client.write',
   args: z.object({ clientId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
@@ -107,7 +107,7 @@ export const updateClientTool = defineTool({
 
 export const createProductTool = defineTool({
   name: 'create_product',
-  description: 'Proposes to ADD a new product to the catalogue (name, description, current version). Packages and prices are set by a person on the product page, never by you. Check list_products first. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to ADD a new product to the catalogue (name, description, current version). Packages and prices are set by a person on the product page, never by you. Check list_products first. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'catalog.write',
   args: z.object({ name: text(120).min(2), description: text(2000).optional(), currentVersion: text(40).optional() }),
@@ -117,7 +117,7 @@ export const createProductTool = defineTool({
 
 export const updateProductTool = defineTool({
   name: 'update_product',
-  description: 'Proposes to CHANGE a product (name, description, current version). Give only what changes; productId from list_products. Prices are not touched. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to CHANGE a product (name, description, current version). Give only what changes; productId from list_products. Prices are not touched. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'catalog.write',
   args: z.object({ productId: id, name: text(120).min(2).optional(), description: text(2000).optional(), currentVersion: text(40).optional() }),
@@ -127,7 +127,7 @@ export const updateProductTool = defineTool({
 
 export const createDeploymentTool = defineTool({
   name: 'create_deployment',
-  description: 'Proposes to RECORD a deployment: a product installed for a client (ids from list_products and list_clients), with environment (default production), optional label, domain (host name only, no https:// and no login) and installed version. It never runs by itself: a person must approve it first. It does not install anything on a server.',
+  description: 'Proposes to RECORD a deployment: a product installed for a client (ids from list_products and list_clients), with environment (default production), optional label, domain (host name only, no https:// and no login) and installed version. The system decides whether it runs at once or waits for a person\'s approval. It does not install anything on a server.',
   tier: 'act',
   permission: 'deployment.write',
   args: z.object({ productId: id, clientId: id, environment: text(30).min(2).optional(), label: text(120).optional(), domain: text(253).optional(), installedVersion: text(40).optional() }),
@@ -137,7 +137,7 @@ export const createDeploymentTool = defineTool({
 
 export const updateDeploymentTool = defineTool({
   name: 'update_deployment',
-  description: 'Proposes to CHANGE a recorded deployment (environment, label, domain, installed version, active or inactive). deploymentId from list_deployments. It never runs by itself: a person must approve it first. It does not touch any server.',
+  description: 'Proposes to CHANGE a recorded deployment (environment, label, domain, installed version, active or inactive). deploymentId from list_deployments. The system decides whether it runs at once or waits for a person\'s approval. It does not touch any server.',
   tier: 'act',
   permission: 'deployment.write',
   args: z.object({ deploymentId: id, environment: text(30).min(2).optional(), label: text(120).optional(), domain: text(253).optional(), installedVersion: text(40).optional(), status: z.enum(['active', 'inactive']).optional() }),
@@ -147,7 +147,7 @@ export const updateDeploymentTool = defineTool({
 
 export const updateLeadTool = defineTool({
   name: 'update_lead',
-  description: 'Proposes to CHANGE a lead (name, contact person, email, phone, source, needs, estimated value in Rupiah, assignedTo = a user id from list_team_members). Give only what changes; leadId from list_leads. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to CHANGE a lead (name, contact person, email, phone, source, needs, estimated value in Rupiah, assignedTo = a user id from list_team_members). Give only what changes; leadId from list_leads. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'lead.update_assigned',
   args: z.object({ leadId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), source: text(80).optional(), needsSummary: text(4000).optional(), estimatedValue: z.number().int().min(0).optional(), assignedTo: id.nullable().optional() }),
@@ -157,7 +157,7 @@ export const updateLeadTool = defineTool({
 
 export const moveLeadTool = defineTool({
   name: 'move_lead',
-  description: 'Proposes to MOVE a lead one step to another pipeline stage (exploring, proposal, negotiation, won, lost). A lost lead needs lostReason. The system refuses an invalid move. leadId from list_leads. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to MOVE a lead one step to another pipeline stage (exploring, proposal, negotiation, won, lost). A lost lead needs lostReason. The system refuses an invalid move. leadId from list_leads. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'lead.update_assigned',
   args: z.object({ leadId: id, to: z.enum(STAGES), lostReason: text(500).optional() }),
@@ -167,7 +167,7 @@ export const moveLeadTool = defineTool({
 
 export const updateTaskTool = defineTool({
   name: 'update_task',
-  description: 'Proposes to CHANGE an accepted task: status (open, in_progress, done), priority, due date (YYYY-MM-DD), assignee (user id from list_team_members), title or description. taskId from list_tasks. It never runs by itself: a person must approve it first.',
+  description: 'Proposes to CHANGE an accepted task: status (open, in_progress, done), priority, due date (YYYY-MM-DD), assignee (user id from list_team_members), title or description. taskId from list_tasks. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'task.update_own',
   args: z.object({

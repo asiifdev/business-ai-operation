@@ -10,6 +10,7 @@ import { LogoMark } from '../brand/LogoMark';
 import { Textarea } from '../forms/Textarea';
 import { Icon } from '../shell/Icon';
 import { Button } from '../ui/Button';
+import { AutoRanCard } from './AutoRanCard';
 import { MAX_LENGTH, type Turn } from './useAssistant';
 
 type Role = 'owner' | 'admin' | 'staff';
@@ -274,6 +275,7 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
             <Icon name="arrow" className="size-4" />
           </a>
         )}
+        {(reply.autoRan?.length ?? 0) > 0 && <AutoRanCard items={reply.autoRan} />}
         {reply.drafts?.filter((d) => DRAFT_HREF[d.tool]).map((d) => (
           <a key={`${d.tool}-${d.id}`} href={DRAFT_HREF[d.tool](d.id)} className="flex w-fit items-center gap-2 rounded-input border border-rule px-3 py-1.5 text-sm text-ink no-underline hover:bg-paper">
             {t('assistantOpenDraft', { what: sourceLabel(d.tool, t) })}

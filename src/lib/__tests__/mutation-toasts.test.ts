@@ -35,6 +35,11 @@ describe('mutationToastKey', () => {
     expect(mutationToastKey('POST', '/api/settings/org', { changed: ['name'] })).toBe('toastSaved');
   });
 
+  it('says done when an automatic action is taken back, and nothing when the undo was refused', () => {
+    expect(mutationToastKey('POST', '/api/approvals/01ABC/undo', { undone: true })).toBe('toastDone');
+    expect(mutationToastKey('POST', '/api/approvals/01ABC/undo', { undone: false, reason: 'changed_since' })).toBeNull();
+  });
+
   it('stays silent for chat, sign-in and screens that raise their own toast', () => {
     expect(mutationToastKey('POST', '/api/assistant/chat')).toBeNull();
     expect(mutationToastKey('POST', '/api/auth/sign-in/email')).toBeNull();

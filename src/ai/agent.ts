@@ -58,6 +58,12 @@ export interface AgentInput {
   /** Extra values the answer may mention that did not come from a tool, such as today's date. */
   trustedNumbers?: string[];
   requestApproval?: typeof defaultRequestApproval;
+  /**
+   * D-082: lets an `act` proposal run at once, for the person who asked. Returns null when this tool may not run by itself at
+   * the organization's autonomy level. Never used for a finding (Action Center) and never once the run has read text from a
+   * source that is not the person (a document, a page, a message): those proposals wait for a click.
+   */
+  autoRun?: (approval: { id: string; tool: string }) => Promise<{ executed: boolean; reason?: string; undoable?: boolean } | null>;
 }
 
 export interface AgentResult {
@@ -75,6 +81,8 @@ export interface AgentResult {
   costMicroUsd: number;
   tools: ToolLogEntry[];
   pendingApprovals: Array<{ id: string; tool: string }>;
+  /** Actions that ran by themselves under the organization's autonomy level (D-082). `summary` is the plain sentence of what was done. */
+  autoRan?: Array<{ id: string; tool: string; summary: string; executed: boolean; reason?: string; undoable: boolean }>;
   /** Drafts this run made (a `draft` tool that returned an id): the interface links to each so a person reviews it at once. */
   drafts?: Array<{ tool: string; id: string }>;
   /** Numbers in the answer that no tool result contained (BR-M07-10). The caller decides what to do with them. */
@@ -89,6 +97,16 @@ export interface AgentResult {
 }
 
 const toJson = (value: unknown) => JSON.stringify(value);
+
+/**
+ * Read tools whose results hold only numbers, ids, enums and short one-line names, so nothing in them can carry an instruction (D-082).
+ * Fail closed: after ANY other tool (documents, meetings, descriptions, notes, the company text, a tool added later) nothing the run
+ * proposes may run by itself; it waits for a click. A new tool is untrusted until someone puts it here.
+ */
+const TRUSTED_READ_TOOLS: ReadonlySet<string> = new Set([
+  'get_ai_usage', 'get_billing_summary', 'get_business_summary', 'get_pipeline_summary', 'list_team_members',
+  'list_clients', 'list_deployments', 'describe_capabilities', 'report_out_of_scope',
+]);
 
 /**
  * The agent loop (BRD-M07 §4). It checks the budget, offers the model only the tools the user's role may use, runs
@@ -141,6 +159,9 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   const safetyIdentifier = createHash('sha256').update(`${input.ctx.orgId}:${input.ctx.userId}`).digest('hex').slice(0, 32);
   const toolOutputs: string[] = [];
   const pendingApprovals: Array<{ id: string; tool: string }> = [];
+  const autoRan: NonNullable<AgentResult['autoRan']> = [];
+  /** Once the run has read text that came from somebody else, nothing it proposes may run by itself (D-082). */
+  let readUntrusted = false;
   const drafts: Array<{ tool: string; id: string }> = [];
   let invalidCalls = 0;
   let rejectedCall = false;
@@ -190,7 +211,16 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
 
     if (tool.tier === 'act') {
       const describe = tool.describe as (args: unknown) => string;
-      const approval = await ask(input.db, aiCtx, { tool: tool.name, args: parsed.data, rationale: describe(parsed.data), findingId: input.findingId ?? null });
+      const summary = describe(parsed.data);
+      const approval = await ask(input.db, aiCtx, { tool: tool.name, args: parsed.data, rationale: summary, findingId: input.findingId ?? null });
+      const outcome = input.autoRun && !readUntrusted && !input.findingId ? await input.autoRun({ id: approval.id, tool: tool.name }).catch(() => null) : null;
+      if (outcome) {
+        autoRan.push({ id: approval.id, tool: tool.name, summary, executed: outcome.executed, reason: outcome.reason, undoable: outcome.undoable === true });
+        log(outcome.executed ? 'ok' : 'failed');
+        return outcome.executed
+          ? toJson({ status: 'sudah_dijalankan', approvalId: approval.id, ringkasan: summary, catatan: 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan; pengguna bisa membatalkannya.' })
+          : toJson({ status: 'ditolak_sistem', alasan: outcome.reason ?? 'ditolak', catatan: 'Aksi tidak dijalankan karena data sudah berubah atau aturan menolaknya.' });
+      }
       pendingApprovals.push({ id: approval.id, tool: tool.name });
       log('pending_approval');
       return toJson({ status: 'menunggu_persetujuan_manusia', approvalId: approval.id, catatan: 'Aksi belum dijalankan. Seorang manusia harus menyetujuinya lebih dulu.' });
@@ -205,6 +235,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       }
       log('ok');
       toolOutputs.push(text);
+      if (!TRUSTED_READ_TOOLS.has(call.name) || text.includes('data_tidak_tepercaya')) readUntrusted = true;
       const draftId = (output as { id?: unknown } | null)?.id;
       if (tool.tier === 'draft' && typeof draftId === 'string') drafts.push({ tool: tool.name, id: draftId });
       if (output && typeof output === 'object' && (output as { outOfScope?: unknown }).outOfScope === true) outOfScope = true;
@@ -260,12 +291,13 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
             ok: true,
             label: NOT_AI_LABEL[locale],
             status: 'ok',
-            text: pendingApprovals.length || drafts.length ? ACTION_DONE_FALLBACK[refusalLocale] : NO_DATA_REFUSAL[refusalLocale],
+            text: pendingApprovals.length || autoRan.length || drafts.length ? ACTION_DONE_FALLBACK[refusalLocale] : NO_DATA_REFUSAL[refusalLocale],
             runId: run.id,
             rounds,
             costMicroUsd: run.spentMicroUsd,
             tools: [...run.toolLog],
             pendingApprovals,
+            autoRan,
             drafts,
             unverifiedNumbers: unverified,
             grounded,
@@ -288,6 +320,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           costMicroUsd: run.spentMicroUsd,
           tools: [...run.toolLog],
           pendingApprovals,
+          autoRan,
           drafts,
           unverifiedNumbers: unverified,
           grounded,
@@ -310,6 +343,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           costMicroUsd: run.spentMicroUsd,
           tools: [...run.toolLog],
           pendingApprovals,
+          autoRan,
           drafts,
           unverifiedNumbers: [],
           grounded: false,

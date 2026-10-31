@@ -26,6 +26,7 @@ describe('approval callback_data', () => {
     expect(data).toBe(`ap:${id}:y`);
     expect(Buffer.byteLength(data)).toBeLessThan(64);
     expect(parseApprovalCallback(data)).toEqual({ approvalId: id, action: 'y' });
+    expect(parseApprovalCallback(encodeApprovalCallback(id, 'u'))).toEqual({ approvalId: id, action: 'u' });
   });
 
   it.each(['', 'ap:x:z', 'ap::y', 'ap:id with space:y', 'xx:abc:y', `ap:${'a'.repeat(41)}:y`, 'ap:abc:y:extra'])('rejects forged or malformed data %j', (data) => {

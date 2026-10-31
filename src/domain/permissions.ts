@@ -13,6 +13,8 @@ export const PERMISSIONS = {
   // Organization and users
   'org.settings.update': OWNER,
   'ai.budget.update': OWNER,
+  // D-082: how much the assistant may do by itself.
+  'org.ai_autonomy.update': OWNER,
   // Company profile (D-079): everyone reads it, Owner and Admin edit it.
   'org.profile.read': ALL,
   'org.profile.update': MANAGERS,

@@ -215,6 +215,10 @@ export const approvals = pgTable(
     decidedAt: tstz('decided_at'),
     executionResult: jsonb('execution_result'),
     executedAt: tstz('executed_at'),
+    /** D-082: ran by itself under the organization's autonomy level; `undo` says how to take it back. */
+    autoRun: boolean('auto_run').notNull().default(false),
+    undo: jsonb('undo'),
+    undoneAt: tstz('undone_at'),
     createdAt: createdAtColumn(),
   },
   (t) => [

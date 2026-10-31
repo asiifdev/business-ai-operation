@@ -3,6 +3,8 @@ import type { Db } from '../db/client';
 import { assertCan, can } from '../domain/permissions';
 import type { Ctx } from '../domain/ctx';
 import { DomainError } from '../domain/errors';
+import { getAutonomy, mayAutoRun } from '../domain/action-center/autonomy';
+import { decideApproval } from '../domain/action-center/approvals';
 import { runAgent, type AgentResult } from './agent';
 import { getAiProvider } from './index';
 import type { Locale } from './messages';
@@ -39,7 +41,7 @@ export function assistantInstructions(organizationName: string, locale: Locale, 
     '3. Saran dan rekomendasi boleh, tetapi dasarkan pada data dari tool bila menyangkut kondisi organisasi, dan tandai mana yang saran Anda (misalnya "Saran saya: ..."). Jangan menyebut angka dalam saran kecuali dari hasil tool.',
     '4. Sapaan, terima kasih, dan pertanyaan tentang kemampuan Anda dijawab ramah dan singkat tanpa tool; untuk kemampuan, panggil describe_capabilities.',
     '5. Bila pertanyaan tidak berkaitan dengan bisnis organisasi ini (pengetahuan umum, politik, hiburan, tugas sekolah, kode di luar produk, dan sebagainya), panggil report_out_of_scope. Jangan menjawabnya sendiri.',
-    '6. Anda mengerjakan pekerjaan, bukan hanya menjawab. Draf (invoice, tugas, lead, proposal, poster, caption, diagram flow) Anda buat langsung lewat tool dan tetap ditinjau manusia. Bila pengguna meminta gambar, poster, atau banner, langsung panggil make_picture dengan kata-kata mereka; jangan menyuruh mereka memilih tujuan atau tata letak dulu. Menambah atau mengubah data (klien, produk, deployment, lead, tahap lead, tugas, langganan, invoice menjadi terkirim, finalisasi dokumen, menjalankan flow) Anda ajukan lewat tool sebagai permintaan persetujuan, dan baru berjalan setelah manusia menyetujuinya. Anda tidak bisa menghapus data, mencatat pembayaran, mengubah harga, jatuh tempo, peran, atau pengaturan.',
+    '6. Anda mengerjakan pekerjaan, bukan hanya menjawab. Draf (invoice, tugas, lead, proposal, poster, caption, diagram flow) Anda buat langsung lewat tool dan tetap ditinjau manusia. Bila pengguna meminta gambar, poster, atau banner, langsung panggil make_picture dengan kata-kata mereka; jangan menyuruh mereka memilih tujuan atau tata letak dulu. Menambah atau mengubah data (klien, produk, deployment, lead, tahap lead, tugas, langganan, invoice menjadi terkirim, finalisasi dokumen, menjalankan flow) Anda ajukan lewat tool; sistem yang memutuskan apakah langsung dijalankan (risiko rendah dan pengaturan organisasi mengizinkan) atau menunggu persetujuan manusia (uang, penguncian, server). Baca hasil tool: "sudah_dijalankan" berarti sudah selesai, jadi katakan sudah dilakukan dan pengguna bisa membatalkannya; "menunggu_persetujuan_manusia" berarti belum berjalan; "ditolak_sistem" berarti tidak dijalankan, jelaskan alasannya. Jangan mengajukan ulang aksi yang sudah dijalankan. Anda tidak bisa menghapus data, mencatat pembayaran, mengubah harga, jatuh tempo, peran, atau pengaturan.',
     `7. Jawab dalam bahasa yang dipakai pengguna pada pesan terakhirnya. Bila tidak jelas, pakai ${locale === 'en' ? 'bahasa Inggris' : 'bahasa Indonesia'}. Gaya santai tapi profesional, ringkas, untuk pemilik bisnis.`,
     '8. Format jawaban: teks biasa dengan paragraf pendek. Hanya boleh memakai **tebal** (dua bintang), daftar dengan awalan "- " di awal baris, dan `kode`. Jangan memakai judul (#), tabel, tautan, miring (*teks*), atau blok kode, karena tidak tampil rapi di web maupun Telegram.',
     '9. Percakapan sebelumnya ada di pesan-pesan di atas: pakai sebagai konteks, dan bila ditanya apa yang tadi dibicarakan, jawab dari situ. Jangan mengaku "belum ada pertanyaan sebelumnya" bila ada.',
@@ -69,6 +71,8 @@ export interface AssistantReply {
   sources: string[];
   tools: Array<{ name: string; status: string }>;
   pendingApprovals: Array<{ id: string; tool: string }>;
+  /** Actions that ran by themselves for this person (D-082); each can be taken back while `undoable`. */
+  autoRan: Array<{ id: string; tool: string; summary: string; executed: boolean; reason?: string; undoable: boolean }>;
   /** Drafts made while answering, each with the tool that made it and its id. */
   drafts: Array<{ tool: string; id: string }>;
   runId: string | null;
@@ -91,6 +95,7 @@ export async function askAssistant(
 
   const history = parsed.data.messages;
   const question = history[history.length - 1].content;
+  const level = await getAutonomy(ctx.orgId);
   const result = await runAgent({
     provider: input.provider ?? getAiProvider(),
     db,
@@ -106,6 +111,8 @@ export async function askAssistant(
     inputSummary: `Pertanyaan asisten (${question.length} karakter)`,
     cacheKey: input.channel === 'voice' ? 'orbyte-assistant-voice-v1' : 'orbyte-assistant-v2',
     trustedNumbers: [ctx.clock.now().toISOString().slice(0, 10)],
+    // D-082: the person's own request, as the person, with the person's own rights. Same service as the button.
+    autoRun: (approval) => (mayAutoRun(level, approval.tool) ? decideApproval(ctx, approval.id, { decision: 'approve' }, { auto: true }) : Promise.resolve(null)),
   });
 
   return {
@@ -118,6 +125,7 @@ export async function askAssistant(
     sources: result.sources,
     tools: result.tools.map((t) => ({ name: t.name, status: t.status })),
     pendingApprovals: result.pendingApprovals,
+    autoRan: result.autoRan ?? [],
     drafts: result.drafts ?? [],
     runId: result.runId,
     costMicroUsd: can(ctx.role, 'ai.usage.read') ? result.costMicroUsd : null,

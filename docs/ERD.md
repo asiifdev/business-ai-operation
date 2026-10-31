@@ -129,6 +129,7 @@ Tipe `ref` = foreign key komposit ke `(org_id, id)` tabel induk (kecuali disebut
 | `tax_rate_bps` | integer | default 0 |
 | `stagnant_days` | smallint | default 14 (D-025) |
 | `approval_ttl_hours` | smallint | default 24 (D-025) |
+| `ai_autonomy` | text (`careful` · `balanced` · `autonomous`) | default `balanced` (**D-082, disetujui owner 2026-10-31**): seberapa banyak yang boleh dijalankan asisten sendiri untuk orang yang meminta; aksi berisiko tinggi selalu menunggu klik |
 | `bank_name`, `bank_account_name`, `bank_account_number` | text N | info pembayaran di PDF (BR-M03-15) |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -303,7 +304,7 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`approvals`** · BR-M15-07, -08
 
-`id`, `org_id`, `finding_id N` (ref), `tool text`, `args jsonb` (argumen **persis**), `rationale text`, `requested_for text` (→ `users`, atas nama siapa), `ai_run_id N`, `status approval_status` default `pending`, `expires_at timestamptz`, `decided_by text N`, `decided_at N`, `execution_result jsonb N`, `executed_at N`, `created_at`. `UNIQUE (org_id, id)`. **Keputusan atomik:** `UPDATE approvals SET status = … WHERE id = $1 AND status = 'pending' AND expires_at > now()` lalu periksa jumlah baris: hanya satu pemanggil menang (web dan Telegram bersamaan). Indeks `(org_id, status, expires_at)`.
+`id`, `org_id`, `finding_id N` (ref), `tool text`, `args jsonb` (argumen **persis**), `rationale text`, `requested_for text` (→ `users`, atas nama siapa), `ai_run_id N`, `status approval_status` default `pending`, `expires_at timestamptz`, `decided_by text N`, `decided_at N`, `execution_result jsonb N`, `executed_at N`, `auto_run boolean` default false (**D-082**: tindakan ini berjalan sendiri sesuai tingkat otonomi, tanpa klik setuju), `undo jsonb N` (**D-082**: cara membatalkan, berisi nilai sebelum), `undone_at N`, `created_at`. `UNIQUE (org_id, id)`. **Keputusan atomik:** `UPDATE approvals SET status = … WHERE id = $1 AND status = 'pending' AND expires_at > now()` lalu periksa jumlah baris: hanya satu pemanggil menang (web dan Telegram bersamaan). Indeks `(org_id, status, expires_at)`.
 
 **`automation_runs`** · BR-M15-04
 

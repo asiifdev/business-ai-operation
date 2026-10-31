@@ -18,6 +18,8 @@ export function mutationToastKey(method: string, url: string, data?: unknown): M
   if (data && typeof data === 'object' && (data as { ok?: unknown }).ok === false) return null;
   // A save that reports it changed nothing (`changed: []`) must not say "saved".
   if (data && typeof data === 'object' && Array.isArray((data as { changed?: unknown }).changed) && (data as { changed: unknown[] }).changed.length === 0) return null;
+  // An undo the system refused (the record was edited since) is not a success.
+  if (data && typeof data === 'object' && (data as { undone?: unknown }).undone === false) return null;
   const path = url.split('?')[0]!;
   if (OWN_TOAST.some((re) => re.test(path))) return null;
   if (method === 'DELETE' && SETTINGS.test(path)) return 'toastDeleted';

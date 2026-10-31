@@ -8,6 +8,7 @@ import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
 import { who } from '../portfolio/shared';
+import { snapshotBefore, undoFor } from './autonomy';
 import { sweepFindings } from './findings';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
@@ -116,6 +117,8 @@ export interface DecisionResult {
   executed: boolean;
   /** Why an approved action did not run (the invoice was already sent, paid, or gone). */
   reason?: string;
+  /** True when the action ran by itself (D-082) and the Batalkan button can take it back. */
+  undoable?: boolean;
 }
 
 /**
@@ -125,7 +128,8 @@ export interface DecisionResult {
  * as the person who approved it, with the AI run recorded alongside (CR-07). When the data has moved on (the invoice is
  * no longer a draft), the service refuses, the approval ends `rejected` with the reason, and the finding closes itself.
  */
-export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof decisionSchema>): Promise<DecisionResult> {
+export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof decisionSchema>, opts: { auto?: boolean } = {}): Promise<DecisionResult> {
+  const auto = opts.auto === true;
   const { decision } = decisionSchema.parse(raw);
   const now = ctx.clock.now();
   const [row] = await db.select().from(approvals).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id)));
@@ -138,11 +142,11 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
   const claimed = await db.transaction(async (tx) => {
     const won = await tx
       .update(approvals)
-      .set({ status, decidedBy: ctx.userId, decidedAt: now })
+      .set({ status, decidedBy: ctx.userId, decidedAt: now, ...(auto ? { autoRun: true } : {}) })
       .where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id), eq(approvals.status, 'pending'), gt(approvals.expiresAt, now)))
       .returning({ id: approvals.id });
     if (won.length === 0) return false;
-    await recordAudit(tx, who(ctx), { action: `approval.${status}`, entityType: 'approval', entityId: id, summary: { tool: row.tool, findingId: row.findingId } });
+    await recordAudit(tx, who(ctx), { action: auto ? 'approval.auto_approved' : `approval.${status}`, entityType: 'approval', entityId: id, summary: { tool: row.tool, findingId: row.findingId } });
     return true;
   });
 
@@ -162,9 +166,11 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
   const execCtx: Ctx = { ...ctx, aiRunId: row.aiRunId ?? undefined };
   try {
     if (!args.success) throw new DomainError('validation', 'stored arguments no longer valid');
+    const snapshot = auto ? await snapshotBefore(execCtx, row.tool, args.data) : null;
     const result = await (tool.execute as (c: Ctx, a: unknown) => Promise<unknown>)(execCtx, args.data);
+    const undo = auto ? await undoFor(execCtx, row.tool, args.data, snapshot, result) : null;
     await db.transaction(async (tx) => {
-      await tx.update(approvals).set({ executionResult: { ok: true, result: (result ?? null) as object }, executedAt: ctx.clock.now() }).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id)));
+      await tx.update(approvals).set({ executionResult: { ok: true, result: (result ?? null) as object }, executedAt: ctx.clock.now(), ...(undo ? { undo } : {}) }).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id)));
       if (row.findingId) {
         const closed = await tx
           .update(findings)
@@ -173,9 +179,9 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
           .returning({ id: findings.id });
         if (closed.length) await recordAudit(tx, who(execCtx), { action: 'finding.handled', entityType: 'finding', entityId: row.findingId, summary: { approvalId: id } });
       }
-      await recordAudit(tx, who(execCtx), { action: 'approval.executed', entityType: 'approval', entityId: id, summary: { tool: row.tool } });
+      await recordAudit(tx, who(execCtx), { action: auto ? 'approval.auto_executed' : 'approval.executed', entityType: 'approval', entityId: id, summary: { tool: row.tool, undoable: undo !== null } });
     });
-    return { status, executed: true };
+    return { status, executed: true, ...(auto ? { undoable: undo !== null } : {}) };
   } catch (error) {
     if (!(error instanceof DomainError)) throw error;
     // The data changed between request and decision: refuse with the reason instead of acting on stale facts (BR-M08-05).

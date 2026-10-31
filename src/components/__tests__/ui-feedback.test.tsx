@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { messages } from '../../lib/i18n';
 import { Modal } from '../ui/Modal';
 import { Steps, type StepItem } from '../ui/Steps';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { Toaster } from '../ui/Toast';
 
 const steps: StepItem[] = [
@@ -43,5 +44,18 @@ describe('Modal and Toaster', () => {
     expect(out).toContain('role="status"');
     expect(out).toContain('aria-live="polite"');
     expect(out).not.toContain('<button');
+  });
+});
+
+describe('ErrorBoundary', () => {
+  it('shows what happened and a reload button instead of an empty box once a screen has crashed', () => {
+    expect(ErrorBoundary.getDerivedStateFromError()).toEqual({ failed: true });
+    const boundary = new ErrorBoundary({ children: 'the screen' });
+    expect(renderToStaticMarkup(<>{boundary.render()}</>)).toContain('the screen');
+    boundary.state = { failed: true };
+    const html = renderToStaticMarkup(<>{boundary.render()}</>);
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain('the screen');
+    expect(html).toMatch(/Muat ulang|Reload/);
   });
 });
