@@ -5,7 +5,7 @@ import { Icon } from '../shell/Icon';
 import type { Chip } from './attachments';
 
 const KIND: Record<string, MessageKey> = { pdf: 'attKindPdf', image: 'attKindImage', video: 'attKindVideo', audio: 'attKindAudio', document: 'attKindDocument', sheet: 'attKindSheet', slides: 'attKindSlides', text: 'attKindText', link: 'attKindLink' };
-const REASON: Record<string, MessageKey> = { format: 'attErrFormat', legacy: 'attErrLegacy', size: 'attErrSize', empty: 'attErrEmpty', url: 'attErrUrl', limit: 'attErrLimit', ai: 'attErrAi', quota: 'attErrQuota', audio: 'attErrAudio', rate: 'attErrRate' };
+const REASON: Record<string, MessageKey> = { format: 'attErrFormat', legacy: 'attErrLegacy', size: 'attErrSize', empty: 'attErrEmpty', url: 'attErrUrl', unreachable: 'attErrUnreachable', limit: 'attErrLimit', ai: 'attErrAi', quota: 'attErrQuota', audio: 'attErrAudio', rate: 'attErrRate' };
 
 /** What is attached: a name, what kind it was read as, and while it is being read a pulse. `onRemove` shows the cross (the composer); the message bubble leaves it out. */
 export function AttachmentChips({ chips, onRemove, onDark = false }: { chips: readonly Chip[]; onRemove?: (chip: Chip) => void; onDark?: boolean }) {

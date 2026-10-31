@@ -74,3 +74,5 @@ Sumber: `dev.meta.ai/platform/models`, `/docs/overview`, `/docs/pricing-rate-lim
 ## 6. Anggaran biaya
 
 Anggaran harian per fitur disimpan di konfigurasi org dan diperiksa **sebelum** panggilan model. Estimasi kasar (indikatif): 1 siklus Action Center ≈ ribuan token (sen), rapat 10 menit ≈ $0,03 STT, satu gambar $0,01. Total demo wajar jauh di bawah $150; risiko biaya ada pada loop agen yang tidak dibatasi, jadi **batas putaran tool dan token per run wajib**.
+
+**Uji 2026-10-31 (D-083):** PDF terbaca lewat Chat Completions (blok `file`); `video_url` di Chat diterima tetapi diabaikan diam-diam, video hanya terbaca lewat Responses `input_video`; `input_file` PDF di Responses terbaca.

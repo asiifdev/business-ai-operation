@@ -48,7 +48,7 @@ export interface AttachmentCard {
   sizeBytes: number;
 }
 
-export type AttachRefusal = 'format' | 'legacy' | 'size' | 'empty' | 'url' | 'limit' | 'ai' | 'quota' | 'audio';
+export type AttachRefusal = 'format' | 'legacy' | 'size' | 'empty' | 'url' | 'unreachable' | 'limit' | 'ai' | 'quota' | 'audio';
 export type AttachResult = { ok: true; attachment: AttachmentCard } | { ok: false; reason: AttachRefusal; message: string };
 
 /** The audio side of a video or voice file needs ffmpeg, which lives in `src/server`: the caller hands it in. */
@@ -170,7 +170,7 @@ export async function addAttachment(ctx: Ctx, input: { file?: Upload; url?: stri
       digest = [page.title, page.description, page.text].filter(Boolean).join('\n');
       name = (page.title ?? input.url).slice(0, 200);
     } catch (error) {
-      if (error instanceof DomainError) return refuse('url', error.message);
+      if (error instanceof DomainError) return refuse(/^(page |host cannot be resolved)/.test(error.message) ? 'unreachable' : 'url', error.message);
       throw error;
     }
     if (!digest.trim()) return refuse('empty');
