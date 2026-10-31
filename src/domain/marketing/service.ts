@@ -80,6 +80,13 @@ export async function getBrandKit(ctx: Ctx) {
   return row ? { ...row, logoFileId: profile?.logoFileId ?? null } : null;
 }
 
+/** What the brand kit form starts with before anything is saved: the company's own name, so nobody retypes what the profile already says. */
+export async function brandKitDefaults(ctx: Ctx): Promise<{ brandName: string }> {
+  assertCan(ctx, 'marketing.use');
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, ctx.orgId));
+  return { brandName: org?.name ?? '' };
+}
+
 /** Whether the company has a logo, with or without a brand kit. */
 export async function hasCompanyLogo(ctx: Ctx): Promise<boolean> {
   assertCan(ctx, 'marketing.use');
@@ -539,6 +546,15 @@ export async function readAssetFile(ctx: Ctx, id: string): Promise<{ bytes: Uint
   const [file] = await db.select().from(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, asset.fileId), isNull(files.deletedAt)));
   if (!file) throw new DomainError('not_found', 'file');
   return { bytes: await storage().get(file.storageKey), mime: file.mime, name: `${asset.purpose}-${asset.id}.webp` };
+}
+
+/** The model's own picture without the logo (kept for pictures that got their logo from code), or null for an older asset. */
+export async function readAssetBackground(ctx: Ctx, id: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  assertCan(ctx, 'marketing.use');
+  const asset = await loadAsset(ctx, id);
+  if (!asset.backgroundFileId) return null;
+  const [file] = await db.select().from(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, asset.backgroundFileId), isNull(files.deletedAt)));
+  return file ? { bytes: await storage().get(file.storageKey), mime: file.mime } : null;
 }
 
 /** The logo that sits on this asset's poster (the product's, else the company's), so it can be attached or downloaded on its own. */

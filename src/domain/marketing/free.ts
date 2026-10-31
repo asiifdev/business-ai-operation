@@ -10,6 +10,7 @@ import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan } from '../permissions';
 import { sniffImage } from '../portfolio/logo';
+import { applyLogo } from './poster';
 import { fetchPage } from './page';
 import {
   MAX_ATTACHMENTS,
@@ -27,7 +28,7 @@ import {
   type FreeInput,
 } from './free-rules';
 import { ASPECTS, factsText, foreignCaptionFigures } from './rules';
-import { imageQuotaStatus, loadAsset, loadFacts, quotaRefusal, readAssetFile, resolveLogo, saveCaption, saveImages, type AssetRow, type StudioResult } from './service';
+import { imageQuotaStatus, loadAsset, loadFacts, quotaRefusal, readAssetBackground, readAssetFile, resolveLogo, saveCaption, saveImages, type AssetRow, type StudioResult } from './service';
 
 export interface Attachment {
   bytes: Uint8Array;
@@ -110,9 +111,10 @@ export async function createFromPrompt(ctx: Ctx, raw: FreeInput & { logo?: boole
   }
   const pageText = page ? [page.title, page.description, page.text].filter(Boolean).join('\n') : '';
 
-  // The company or product logo goes in as the first reference unless the person said not to (the logo must stay as it is).
+  // The company or product logo is laid on by code afterwards, never drawn by the model: a model redraws a logo (changes it, adds a plate).
+  // Only the person's own attachments go to the model as references, in the order they gave them.
   const logo = raw.logo === false ? null : await resolveLogo(ctx, productId);
-  const images: Array<InputImage & { name: string }> = [...(logo ? [{ bytes: logo.bytes, mime: 'image/webp' as const, name: 'company logo' }] : []), ...references];
+  const images: Array<InputImage & { name: string }> = [...references];
 
   const attachmentRead = await readTexts(ctx, provider, references, facts.locale, 'Teks pada lampiran');
   if (!attachmentRead.ok) return refusal(attachmentRead.kind, attachmentRead.message);
@@ -152,7 +154,7 @@ export async function createFromPrompt(ctx: Ctx, raw: FreeInput & { logo?: boole
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const made = await make(strictPrompt(imagePrompt, allowedText, attempt > 0));
+    const made = await make(strictPrompt(logo ? `${imagePrompt}\nKeep the top-left corner calm and empty, with no text and no logo: the real logo is added there afterwards.` : imagePrompt, allowedText, attempt > 0));
     if (!made.ok) return refusal(made.kind, made.message);
     const image = made.value.images[0]!;
     const seen = await readTexts(ctx, provider, [{ bytes: image.bytes, mime: image.mime }], facts.locale, 'Teks pada gambar jadi');
@@ -162,7 +164,7 @@ export async function createFromPrompt(ctx: Ctx, raw: FreeInput & { logo?: boole
       if (attempt === 0) continue;
       return refusal('unverified', claims.join(', '));
     }
-    const [asset] = await saveImages(ctx, { productId, purpose: 'free', prompt: input.prompt, parentAssetId: null, aiRunId: made.runId }, [{ poster: image.bytes }]);
+    const [asset] = await saveImages(ctx, { productId, purpose: 'free', prompt: input.prompt, parentAssetId: null, aiRunId: made.runId }, [logo ? { poster: await applyLogo(image.bytes, logo.bytes, 'top_left').catch(() => image.bytes), background: image.bytes } : { poster: image.bytes }]);
     // The caption passes the same guard as everything else; one that carries a claim nobody gave is dropped, not shown.
     const cleanCaption = draftCaption.trim() && foreignCaptionFigures(draftCaption, sources.join('\n')).length === 0 && foreignClaims([draftCaption], sources).length === 0 ? draftCaption.trim().slice(0, 2200) : null;
     if (cleanCaption) await saveCaption(ctx, asset!.id, cleanCaption, made.runId);
@@ -183,7 +185,10 @@ export async function refineFreeAsset(ctx: Ctx, id: string, raw: z.input<typeof 
   const quota = await imageQuotaStatus(ctx);
   if (quota.remaining < 1) return quotaRefusal(quota);
   const facts = await loadFacts(ctx, parent.productId);
-  const file = await readAssetFile(ctx, id);
+  // A picture whose logo came from code is edited without the logo and stamped again, so the logo never changes.
+  const clean = await readAssetBackground(ctx, id);
+  const logo = clean ? await resolveLogo(ctx, parent.productId) : null;
+  const file = clean ?? (await readAssetFile(ctx, id));
   const current: InputImage = { bytes: file.bytes, mime: 'image/webp' };
 
   const before = await readTexts(ctx, provider, [current], facts.locale, 'Teks pada gambar sebelum diubah');
@@ -199,7 +204,7 @@ export async function refineFreeAsset(ctx: Ctx, id: string, raw: z.input<typeof 
   if (!after.ok) return refusal(after.kind, after.message);
   const claims = foreignClaims(after.text, sources);
   if (claims.length > 0) return refusal('unverified', claims.join(', '));
-  const [asset] = await saveImages(ctx, { productId: parent.productId, purpose: 'free', prompt: `${parent.prompt}\n→ ${instruction}`, parentAssetId: parent.id, aiRunId: made.runId }, [{ poster: image.bytes }]);
+  const [asset] = await saveImages(ctx, { productId: parent.productId, purpose: 'free', prompt: `${parent.prompt}\n→ ${instruction}`, parentAssetId: parent.id, aiRunId: made.runId }, [logo ? { poster: await applyLogo(image.bytes, logo.bytes, 'top_left').catch(() => image.bytes), background: image.bytes } : { poster: image.bytes }]);
   if (parent.caption) await saveCaption(ctx, asset!.id, parent.caption, null);
   return { ok: true, asset: asset!, caption: parent.caption };
 }

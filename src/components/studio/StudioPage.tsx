@@ -25,6 +25,7 @@ type Options = Jsonify<{
   brandKit: Awaited<ReturnType<typeof getBrandKit>>;
   quota: Awaited<ReturnType<typeof imageQuotaStatus>>;
   companyLogo: boolean;
+  brandDefaults: { brandName: string };
 }>;
 type Asset = Jsonify<Awaited<ReturnType<typeof listAssets>>[number]>;
 /** What the generate, revise and caption endpoints answer: a result the page can show, not an HTTP error (BR-M10-08). */
@@ -74,7 +75,7 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('mkTitle')} intro={t('mkIntro')} />
-      <BrandKitPanel brandKit={opts.brandKit} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
+      <BrandKitPanel brandKit={opts.brandKit} brandDefaults={opts.brandDefaults} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
       <FreeCreatePanel products={opts.products} hasLogo={opts.companyLogo} remaining={opts.quota.remaining} quota={opts.quota.quota} onDone={refresh} />
       <details className="group rounded-card border border-rule bg-paper">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-2 marker:hidden hover:text-ink">{t('mkAdvancedTitle')}</summary>
@@ -104,9 +105,9 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
   );
 }
 
-function BrandKitPanel({ brandKit, companyLogo, canEdit, onSaved }: { brandKit: Options['brandKit']; companyLogo: boolean; canEdit: boolean; onSaved: () => void }) {
+function BrandKitPanel({ brandKit, brandDefaults, companyLogo, canEdit, onSaved }: { brandKit: Options['brandKit']; brandDefaults: Options['brandDefaults']; companyLogo: boolean; canEdit: boolean; onSaved: () => void }) {
   const t = useT();
-  const [brandName, setBrandName] = useState(brandKit?.brandName ?? '');
+  const [brandName, setBrandName] = useState(brandKit?.brandName ?? brandDefaults.brandName);
   const [colors, setColors] = useState(brandKit?.colors ?? '');
   const [tone, setTone] = useState(brandKit?.tone ?? '');
   const [prohibitions, setProhibitions] = useState(brandKit?.prohibitions ?? '');

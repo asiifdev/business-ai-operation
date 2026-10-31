@@ -121,16 +121,19 @@ describe('createFromPrompt (D-080)', () => {
     expect(JSON.stringify(briefCall.messages)).toContain('data_tidak_tepercaya');
   });
 
-  it('adds the company logo as the first reference when there is one', async () => {
+  it('lays the company logo on with code and never sends it to the model, keeping the clean picture for revisions', async () => {
     const o = await makeOrg();
     await setBrandLogo(o.ownerCtx, new Uint8Array(await png('#ff0000')));
     const provider = new FakeProvider({ chat: [sayJson(BRIEF), read('Diskon Akhir Tahun')], image: [pictures()] });
-    await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"' }, [], provider);
-    expect(provider.editCalls).toHaveLength(1);
-    expect(provider.editCalls[0]!.images).toHaveLength(1);
+    const r = await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"' }, [], provider);
+    expect(r.ok).toBe(true);
+    // No attachment, so the model draws from the prompt alone and is told to leave the corner empty.
+    expect(provider.editCalls).toHaveLength(0);
+    expect(JSON.stringify(provider.imageCalls)).toContain('top-left corner');
+    if (r.ok) expect(r.asset.backgroundFileId).not.toBeNull();
     const off = new FakeProvider({ chat: [sayJson(BRIEF), read('Diskon Akhir Tahun')], image: [pictures()] });
-    await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"', logo: false }, [], off);
-    expect(off.editCalls).toHaveLength(0);
+    const none = await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"', logo: false }, [], off);
+    if (none.ok) expect(none.asset.backgroundFileId).toBeNull();
   });
 
   it('sends a picture that invented an offer back once for a plain version, then keeps it', async () => {
@@ -203,6 +206,16 @@ describe('refineFreeAsset (D-080)', () => {
     expect(await db.select().from(marketingAssets).where(eq(marketingAssets.orgId, o.orgId))).toHaveLength(2);
     // the old poster editor does not take a free picture
     await rejects(reviseAsset(o.ownerCtx, first.asset.id, { instruction: 'lebih terang' }, new FakeProvider()), 'invalid_state');
+  });
+
+  it('revises the clean picture and stamps the logo again, so the logo is never redrawn', async () => {
+    const o = await makeOrg();
+    await setBrandLogo(o.ownerCtx, new Uint8Array(await png('#ff0000')));
+    const first = await createFromPrompt(o.ownerCtx, { prompt: 'Poster "Diskon Akhir Tahun"' }, [], new FakeProvider({ chat: [sayJson(BRIEF), read('Diskon Akhir Tahun')], image: [pictures()] }));
+    if (!first.ok) throw new Error('setup failed');
+    const r = await refineFreeAsset(o.ownerCtx, first.asset.id, { instruction: 'warna lebih hangat' }, new FakeProvider({ chat: [read('Diskon Akhir Tahun'), read('Diskon Akhir Tahun')], image: [pictures()] }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.asset.backgroundFileId).not.toBeNull();
   });
 
   it('refuses a change that adds an offer', async () => {
