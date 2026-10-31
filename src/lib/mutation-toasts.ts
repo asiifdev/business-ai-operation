@@ -40,4 +40,4 @@ const SAVES = /^\/api\/(?:settings|profile|ai\/budgets)(?:\/|$)/;
 const SETTINGS = /^\/api\/settings\//;
 
 /** Calls whose screen already says something specific. */
-const OWN_TOAST: RegExp[] = [/^\/api\/runs\//];
+const OWN_TOAST: RegExp[] = [/^\/api\/runs\//, /^\/api\/marketing\/videos\/[^/]+\/render$/];

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { getBrandKit, imageQuotaStatus, listAssets, listStudioProducts } from '../../domain/marketing/service';
 import { api, badFields, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
@@ -16,6 +16,7 @@ import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { Panel } from '../ui/Panel';
+import { Tabs } from '../ui/Tabs';
 import { FreeCreatePanel } from './FreeCreatePanel';
 import { VideoScriptPanel } from './VideoScriptPanel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
@@ -42,10 +43,17 @@ const PLACES_ITSELF = new Set<string>(['center', 'side']);
 const layoutOptions = (t: (k: MessageKey) => string) => (Object.keys(LAYOUT_LABEL) as Array<keyof typeof LAYOUT_LABEL>).map((k) => ({ value: k, label: t(LAYOUT_LABEL[k]) }));
 const COMPANY = 'company';
 
+type StudioTab = 'create' | 'gallery' | 'script' | 'brand';
+const TAB_IDS: readonly StudioTab[] = ['create', 'gallery', 'script', 'brand'];
+const readTab = (): StudioTab => {
+  const wanted = new URLSearchParams(window.location.search).get('tab');
+  return TAB_IDS.find((id) => id === wanted) ?? 'create';
+};
+
 type PosterCopy = { headline: string; subheadline: string | null; cta: string | null; showPrice: boolean; layout: keyof typeof LAYOUT_LABEL; textPosition: 'top' | 'bottom'; logo: boolean; corner: keyof typeof CORNER_LABEL };
 const ASPECT_LABEL = { square: 'mkAspectSquare', portrait: 'mkAspectPortrait', story: 'mkAspectStory', wide: 'mkAspectWide' } as const satisfies Record<string, MessageKey>;
 
-/** Brand kit, image maker, video script and gallery in one page (BRD-M10). No video or voice is made (BR-M10-10); the script is text only (D-079). */
+/** Image maker, gallery, video script and brand kit as four tabs of one page, the tab kept in the URL (BRD-M10). No video or voice is made (BR-M10-10); the script is text only (D-079). */
 export function StudioPage(props: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
   return (
     <ErrorBoundary>
@@ -57,6 +65,14 @@ export function StudioPage(props: { canEditBrand: boolean; canDeleteAny: boolean
 function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
   const t = useT();
   const options = useLoad(() => api<Options>('GET', '/api/marketing/options'), []);
+  const [tab, setTab] = useState<StudioTab>('create');
+  useEffect(() => setTab(readTab()), []);
+  function chooseTab(next: StudioTab) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', next);
+    window.history.replaceState(null, '', url);
+  }
   const [productFilter, setProductFilter] = useState('');
   const [purposeFilter, setPurposeFilter] = useState('');
   const qs = new URLSearchParams();
@@ -67,6 +83,11 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
     void options.reload();
     void assets.reload();
   };
+  /** A new picture is the point of the first tab, so show it where it lands. */
+  const created = () => {
+    refresh();
+    chooseTab('gallery');
+  };
 
   if (options.value.state === 'loading') return <Panel aria-busy="true"><Skeleton rows={6} /></Panel>;
   if (options.value.state === 'error') return <Panel><ErrorBox onRetry={options.retry}>{t(errorKey(options.value.error))}</ErrorBox></Panel>;
@@ -75,32 +96,53 @@ function Studio({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean;
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('mkTitle')} intro={t('mkIntro')} />
-      <FreeCreatePanel products={opts.products} hasLogo={opts.companyLogo} remaining={opts.quota.remaining} quota={opts.quota.quota} onDone={refresh} />
-      <details className="group rounded-card border border-rule bg-paper">
-        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-2 marker:hidden hover:text-ink">{t('mkAdvancedTitle')}</summary>
-        <div className="p-4 pt-0">
-          <MakePanel options={opts} onDone={refresh} />
-        </div>
-      </details>
-      <VideoScriptPanel products={opts.products} />
-      <BrandKitPanel brandKit={opts.brandKit} brandDefaults={opts.brandDefaults} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
-      <Panel className="flex flex-col gap-4">
-        <h2 className="m-0 text-lg font-semibold text-ink">{t('mkGalleryTitle')}</h2>
-        <div className="grid gap-3 sm:max-w-lg sm:grid-cols-2">
-          <SelectMenu value={productFilter} onChange={setProductFilter} includeAll={t('mkFilterProduct')} options={[{ value: COMPANY, label: t('mkScopeCompany') }, ...opts.products.map((p) => ({ value: p.id, label: p.name }))]} />
-          <SelectMenu value={purposeFilter} onChange={setPurposeFilter} includeAll={t('mkAllPurposes')} searchable={false} options={PURPOSES.map((p) => ({ value: p, label: t(PURPOSE_LABEL[p]) }))} />
-        </div>
-        {assets.value.state === 'loading' && <Skeleton rows={4} />}
-        {assets.value.state === 'error' && <ErrorBox onRetry={assets.retry}>{t(errorKey(assets.value.error))}</ErrorBox>}
-        {assets.value.state === 'ready' && assets.value.data.assets.length === 0 && <EmptyState>{t('mkGalleryEmpty')}</EmptyState>}
-        {assets.value.state === 'ready' && assets.value.data.assets.length > 0 && (
-          <ul className="m-0 grid list-none gap-5 p-0 sm:grid-cols-2 xl:grid-cols-3">
-            {assets.value.data.assets.map((a) => (
-              <AssetCard key={a.id} asset={a} canDelete={canDeleteAny || a.createdBy === userId} onChanged={refresh} />
-            ))}
-          </ul>
-        )}
-      </Panel>
+      <Tabs
+        label={t('mkTabsLabel')}
+        value={tab}
+        onChange={chooseTab}
+        items={[
+          { id: 'create', label: t('mkTabCreate') },
+          { id: 'gallery', label: t('mkTabGallery'), count: assets.value.state === 'ready' ? assets.value.data.assets.length : undefined },
+          { id: 'script', label: t('mkTabScript') },
+          { id: 'brand', label: t('mkTabBrand') },
+        ]}
+      />
+      {tab === 'create' && (
+        <>
+        <FreeCreatePanel products={opts.products} hasLogo={opts.companyLogo} remaining={opts.quota.remaining} quota={opts.quota.quota} onDone={created} />
+        <details className="group rounded-card border border-rule bg-paper">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-2 marker:hidden hover:text-ink">{t('mkAdvancedTitle')}</summary>
+          <div className="p-4 pt-0">
+            <MakePanel options={opts} onDone={created} />
+          </div>
+        </details>
+        </>
+      )}
+      {tab === 'script' && (
+        <VideoScriptPanel products={opts.products} imagesLeft={opts.quota.remaining} />
+      )}
+      {tab === 'brand' && (
+        <BrandKitPanel brandKit={opts.brandKit} brandDefaults={opts.brandDefaults} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
+      )}
+      {tab === 'gallery' && (
+        <Panel className="flex flex-col gap-4">
+          <h2 className="m-0 text-lg font-semibold text-ink">{t('mkGalleryTitle')}</h2>
+          <div className="grid gap-3 sm:max-w-lg sm:grid-cols-2">
+            <SelectMenu value={productFilter} onChange={setProductFilter} includeAll={t('mkFilterProduct')} options={[{ value: COMPANY, label: t('mkScopeCompany') }, ...opts.products.map((p) => ({ value: p.id, label: p.name }))]} />
+            <SelectMenu value={purposeFilter} onChange={setPurposeFilter} includeAll={t('mkAllPurposes')} searchable={false} options={PURPOSES.map((p) => ({ value: p, label: t(PURPOSE_LABEL[p]) }))} />
+          </div>
+          {assets.value.state === 'loading' && <Skeleton rows={4} />}
+          {assets.value.state === 'error' && <ErrorBox onRetry={assets.retry}>{t(errorKey(assets.value.error))}</ErrorBox>}
+          {assets.value.state === 'ready' && assets.value.data.assets.length === 0 && <EmptyState>{t('mkGalleryEmpty')}</EmptyState>}
+          {assets.value.state === 'ready' && assets.value.data.assets.length > 0 && (
+            <ul className="m-0 grid list-none gap-5 p-0 sm:grid-cols-2 xl:grid-cols-3">
+              {assets.value.data.assets.map((a) => (
+                <AssetCard key={a.id} asset={a} canDelete={canDeleteAny || a.createdBy === userId} onChanged={refresh} />
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
     </div>
   );
 }

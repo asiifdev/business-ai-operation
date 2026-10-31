@@ -63,6 +63,7 @@ function ProfileForm({ initial, canEdit, onLogoChanged }: { initial: Data['profi
   const t = useT();
   const [v, setV] = useState({
     tagline: initial.tagline ?? '',
+    namePronunciation: initial.namePronunciation ?? '',
     description: initial.description ?? '',
     industry: initial.industry ?? '',
     website: initial.website ?? '',
@@ -122,6 +123,7 @@ function ProfileForm({ initial, canEdit, onLogoChanged }: { initial: Data['profi
           {field('tagline', 'companyTagline', 160, 'companyTaglineHelp')}
           {field('industry', 'companyIndustry', 120)}
         </div>
+        {field('namePronunciation', 'companyPronunciation', 120, 'companyPronunciationHelp')}
         {area('description', 'companyDescription', 2000, 'companyDescriptionHelp', 4)}
         {field('website', 'companyWebsite', 300, 'companyWebsiteHelp', { type: 'url', inputMode: 'url' })}
       </Section>

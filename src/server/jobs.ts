@@ -1,6 +1,7 @@
 import { enqueueJob } from '../domain/jobs/queue';
 import { executeRun, RunBusy } from '../domain/flows/engine';
 import { markMeetingFailedIfStuck, processMeeting } from './meeting-process';
+import { renderVideo } from './video-render';
 import { ensureWorker, PermanentJobError, type JobHandler, type JobType } from './worker';
 
 /**
@@ -21,6 +22,8 @@ export const JOB_HANDLERS: Record<JobType, JobHandler> = {
       throw err;
     }
   },
+  // A slideshow video built from a saved script (D-086). Failures are final and said on the project, never retried.
+  'video.render': async (payload) => renderVideo(payload),
   'meeting.process': async (payload, job) => {
     try {
       return await processMeeting(payload);

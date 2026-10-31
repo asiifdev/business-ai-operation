@@ -1,9 +1,11 @@
-import { foreignKey, index, jsonb, pgEnum, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { foreignKey, index, integer, jsonb, pgEnum, pgTable, smallint, text, unique } from 'drizzle-orm/pg-core';
 import { createdAtColumn, idColumn, updatedAtColumn } from './_shared';
 import { aiRuns } from './ai';
 import { organizations } from './auth';
 import { files } from './meetings';
 import { products } from './portfolio';
+
+export const videoStatus = pgEnum('video_status', ['script', 'queued', 'rendering', 'done', 'failed']);
 
 export const marketingPurpose = pgEnum('marketing_purpose', ['launch', 'promo', 'education', 'release', 'brand', 'free']);
 
@@ -57,5 +59,45 @@ export const marketingAssets = pgTable(
     foreignKey({ columns: [t.orgId, t.fileId], foreignColumns: [files.orgId, files.id], name: 'fk_marketing_assets_file' }),
     foreignKey({ columns: [t.orgId, t.backgroundFileId], foreignColumns: [files.orgId, files.id], name: 'fk_marketing_assets_background' }),
     index('idx_marketing_assets_org_created').on(t.orgId, t.createdAt),
+  ],
+);
+
+/**
+ * ERD 3.7, D-086. One video script and the video built from it. The video is assembled by code from still pictures, text
+ * and a narration (the Meta Model API makes no video); `speech_engine` records which voice engine really spoke.
+ */
+export const videoProjects = pgTable(
+  'video_projects',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    /** Empty means the company itself (D-066). */
+    productId: text('product_id'),
+    purpose: marketingPurpose('purpose').notNull(),
+    seconds: smallint('seconds').notNull(),
+    aspect: text('aspect').notNull().default('story'),
+    /** A key of `src/config/narrators.ts`. */
+    narrator: text('narrator').notNull().default('sinta'),
+    title: text('title').notNull(),
+    /** Title, hook, call to action and the scenes (visual, voiceover, spoken, on-screen text, time span). */
+    script: jsonb('script').$type<Record<string, unknown>>().notNull(),
+    status: videoStatus('status').notNull().default('script'),
+    stage: text('stage'),
+    progress: smallint('progress').notNull().default(0),
+    error: text('error'),
+    fileId: text('file_id'),
+    durationMs: integer('duration_ms'),
+    speechEngine: text('speech_engine'),
+    imagesUsed: smallint('images_used').notNull().default(0),
+    aiRunId: text('ai_run_id').references(() => aiRuns.id, { onDelete: 'restrict' }),
+    createdBy: text('created_by').notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (t) => [
+    unique('uq_video_projects_org_id').on(t.orgId, t.id),
+    foreignKey({ columns: [t.orgId, t.productId], foreignColumns: [products.orgId, products.id], name: 'fk_video_projects_product' }),
+    foreignKey({ columns: [t.orgId, t.fileId], foreignColumns: [files.orgId, files.id], name: 'fk_video_projects_file' }),
+    index('idx_video_projects_org_created').on(t.orgId, t.createdAt),
   ],
 );

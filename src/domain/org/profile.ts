@@ -11,11 +11,12 @@ import { profileSchema, profileText, serviceSchema, SOCIAL_KEYS, type ProfileFac
 type Row = typeof organizationProfiles.$inferSelect;
 type ServiceRow = typeof orgServices.$inferSelect;
 
-const FIELDS = ['tagline', 'description', 'industry', 'website', 'contactEmail', 'contactPhone', 'address', 'targetAudience', 'valueProps'] as const;
+const FIELDS = ['tagline', 'namePronunciation', 'description', 'industry', 'website', 'contactEmail', 'contactPhone', 'address', 'targetAudience', 'valueProps'] as const;
 
 export interface CompanyProfile {
   name: string;
   tagline: string | null;
+  namePronunciation: string | null;
   description: string | null;
   industry: string | null;
   website: string | null;
@@ -32,6 +33,7 @@ function shape(name: string, row: Row | undefined): CompanyProfile {
   return {
     name,
     tagline: row?.tagline ?? null,
+    namePronunciation: row?.namePronunciation ?? null,
     description: row?.description ?? null,
     industry: row?.industry ?? null,
     website: row?.website ?? null,
@@ -66,6 +68,7 @@ export async function saveCompanyProfile(ctx: Ctx, raw: ProfileInput): Promise<{
     const socials = Object.fromEntries(SOCIAL_KEYS.flatMap((k) => (input.socials?.[k] ? [[k, input.socials[k]!]] : [])));
     const next = {
       tagline: input.tagline ?? null,
+      namePronunciation: input.namePronunciation ?? null,
       description: input.description ?? null,
       industry: input.industry ?? null,
       website: input.website ?? null,

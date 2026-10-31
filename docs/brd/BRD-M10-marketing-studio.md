@@ -50,7 +50,7 @@ Membuat konten promosi produk (gambar dan caption) dari **data produk yang sudah
 | BR-M10-07 | Prompt tidak memuat data pribadi klien; konten tidak menampilkan nama klien tanpa izin ⚠️ | Usulan |
 | BR-M10-08 | Respons yang terkena **filter keamanan** model ditampilkan sebagai gagal dengan pesan jelas dan tidak ditagih (sesuai dokumentasi) | Final |
 | BR-M10-09 | Gambar disimpan sebagai berkas di Storage (bukan base64 di basis data); format asal (WebP) dipertahankan atau dikonversi | Usulan |
-| BR-M10-10 | Fitur **pembuatan** video/suara **tidak ditampilkan** di UI atau demo. **Amandemen D-079 (2026-10-31, permintaan owner):** naskah dan storyboard video **berupa teks** boleh ada (dari profil perusahaan dan fakta produk), diberi keterangan jelas bahwa Orbyte tidak membuat video | Final (CR-17), diamandemen |
+| BR-M10-10 | Fitur **pembuatan** video/suara **tidak ditampilkan** di UI atau demo. **Amandemen D-079 (2026-10-31, permintaan owner):** naskah dan storyboard video **berupa teks** boleh ada (dari profil perusahaan dan fakta produk), diberi keterangan jelas bahwa Orbyte tidak membuat video | Final (CR-17), diamandemen 2x | **Amandemen D-086 (2026-10-31, permintaan owner):** video **slideshow bernarasi** boleh dibuat: satu gambar Muse Image per adegan, teks di layar digambar kode, suara dari mesin suara lokal di balik `SpeechProvider`, dirakit ffmpeg. UI **tidak boleh** menyebut video itu "dibuat AI generatif" atau menjanjikan gerak sinematik; video diberi penanda "dibuat AI", memakai kuota gambar harian (satu per adegan), dan naskahnya tetap lolos penjaga angka/harga. Tanpa kirim otomatis ke media sosial |
 | BR-M10-11 | Brand kit hanya dapat diubah Pemilik/Admin; perubahan tercatat di audit | Final |
 
 ## 6. Entitas bisnis & data kunci

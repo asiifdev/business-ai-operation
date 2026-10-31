@@ -31,6 +31,7 @@ const socialsSchema = z
 
 export const profileSchema = z.object({
   tagline: optionalText(160),
+  namePronunciation: optionalText(120),
   description: optionalText(2000),
   industry: optionalText(120),
   website: httpsUrl(300),

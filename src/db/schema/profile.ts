@@ -14,6 +14,8 @@ export const organizationProfiles = pgTable(
     id: idColumn(),
     orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
     tagline: text('tagline'),
+    /** How the company name is said aloud, for example `asif dev` (D-086). Read by the video narration writer. */
+    namePronunciation: text('name_pronunciation'),
     description: text('description'),
     industry: text('industry'),
     website: text('website'),

@@ -49,7 +49,8 @@
 | `ai_run_status` | `ok` · `error` · `blocked_budget` · `rejected_tool` |
 | `job_status` | `queued` · `running` · `done` · `failed` |
 | `meeting_status` | `uploaded` · `processing` · `done` · `failed` |
-| `file_kind` | `meeting_audio` · `marketing_image` · `product_logo` · `brand_logo` |
+| `file_kind` | `meeting_audio` · `marketing_image` · `product_logo` · `brand_logo` · `marketing_video` (D-086) |
+| `video_status` | `script` · `queued` · `rendering` · `done` · `failed` (D-086) |
 | `marketing_purpose` | `launch` · `promo` · `education` · `release` · `brand` (D-066) · `free` (D-080: gambar dari permintaan bebas, bukan dari pilihan tujuan) |
 | `deployment_status` | `active` · `inactive` |
 | `connection_kind` | `github` · `ssh` · `aapanel` (CyberPanel dan cPanel ditambahkan lewat migrasi saat didukung, D-055) |
@@ -171,7 +172,7 @@ Unik parsial: `UNIQUE (user_id) WHERE unlinked_at IS NULL`.
 
 **`telegram_updates`**: `update_id bigint PK`, `received_at`. Menolak pemrosesan ganda saat Telegram mengirim ulang webhook (idempotensi).
 
-**`organization_profiles`** (D-079): satu baris per organisasi (`org_id` **`UNIQUE`**), dibuat saat pertama disimpan. Profil perusahaan sebagai **sumber tunggal** identitas bisnis, dipakai tampilan (logo di poster) dan menjadi **konteks AI** (asisten, Marketing Studio, naskah video). Tidak memuat angka keuangan.
+**`organization_profiles`** (D-079): satu baris per organisasi (`org_id` **`UNIQUE`**), dibuat saat pertama disimpan. Profil perusahaan sebagai **sumber tunggal** identitas bisnis, dipakai tampilan (logo di poster) dan menjadi **konteks AI** (asisten, Marketing Studio, naskah video). Tidak memuat angka keuangan. **D-086:** kolom `name_pronunciation text N` (maks 120): cara membaca nama perusahaan bila dibacakan (mis. "asif dev"), diisi Pemilik/Admin, dipakai penulis ucapan video.
 
 | Kolom | Tipe | Aturan |
 |---|---|---|
@@ -290,6 +291,8 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`marketing_assets`**: `id`, `org_id`, `product_id N` (ref; kosong = pemasaran tingkat perusahaan, D-066), `purpose marketing_purpose`, `prompt text` (untuk `purpose = free`: kata-kata orang itu sendiri; lampiran acuan tidak disimpan, hanya dipakai saat membuat), `parent_asset_id N` (ref diri sendiri, rantai revisi, yang lama tetap), `file_id` (ref `files`), `caption text N`, `background_file_id N` (ref `files`: gambar latar dari model tanpa teks dan tanpa logo; ada bila poster memakai teks, D-067), `poster_copy jsonb N` (judul, subjudul, ajakan, posisi teks, tampilkan harga, logo, sudut; D-067), `ai_run_id N`, `created_by text`, `created_at`. Bila `poster_copy` terisi, `file_id` adalah poster jadi yang dirender kode dari `background_file_id`.
 
+**`video_projects`** (D-086): satu naskah video dan hasil videonya. `id`, `org_id`, `product_id N` (ref; kosong = perusahaan), `purpose marketing_purpose`, `seconds int` (15/30/60), `aspect text` (`story` bawaan), `narrator text` (kunci narator di kode, bawaan `sinta`), `title text`, `script jsonb` (judul, hook, ajakan, adegan: `visual`, `voiceover`, `spoken` = ucapan berejaan lisan, `onScreenText`, `from`, `to`), `status video_status` (`script` = baru naskah, `queued`, `rendering`, `done`, `failed`), `stage text N` (`images` / `voice` / `assemble`), `progress smallint` (0–100), `error text N` (kalimat biasa), `file_id N` (ref `files` kind `marketing_video`), `duration_ms int N`, `speech_engine text N` (mesin suara yang benar-benar dipakai, ditelusuri), `images_used smallint` (jumlah gambar yang memakai kuota), `ai_run_id N`, `created_by text`, `created_at`, `updated_at`. Satu proyek = satu video; membuat ulang dengan naskah lain = proyek baru. Indeks `(org_id, created_at)`. Hapus proyek menghapus berkas videonya (gambar adegan tidak disimpan).
+
 ### 3.8 AI, Action Center, audit (M07, M08, M15)
 
 **`ai_runs`** · BR-M15-05, CR-11
@@ -371,7 +374,7 @@ Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); per
 | `pipeline.ts` | `leads`, `tasks` |
 | `documents.ts` | `documents`, `document_items` |
 | `meetings.ts` | `files`, `meetings`, `meeting_turns` |
-| `marketing.ts` | `brand_kits`, `marketing_assets` |
+| `marketing.ts` | `brand_kits`, `marketing_assets`, `video_projects` (D-086) |
 | `profile.ts` | `organization_profiles`, `org_services` (D-079) |
 | `operations.ts` | `connections`, `product_setups`, `playbook_runs`, `playbook_steps` |
 | `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings`, `assistant_sessions`, `assistant_messages`, `assistant_attachments` |
@@ -433,7 +436,7 @@ Urutan kelompok (satu migrasi per kelompok, mudah ditinjau). Nomor berkas mengik
 6. `pipeline_tasks`: `leads`, `tasks`
 7. `documents`: dokumen dan item (+ pemicu final), FK `meetings.minutes_document_id`
 8. `action_center`: `findings`, `approvals`, `briefings`
-9. `marketing`: `brand_kits`, `marketing_assets`
+9. `marketing`: `brand_kits`, `marketing_assets`, `video_projects`
 10. `operations` (M17): enum baru, `connections`, `product_setups`, `playbook_runs`, `playbook_steps`; kolom baru pada `deployments` dan `organizations`; nilai baru `finding_rule` (`deployment_outdated`, `deployment_down`)
 
 Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterapkan**, tidak pernah diubah setelah diterapkan di server live (koreksi = migrasi baru). Basis data uji (`DATABASE_URL_TEST`, nama wajib berakhiran `_test`) dibangun ulang dari migrasi yang sama pada setiap `pnpm test` dan dipakai tes penjaga di `tests/db/`.
@@ -451,7 +454,7 @@ Aturan: migrasi dibuat dengan `drizzle-kit generate`, **ditinjau sebelum diterap
 | M07, M15 | `ai_runs`, `ai_budgets`, `audit_log`, `approvals`, `automation_runs` | BR-M15-01/-02/-04/-05/-07/-08/-09 |
 | M08 | `findings`, `approvals`, `briefings` | BR-M08 (dedupe, keputusan tunggal) |
 | M09 | `meetings`, `meeting_turns`, `files` | BR-M09 |
-| M10 | `brand_kits`, `marketing_assets`, `files` | BR-M10 |
+| M10 | `brand_kits`, `marketing_assets`, `video_projects`, `files` | BR-M10 |
 | M11 | `telegram_links`, `telegram_pairing_codes`, `telegram_updates` | BR-M11 |
 | M12 | tanpa tabel (hitung dari tabel di atas) | CR-06 |
 | M17 | `connections`, `product_setups`, `playbook_runs`, `playbook_steps`, kolom baru `deployments`/`organizations` | BR-M17-01/-02/-13/-15 |
