@@ -10,6 +10,7 @@ import type { Ctx } from '../../ctx';
 import { DomainError } from '../../errors';
 import { createLead, updateLead } from '../../pipeline/leads';
 import { createClient, updateClient } from '../../portfolio/clients';
+import { appendTurns, getSession } from '../../assistant/sessions';
 import { ACT_RISK, getAutonomy, mayAutoRun, setAutonomy, undoApproval } from '../autonomy';
 
 afterAll(async () => {
@@ -143,5 +144,22 @@ describe('the assistant acts by itself for the person who asked (D-082)', () => 
     await setAutonomy(o.ownerCtx, { level: 'careful' });
     const reply = await ask(o.ownerCtx, new FakeProvider({ chat: [callTools([{ name: 'create_client', args: { name: 'Manual Saja' } }]), say('Diajukan.')] }));
     expect(await undoApproval(o.ownerCtx, reply.pendingApprovals[0].id)).toEqual({ undone: false, reason: 'nothing_to_undo' });
+  });
+});
+
+describe('a stored conversation remembers what was taken back (D-082)', () => {
+  it('marks an undone automatic action when the conversation is loaded again, and only that one', async () => {
+    const o = await makeOrg();
+    const reply = await ask(o.ownerCtx, new FakeProvider({ chat: [callTools([{ name: 'create_client', args: { name: 'Toko Batal' } }, { name: 'create_client', args: { name: 'Toko Tetap' } }]), say('Dua klien ditambahkan.')] }));
+    expect(reply.autoRan).toHaveLength(2);
+    const sessionId = await appendTurns(o.ownerCtx, null, [{ kind: 'user', body: { text: 'tambah dua klien' } }, { kind: 'assistant', body: reply }], 'tambah dua klien');
+
+    const before = (await getSession(o.ownerCtx, sessionId)).messages[1].body as { autoRan: Array<{ id: string; undone?: boolean }> };
+    expect(before.autoRan.every((a) => !a.undone)).toBe(true);
+
+    expect(await undoApproval(o.ownerCtx, reply.autoRan[0].id)).toEqual({ undone: true });
+    const after = (await getSession(o.ownerCtx, sessionId)).messages[1].body as { autoRan: Array<{ id: string; undone?: boolean }> };
+    expect(after.autoRan.map((a) => [a.id, a.undone === true])).toEqual([[reply.autoRan[0].id, true], [reply.autoRan[1].id, false]]);
+    expect((await undoApproval(o.ownerCtx, reply.autoRan[0].id)).reason).toBe('already_undone');
   });
 });

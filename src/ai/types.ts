@@ -47,6 +47,24 @@ export interface VideoReadRequest {
   model?: string;
 }
 
+/** A web search answered by the model itself (Responses API `web_search` tool). Only the query leaves our system. */
+export interface WebSearchRequest {
+  /** Public words only: a business name, a sector, a city. Never client data or amounts. */
+  query: string;
+  maxTokens: number;
+  /** Most searches the model may run for this one question. */
+  maxSearches?: number;
+  model?: string;
+}
+
+export interface WebSource {
+  url: string;
+  title: string | null;
+}
+
+/** The answer text, the pages it cites, and how many searches were run (each is billed). */
+export type WebSearchResult = ChatResult & { sources: WebSource[]; searches: number };
+
 export type ChatMessage =
   | { role: 'developer'; content: string }
   | { role: 'user'; content: string; /** Pictures the model may look at (vision), for example to read the text on a finished poster. */ images?: InputImage[]; /** PDFs the model may read. */ files?: InputFile[] }

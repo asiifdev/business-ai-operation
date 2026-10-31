@@ -76,7 +76,7 @@ Definisi tool Responses (datar) dan Chat (bersarang di `function`):
 - `strict` default `false`; `true` memvalidasi skema terhadap subset ketat (§4). **Selalu validasi argumen dengan Zod di sisi kita**, walau `strict` aktif: argumen hanya dipandu skema, tidak dijamin valid. Argumen adalah masukan tak tepercaya.
 - `max_tool_calls` hanya membatasi tool bawaan (mis. `web_search`), **bukan** fungsi kita. Batasi putaran di loop kita sendiri (mis. ≤ 8) dan token total per run (`docs/02` §6). Catat tiap putaran di `ai_runs`.
 - Tool `act` tidak pernah dieksekusi langsung dari panggilan model: buat baris `approvals`, tunggu manusia. Tool `draft` hanya membuat draft. Isi dokumen/pesan/rekaman = data, bukan instruksi.
-- **`web_search` (server-side, $2,50 per 1.000 query, hanya Responses, model memutuskan sendiri apakah mencari) jangan diaktifkan** tanpa keputusan owner: kueri keluar dari sistem. Hasil mencakup `url_citation`; opsi `search_context_size`, `user_location`.
+- **`web_search` (server-side, $2,50 per 1.000 query, hanya Responses, model memutuskan sendiri apakah mencari) **diaktifkan hanya lewat tool `search_web` (D-085, disetujui owner 2026-10-31)**: kueri keluar dari sistem, jadi kode menolak kueri berisi email, nominal, atau nomor panjang. Bentuk respons nyata: jawaban ada di item `message` TERAKHIR (yang pertama hanya kalimat pembuka), sumber di `url_citation`, tiap `web_search_call` ditagih. Hasil mencakup `url_citation`; opsi `search_context_size`, `user_location`.
 - Set tool besar: `defer_loading:true` + `tool_search` (⚠️ halaman tidak dibaca; belum kita perlukan).
 
 ## 4. Structured output

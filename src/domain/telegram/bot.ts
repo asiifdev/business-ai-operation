@@ -27,7 +27,9 @@ import { createMeeting } from '../meetings/service';
 import { listTasks } from '../tasks/service';
 import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
+import { pendingAttachments, readCaption } from './attachments';
 import { pendingPictures, makePicture, pictureJpeg } from './picture';
+import type { AttachResult } from '../assistant/attachments';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
 export interface AutoRan { id: string; summary: string; undoable: boolean }
@@ -41,9 +43,11 @@ export interface BotDeps {
   /** Public address of the web app, for links in messages. */
   appUrl?: string;
   /** Free text goes to the grounded assistant (M07). Left out, the bot answers with the command list instead. */
-  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean; /** Called for each picture the assistant made while answering; the bot then sends it as a photo (D-080). */ onPicture?: (assetId: string) => void; /** Called for each action the assistant ran by itself (D-082); the bot tells the person and offers Undo. */ onAutoRan?: (item: AutoRan) => void }) => Promise<string>;
+  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean; /** Called for each picture the assistant made while answering; the bot then sends it as a photo (D-080). */ onPicture?: (assetId: string) => void; /** Called for each action the assistant ran by itself (D-082); the bot tells the person and offers Undo. */ onAutoRan?: (item: AutoRan) => void; /** Attachments of this chat the assistant may read (D-083). */ attachmentIds?: string[] }) => Promise<string>;
   /** Reads an answer aloud (D-052). Left out, or returning null, the answer stays text only. */
   speak?: (text: string, locale: 'id' | 'en', ctx: Ctx, person: LinkedUser) => Promise<{ ogg: Uint8Array; durationMs: number } | null>;
+  /** Reads a file the person sent into an assistant attachment (D-083), through the same service as the web. Left out, files are not accepted. */
+  attach?: (ctx: Ctx, file: { name: string; bytes: Uint8Array }) => Promise<AttachResult>;
   /** Short speech to text for a chat voice note (M09 STT). Left out, a voice note is treated as a meeting recording. */
   transcribe?: (ctx: Ctx, audio: Uint8Array, person: LinkedUser) => Promise<{ ok: true; text: string } | { ok: false; message: string }>;
 }
@@ -132,6 +136,8 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
 
   const audio = message.voice ?? message.audio;
   if (audio) return onVoice(audio, { forceMeeting: Boolean(message.audio) || /^\/(rapat|meeting)\b/i.test(message.caption?.trim() ?? '') }, ctx, person, deps);
+  const readPhoto = message.photo ? readCaption(message.caption) : null;
+  if (message.document || message.video || message.video_note || (message.photo && readPhoto !== null)) return onAttachment(message, readPhoto, ctx, person, deps);
   if (message.photo) return onPhoto(message, ctx, person, deps);
   if (!text) return;
   // Photos were sent and the words come now: that is the request for a picture (D-080).
@@ -144,9 +150,8 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
   await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
   const pictures: string[] = [];
   const autoRan: AutoRan[] = [];
-  const answer = await deps.ask(ctx, text.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item) });
+  const answer = await deps.ask(ctx, text.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item), attachmentIds: pendingAttachments.ids(chatId, deps.clock.now()) });
   for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
-  await sendAutoRan(autoRan, person, deps);
   await sendAutoRan(autoRan, person, deps);
   await sendPictures(pictures, ctx, person, deps);
 }
@@ -191,8 +196,9 @@ async function onVoiceChat(bytes: Uint8Array, ctx: Ctx, person: LinkedUser, deps
   if (!words) return send(deps, person.chatId, escapeHtml(t('tgVoiceUnclear')));
   const pictures: string[] = [];
   const autoRan: AutoRan[] = [];
-  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice), onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item) });
+  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice), onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item), attachmentIds: pendingAttachments.ids(person.chatId, deps.clock.now()) });
   if (!(await replyAloud(answer, ctx, person, deps))) for (const part of answerToTelegramParts(answer)) await send(deps, person.chatId, part);
+  await sendAutoRan(autoRan, person, deps);
   await sendPictures(pictures, ctx, person, deps);
 }
 
@@ -219,6 +225,50 @@ async function replyAloud(answer: string, ctx: Ctx, person: LinkedUser, deps: Bo
     }
     return false;
   }
+}
+
+const ATTACH_REFUSALS: Record<string, MessageKey> = { format: 'attErrFormat', legacy: 'attErrLegacy', size: 'attErrSize', empty: 'attErrEmpty', url: 'attErrUrl', unreachable: 'attErrUnreachable', limit: 'attErrLimit', ai: 'attErrAi', quota: 'attErrQuota', audio: 'attErrAudio' };
+
+/**
+ * A document, a video, or a photo sent with `/baca` is something for the assistant to read (D-083). It is downloaded (at most
+ * 20 MB, Telegram's own limit for bots), read once by the same service as the web and remembered for this chat for a few
+ * minutes. With words in the caption they are asked at once; without, the next message is the question. What is inside the
+ * file is data: a run that has read it never acts by itself (D-082).
+ */
+async function onAttachment(message: TelegramMessage, readPhoto: string | null, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
+  const chatId = person.chatId;
+  if (!deps.attach || !deps.ask) return send(deps, chatId, helpText(person.locale));
+  if (!can(person.role, 'assistant.use')) return send(deps, chatId, escapeHtml(t('errForbidden')));
+  // An album would answer once per file; each file is a model call, so the same per-minute cap as questions applies.
+  if (!limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
+
+  const photo = readPhoto !== null ? pickPhoto(message.photo) : null;
+  const file = message.document ?? message.video ?? message.video_note ?? photo;
+  if (!file) return send(deps, chatId, escapeHtml(t('tgAttachTooLarge')));
+  const name = message.document?.file_name ?? message.video?.file_name ?? (message.video || message.video_note ? `video-${message.message_id}.mp4` : `foto-${message.message_id}.jpg`);
+  let bytes: Uint8Array;
+  try {
+    bytes = await deps.client.downloadFile(file.file_id);
+  } catch (err) {
+    if (err instanceof TelegramError && err.kind === 'too_large') return send(deps, chatId, escapeHtml(t('tgAttachTooLarge')));
+    throw err;
+  }
+  await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
+  const added = await deps.attach(ctx, { name, bytes });
+  if (!added.ok) return send(deps, chatId, escapeHtml(`${name}: ${t(ATTACH_REFUSALS[added.reason] ?? 'attErrGeneric')}`));
+  pendingAttachments.add(chatId, added.attachment.id, deps.clock.now());
+
+  const words = (readPhoto ?? message.caption ?? '').trim();
+  // The other files of an album each carry no words; one confirmation per file is enough and the question comes next.
+  if (!words) return send(deps, chatId, escapeHtml(t('tgAttachReceived', { name })));
+  await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
+  const pictures: string[] = [];
+  const autoRan: AutoRan[] = [];
+  const answer = await deps.ask(ctx, words.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item), attachmentIds: pendingAttachments.ids(chatId, deps.clock.now()) });
+  for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
+  await sendAutoRan(autoRan, person, deps);
+  await sendPictures(pictures, ctx, person, deps);
 }
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;

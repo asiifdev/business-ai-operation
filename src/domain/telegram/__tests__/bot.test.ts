@@ -442,3 +442,95 @@ describe('pictures from Telegram (D-080)', () => {
     expect(pendingPictures.take(778, now)).toHaveLength(0);
   });
 });
+
+describe('files sent to the bot for the assistant to read (D-083)', () => {
+  const docUpdate = (chatId: number, extra: { caption?: string; name?: string } = {}): TelegramUpdate => ({ update_id: uid(), message: { message_id: uid(), from: { id: chatId, is_bot: false, language_code: 'id' }, chat: chat(chatId), date: 0, document: { file_id: 'doc1', file_name: extra.name ?? 'penawaran.pdf', file_size: 1000 }, caption: extra.caption } as never });
+  const photoReadUpdate = (chatId: number, caption: string): TelegramUpdate => ({ update_id: uid(), message: { message_id: uid(), from: { id: chatId, is_bot: false, language_code: 'id' }, chat: chat(chatId), date: 0, photo: [{ file_id: 'big', width: 800, height: 800, file_size: 40_000 }], caption } as never });
+  const fakeAttach = (made: string[]) => async (_ctx: unknown, file: { name: string }) => {
+    made.push(file.name);
+    return { ok: true as const, attachment: { id: `att-${made.length}`, name: file.name, kind: 'pdf' as const, summary: 's', sizeBytes: 1 } };
+  };
+
+  it('keeps a file without words and gives it to the next question', async () => {
+    const { o, tg, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const made: string[] = [];
+    const asked: Array<{ q: string; ids?: string[] }> = [];
+    const d: BotDeps = { ...deps, attach: fakeAttach(made) as never, ask: async (_c, q, _p, opts) => (asked.push({ q, ids: opts?.attachmentIds }), 'Totalnya Rp 7.500.000.') };
+    await handleUpdate(docUpdate(chatId), d);
+    expect(made).toEqual(['penawaran.pdf']);
+    expect(asked).toHaveLength(0);
+    expect(tg.sent.at(-1)!.text).toContain('penawaran.pdf');
+    await handleUpdate(textUpdate(chatId, 'Berapa totalnya?'), d);
+    expect(asked).toEqual([{ q: 'Berapa totalnya?', ids: ['att-1'] }]);
+    expect(tg.sent.at(-1)!.text).toContain('7.500.000');
+  });
+
+  it('asks at once when the caption has the question', async () => {
+    const { o, tg, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const asked: Array<{ q: string; ids?: string[] }> = [];
+    const d: BotDeps = { ...deps, attach: fakeAttach([]) as never, ask: async (_c, q, _p, opts) => (asked.push({ q, ids: opts?.attachmentIds }), 'Ringkasnya begini.') };
+    await handleUpdate(docUpdate(chatId, { caption: 'Ringkas ini' }), d);
+    expect(asked).toEqual([{ q: 'Ringkas ini', ids: ['att-1'] }]);
+    expect(tg.sent.at(-1)!.text).toContain('Ringkasnya');
+  });
+
+  it('reads a photo only when its caption starts with /baca, and leaves other photos to the picture maker', async () => {
+    const { o, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const made: string[] = [];
+    const asked: string[] = [];
+    const d: BotDeps = { ...deps, client: { ...deps.client, downloadFile: async () => new Uint8Array([1]) }, attach: fakeAttach(made) as never, ask: async (_c, q) => (asked.push(q), 'Itu struk.') };
+    await handleUpdate(photoReadUpdate(chatId, '/baca apa isi struk ini?'), d);
+    expect(made).toHaveLength(1);
+    expect(asked).toEqual(['apa isi struk ini?']);
+    const { readCaption } = await import('../attachments');
+    expect(readCaption('/baca')).toBe('');
+    expect(readCaption('Poster fitur baru')).toBeNull();
+    expect(readCaption(undefined)).toBeNull();
+  });
+
+  it('says why a file was refused and keeps nothing', async () => {
+    const { o, tg, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const asked: string[] = [];
+    const d: BotDeps = { ...deps, attach: (async () => ({ ok: false, reason: 'legacy', message: 'legacy' })) as never, ask: async (_c, q, _p, opts) => (asked.push(`${q}|${opts?.attachmentIds?.length}`), 'ok') };
+    await handleUpdate(docUpdate(chatId, { name: 'lama.doc' }), d);
+    expect(tg.sent.at(-1)!.text).toContain('lama.doc');
+    expect(tg.sent.at(-1)!.text).toContain('.docx');
+    await handleUpdate(textUpdate(chatId, 'Halo'), d);
+    expect(asked).toEqual(['Halo|0']);
+  });
+
+  it('tells the person when the file is too large for a bot, and when the bot cannot read files at all', async () => {
+    const { o, tg, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const big: BotDeps = { ...deps, client: { ...deps.client, downloadFile: async () => { throw new TelegramError('too_large', 'big'); } }, attach: fakeAttach([]) as never, ask: async () => 'ok' };
+    await handleUpdate(docUpdate(chatId), big);
+    expect(tg.sent.at(-1)!.text).toContain('20 MB');
+    await handleUpdate(docUpdate(chatId), deps);
+    expect(tg.sent.at(-1)!.text).toContain('Perintah');
+  });
+
+  it('forgets files after ten minutes and keeps at most six', async () => {
+    const { PendingAttachments } = await import('../attachments');
+    const store = new PendingAttachments();
+    const now = new Date('2026-11-01T10:00:00Z');
+    store.add(1, 'a', now);
+    expect(store.ids(1, new Date(now.getTime() + 9 * 60_000))).toEqual(['a']);
+    expect(store.ids(1, new Date(now.getTime() + 11 * 60_000))).toEqual([]);
+    for (let i = 0; i < 8; i++) store.add(2, `x${i}`, now);
+    expect(store.ids(2, now)).toEqual(['x2', 'x3', 'x4', 'x5', 'x6', 'x7']);
+  });
+
+  it('sends the Undo button once after a typed request and once after a voice note', async () => {
+    const { o, tg, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const ranBy: BotDeps['ask'] = async (_c, _q, _p, opts) => (opts?.onAutoRan?.({ id: 'ap1', summary: 'Tambah klien "X"', undoable: true }), 'Selesai.');
+    await handleUpdate(textUpdate(chatId, 'tambah klien X'), { ...deps, ask: ranBy });
+    expect(tg.sent.filter((m) => m.text.includes('Tambah klien'))).toHaveLength(1);
+    await handleUpdate({ update_id: uid(), message: { message_id: uid(), from: { id: chatId, is_bot: false, language_code: 'id' }, chat: chat(chatId), date: 0, voice: { file_id: 'v', duration: 5 } } as never }, { ...deps, transcribe: async () => ({ ok: true, text: 'tambah klien X' }), ask: ranBy });
+    expect(tg.sent.filter((m) => m.text.includes('Tambah klien'))).toHaveLength(2);
+  });
+});

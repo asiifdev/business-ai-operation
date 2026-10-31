@@ -16,6 +16,8 @@ import { ACCEPT, dropAttachment, readFile, readLink, type Chip } from './attachm
 import { FilePickButton } from '../forms/FilePickButton';
 import { TextInput } from '../forms/TextInput';
 import { MAX_LENGTH, type Turn } from './useAssistant';
+import { progressLabel } from './progress-label';
+import type { AgentProgress } from '../../ai/progress';
 
 type Role = 'owner' | 'admin' | 'staff';
 
@@ -25,6 +27,7 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   get_company_profile: 'srcGetCompanyProfile',
   get_attachment: 'srcGetAttachment',
   read_website: 'srcReadWebsite',
+  search_web: 'srcSearchWeb',
   make_picture: 'srcMakePicture',
   list_leads: 'srcListLeads',
   get_code_status: 'toolGetCodeStatus',
@@ -147,9 +150,11 @@ export function AssistantMark({ className }: { className?: string }) {
  * The conversation: the turns, the starters when it is empty, and a waiting row while the assistant works. Shared by the
  * full page and the side panel, so both look and behave the same.
  */
-export function Conversation({ turns, busy, role, onAsk, onRetry, compact = false }: {
+export function Conversation({ turns, busy, progress = null, role, onAsk, onRetry, compact = false }: {
   turns: Turn[];
   busy: boolean;
+  /** What is really happening while `busy`; the indicator falls back to a general line without it. */
+  progress?: AgentProgress | null;
   role: Role;
   onAsk: (question: string) => void;
   onRetry: (turn: Extract<Turn, { kind: 'error' }>) => void;
@@ -237,7 +242,7 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
           <AssistantMark />
           <div className="flex items-center gap-3 rounded-card rounded-tl-sm border border-rule bg-key-face px-4 py-3">
             <span aria-hidden="true" className="typing flex gap-1"><span /><span /><span /></span>
-            <p className="m-0 text-sm text-muted">{t('assistantThinking')}</p>
+            <p className="m-0 text-sm text-muted">{progressLabel(progress, t)}</p>
           </div>
         </li>
       )}

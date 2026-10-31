@@ -108,7 +108,7 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
       ) : (
         <>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4">
-            <Conversation turns={turns} busy={busy || a.opening} role={role} onAsk={ask} onRetry={retry} compact />
+            <Conversation turns={turns} busy={busy || a.opening} progress={a.progress} role={role} onAsk={ask} onRetry={retry} compact />
           </div>
           <div className="shrink-0 border-t border-rule bg-paper px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <Composer ref={composer} busy={busy} onSend={ask} rows={1} attachable />

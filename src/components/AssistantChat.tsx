@@ -84,7 +84,7 @@ export function AssistantChat({ role }: { role: Role }) {
         </header>
 
         <section className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2" aria-label={t('assistantTitle')} aria-busy={a.opening}>
-          <Conversation turns={a.turns} busy={a.busy || a.opening} role={role} onAsk={a.ask} onRetry={a.retry} />
+          <Conversation turns={a.turns} busy={a.busy || a.opening} progress={a.progress} role={role} onAsk={a.ask} onRetry={a.retry} />
         </section>
 
         <Composer ref={composer} busy={a.busy} onSend={a.ask} attachable />

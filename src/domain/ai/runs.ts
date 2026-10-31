@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { AiProviderError } from '../../ai/errors';
-import { chatCostMicroUsd, imageCostMicroUsd, transcribeCostMicroUsd } from '../../ai/pricing';
+import { chatCostMicroUsd, imageCostMicroUsd, transcribeCostMicroUsd, webSearchCostMicroUsd } from '../../ai/pricing';
 import type { AiFeature, Usage } from '../../ai/types';
 import type { Db } from '../../db/client';
 import { newId } from '../../db/ids';
@@ -121,6 +121,12 @@ export class AiRun {
   addImages(count: number): number {
     this.images += count;
     const cost = imageCostMicroUsd(count);
+    this.costMicroUsd += cost;
+    return cost;
+  }
+
+  addSearches(count: number): number {
+    const cost = webSearchCostMicroUsd(count);
     this.costMicroUsd += cost;
     return cost;
   }

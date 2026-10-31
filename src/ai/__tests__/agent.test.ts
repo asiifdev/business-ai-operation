@@ -408,3 +408,26 @@ describe('strict grounding: no tool result, no answer', () => {
     expect(result).toMatchObject({ ok: true, refused: false, grounded: false, text: 'Ringkasan rapat.' });
   });
 });
+
+describe('progress while working (the person sees what is really happening)', () => {
+  it('tells each round and each tool before it runs, in order, and a broken listener changes nothing', async () => {
+    const o = await makeOrg();
+    const events: unknown[] = [];
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Invoice INV-2026-0042 telat 6 hari.')] });
+    const result = await agent(o, fake, { onProgress: (e) => events.push(e) });
+    expect(result.ok).toBe(true);
+    expect(events).toEqual([{ step: 'think', round: 1 }, { step: 'tool', name: 'list_overdue_invoices', detail: undefined }, { step: 'think', round: 2 }]);
+
+    const fake2 = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }]), say('Invoice INV-2026-0042 telat 6 hari.')] });
+    const broken = await agent(o, fake2, { onProgress: () => { throw new Error('listener bug'); } });
+    expect(broken.ok).toBe(true);
+  });
+
+  it('does not announce a tool call that failed validation', async () => {
+    const o = await makeOrg();
+    const events: Array<{ step: string }> = [];
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'list_overdue_invoices', args: { limit: 'banyak' } }]), say('Maaf, saya perbaiki dulu.')] });
+    await agent(o, fake, { onProgress: (e) => events.push(e), grounding: 'none' as never });
+    expect(events.filter((e) => e.step === 'tool')).toHaveLength(0);
+  });
+});

@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult, VideoReadRequest } from './types';
+import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult, VideoReadRequest, WebSearchRequest, WebSearchResult } from './types';
 
 /**
  * The only door to a model (BR-M07-01). `MetaProvider` is the real one, `FakeProvider` runs every test without a
@@ -12,4 +12,6 @@ export interface AiProvider {
   editImage(request: ImageEditRequest): Promise<ImageResult>;
   /** Watches a video and answers the instruction in text (Muse Spark video understanding, Responses API). The result is a `ChatResult` with `text` set. */
   readVideo(request: VideoReadRequest): Promise<ChatResult>;
+  /** Searches the public web for a question and answers with sources (Muse Spark `web_search`, Responses API; D-085). */
+  webSearch(request: WebSearchRequest): Promise<WebSearchResult>;
 }

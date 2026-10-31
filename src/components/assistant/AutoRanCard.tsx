@@ -25,7 +25,7 @@ export function AutoRanCard({ items }: { items: Item[] }) {
 
 function AutoRanItem({ item }: { item: Item }) {
   const t = useT();
-  const [state, setState] = useState<State>('idle');
+  const [state, setState] = useState<State>(item.undone ? 'undone' : 'idle');
   const [error, setError] = useState<string | null>(null);
 
   async function undo() {
@@ -33,7 +33,7 @@ function AutoRanItem({ item }: { item: Item }) {
     setError(null);
     try {
       const r = await api<{ undone: boolean; reason?: string }>('POST', `/api/approvals/${item.id}/undo`);
-      setState(r.undone ? 'undone' : r.reason === 'changed_since' ? 'changed' : 'refused');
+      setState(r.undone || r.reason === 'already_undone' ? 'undone' : r.reason === 'changed_since' ? 'changed' : 'refused');
     } catch (err) {
       setState('idle');
       setError(t(errorKey(err)));

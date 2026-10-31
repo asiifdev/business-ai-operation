@@ -173,3 +173,33 @@ describe('MetaProvider.generateImage', () => {
     await expect(p.generateImage({ prompt: 'x' })).rejects.toMatchObject({ kind: 'invalid_output' });
   });
 });
+
+describe('MetaProvider.webSearch (D-085)', () => {
+  // The shape of a real answer: reasoning, a short preamble, searches, then the real answer in the LAST message with citations.
+  const real = {
+    output: [
+      { type: 'reasoning', summary: [] },
+      { type: 'message', content: [{ type: 'output_text', text: 'Saya cek sumber web dulu.', annotations: [] }] },
+      { type: 'web_search_call', action: { type: 'search', query: 'Kopi Kenangan pendiri' } },
+      { type: 'web_search_call', action: { type: 'open_page', url: 'https://en.wikipedia.org/wiki/Kopi_Kenangan' } },
+      { type: 'message', content: [{ type: 'output_text', text: '**Kopi Kenangan** didirikan 2017.', annotations: [{ type: 'url_citation', url: 'https://en.wikipedia.org/wiki/Kopi_Kenangan', title: 'Kopi Kenangan' }, { type: 'url_citation', url: 'https://en.wikipedia.org/wiki/Kopi_Kenangan', title: 'Kopi Kenangan' }] }] },
+    ],
+    usage: { input_tokens: 7470, output_tokens: 925 },
+  };
+
+  it('turns on the web_search tool through /responses, caps the searches, and reads the last message with its sources', async () => {
+    const { p, stub } = provider([json(real)]);
+    const out = await p.webSearch({ query: 'Kopi Kenangan pendiri', maxTokens: 3000, maxSearches: 2 });
+    expect(stub.sent[0].url).toBe('https://api.meta.ai/v1/responses');
+    expect(stub.sent[0].body).toMatchObject({ max_tool_calls: 2, tools: [{ type: 'web_search' }], max_output_tokens: 3000 });
+    expect(out.text).toBe('**Kopi Kenangan** didirikan 2017.');
+    expect(out.sources).toEqual([{ url: 'https://en.wikipedia.org/wiki/Kopi_Kenangan', title: 'Kopi Kenangan' }]);
+    expect(out.searches).toBe(2);
+  });
+
+  it('fails clearly when the model gives no answer, and refuses a budget too small for reasoning', async () => {
+    const { p } = provider([json({ output: [{ type: 'web_search_call' }], usage: { input_tokens: 1, output_tokens: 1 } })]);
+    await expect(p.webSearch({ query: 'x y z', maxTokens: 3000 })).rejects.toMatchObject({ kind: 'empty' });
+    await expect(p.webSearch({ query: 'x y z', maxTokens: 10 })).rejects.toMatchObject({ kind: 'bad_request' });
+  });
+});

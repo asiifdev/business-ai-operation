@@ -4,7 +4,7 @@ import type { Db } from '../db/client';
 import { AiProviderError, type AiErrorKind } from './errors';
 import { AI_LABEL, NOT_AI_LABEL, friendlyAiError, type Locale } from './messages';
 import type { AiProvider } from './provider';
-import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult, VideoReadRequest } from './types';
+import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult, VideoReadRequest, WebSearchRequest, WebSearchResult } from './types';
 
 export type AiOutcome<T> =
   | { ok: true; value: T; runId: string; costMicroUsd: number; label: string }
@@ -96,5 +96,15 @@ export function readVideoOnce(options: Options & { request: VideoReadRequest }):
     const result = await options.provider.readVideo(options.request);
     run.addChat(result.meta.model, result.usage);
     return { value: result, summary: result.text ?? '' };
+  });
+}
+
+/** One web search (Responses API `web_search`). Recorded as an `agent` run: the tokens and every search are counted (D-085). */
+export function webSearchOnce(options: Options & { request: WebSearchRequest }): Promise<AiOutcome<WebSearchResult>> {
+  return guardedCall(options, { feature: 'agent', model: options.request.model ?? 'muse-spark-1.3' }, async (run) => {
+    const result = await options.provider.webSearch(options.request);
+    run.addChat(result.meta.model, result.usage);
+    run.addSearches(result.searches);
+    return { value: result, summary: `${result.searches} pencarian, ${result.sources.length} sumber: ${options.request.query}`.slice(0, 500) };
   });
 }

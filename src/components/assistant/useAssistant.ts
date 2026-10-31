@@ -1,3 +1,5 @@
+import type { AgentProgress } from '../../ai/progress';
+import { readStream } from './read-stream';
 import { useEffect, useRef, useState } from 'react';
 import type { AssistantReply } from '../../ai/assistant';
 import { useLocale, useT } from '../../lib/use-t';
@@ -82,6 +84,8 @@ export function useAssistant() {
   const locale = useLocale();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  /** What the assistant is really doing now (a tool, a search, writing the answer); null when idle. */
+  const [progress, setProgress] = useState<AgentProgress | null>(null);
   const [opening, setOpening] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [title, setTitle] = useState<string | null>(null);
@@ -127,6 +131,7 @@ export function useAssistant() {
     setTurnsNow(withQuestion);
     busyRef.current = true;
     setBusy(true);
+    setProgress({ step: 'think', round: 1 });
     const all: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     for (const turn of withQuestion) {
       if (turn.kind === 'user') all.push({ role: 'user', content: turn.text });
@@ -137,8 +142,10 @@ export function useAssistant() {
     }
     const messages = all.slice(-10);
     try {
-      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale, sessionId: sessionRef.current ?? undefined, attachmentIds: attachments.flatMap((a) => (a.id ? [a.id] : [])) }) });
-      const body = await res.json().catch(() => null);
+      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ messages, locale, stream: true, sessionId: sessionRef.current ?? undefined, attachmentIds: attachments.flatMap((a) => (a.id ? [a.id] : [])) }) });
+      const streamed = res.ok && (res.headers.get('content-type') ?? '').includes('ndjson');
+      // A streamed answer sends progress lines and then one `done` (or `error`) line; anything else is the plain JSON reply.
+      const body = streamed ? await readStream(res, setProgress) : await res.json().catch(() => null);
       if (res.ok && body?.ok) {
         const { sessionId: saved, ...reply } = body.data as AssistantReply & { sessionId?: string };
         setTurnsNow([...withQuestion, { id: nextId(), kind: 'assistant', reply: reply as AssistantReply, at: new Date().toISOString() }]);
@@ -154,6 +161,7 @@ export function useAssistant() {
     } finally {
       busyRef.current = false;
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -196,6 +204,7 @@ export function useAssistant() {
   return {
     turns,
     busy,
+    progress,
     opening,
     sessionId,
     title,

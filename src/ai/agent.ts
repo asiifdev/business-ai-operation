@@ -13,6 +13,7 @@ import type { AiProvider } from './provider';
 import type { ToolRegistry } from './tools/registry';
 import type { ChatMessage, ChatRequest, Effort } from './types';
 import { UNTRUSTED_NOTICE } from './untrusted';
+import { progressDetail, type AgentProgress } from './progress';
 
 /** BR-M07-06 default: five rounds of tool calls per run. */
 export const DEFAULT_MAX_ROUNDS = 5;
@@ -37,6 +38,8 @@ export interface AgentInput {
   feature?: 'agent' | 'minutes';
   model?: string;
   maxRounds?: number;
+  /** Told before every step what is happening, so the person sees the real work (the web chat streams it). */
+  onProgress?: (event: AgentProgress) => void;
   maxRunTokens?: number;
   /** Ask for the final answer as JSON (structured output). Validate it with Zod afterwards. */
   schema?: ChatRequest['schema'];
@@ -211,6 +214,12 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       return toJson({ error: 'argumen_tidak_valid', rincian: parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.') || '(akar)'}: ${i.message}`) });
     }
 
+    try {
+      input.onProgress?.({ step: 'tool', name: call.name, detail: progressDetail(call.name, parsed.data) });
+    } catch {
+      /* a broken listener must never stop the work */
+    }
+
     if (tool.tier === 'act') {
       const describe = tool.describe as (args: unknown) => string;
       const summary = describe(parsed.data);
@@ -255,6 +264,11 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   try {
     for (rounds = 1; rounds <= maxRounds; rounds += 1) {
       if (rounds > 1) await run.assertBudget();
+      try {
+        input.onProgress?.({ step: 'think', round: rounds });
+      } catch {
+        /* see above */
+      }
       if (run.tokens >= maxRunTokens) return await stop('run_tokens', friendlyAiError('timeout', locale), 'run token limit reached');
 
       const result = await input.provider.chat({

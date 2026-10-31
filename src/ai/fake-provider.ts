@@ -12,6 +12,8 @@ import type {
   TranscribeResult,
   Usage,
   VideoReadRequest,
+  WebSearchRequest,
+  WebSearchResult,
 } from './types';
 
 // Priced like the real default model so cost and budget logic behave the same in tests.
@@ -50,12 +52,16 @@ export class FakeProvider implements AiProvider {
   readonly editCalls: ImageEditRequest[] = [];
   /** Videos read, recorded apart; the answers come from the chat queue. */
   readonly videoCalls: VideoReadRequest[] = [];
+  /** Web searches asked, recorded apart; the answers come from the `search` script. */
+  readonly searchCalls: WebSearchRequest[] = [];
+  private readonly searchQueue: Array<WebSearchResult | AiProviderError>;
 
   private readonly chatQueue: ChatStep[];
   private readonly transcribeQueue: Array<TranscribeResult | AiProviderError>;
   private readonly imageQueue: Array<ImageResult | AiProviderError>;
 
-  constructor(script: { chat?: ChatStep[]; transcribe?: Array<TranscribeResult | AiProviderError>; image?: Array<ImageResult | AiProviderError> } = {}) {
+  constructor(script: { chat?: ChatStep[]; transcribe?: Array<TranscribeResult | AiProviderError>; image?: Array<ImageResult | AiProviderError>; search?: Array<WebSearchResult | AiProviderError> } = {}) {
+    this.searchQueue = [...(script.search ?? [])];
     this.chatQueue = [...(script.chat ?? [])];
     this.transcribeQueue = [...(script.transcribe ?? [])];
     this.imageQueue = [...(script.image ?? [])];
@@ -69,6 +75,11 @@ export class FakeProvider implements AiProvider {
   async readVideo(request: VideoReadRequest): Promise<ChatResult> {
     this.videoCalls.push(structuredClone(request));
     return next(this.chatQueue, 'readVideo');
+  }
+
+  async webSearch(request: WebSearchRequest): Promise<WebSearchResult> {
+    this.searchCalls.push(structuredClone(request));
+    return next(this.searchQueue, 'webSearch');
   }
 
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {

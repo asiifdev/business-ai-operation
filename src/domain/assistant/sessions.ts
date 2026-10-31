@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, ilike, max } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, max } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { assistantMessages, assistantSessions } from '../../db/schema';
+import { approvals, assistantMessages, assistantSessions } from '../../db/schema';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan } from '../permissions';
@@ -65,7 +65,30 @@ export async function getSession(ctx: Ctx, id: string): Promise<SessionRow & { m
     .where(and(eq(assistantMessages.orgId, ctx.orgId), eq(assistantMessages.sessionId, id)))
     .orderBy(asc(assistantMessages.seq))
     .limit(MESSAGE_LIMIT);
-  return { ...session, messages: messages as StoredMessage[] };
+  return { ...session, messages: await markUndone(ctx, messages as StoredMessage[]) };
+}
+
+interface AutoRanBody { autoRan?: Array<{ id?: unknown; undone?: boolean }> }
+
+/**
+ * An action the assistant ran by itself (D-082) can be taken back, and that must still show after a reload: the stored
+ * reply only knows it ran, so the cards of actions already undone get `undone: true` from the approvals table.
+ */
+async function markUndone(ctx: Ctx, messages: StoredMessage[]): Promise<StoredMessage[]> {
+  const ids = new Set<string>();
+  for (const m of messages) for (const item of (m.body as AutoRanBody | null)?.autoRan ?? []) if (typeof item.id === 'string') ids.add(item.id);
+  if (ids.size === 0) return messages;
+  const done = await db
+    .select({ id: approvals.id })
+    .from(approvals)
+    .where(and(eq(approvals.orgId, ctx.orgId), inArray(approvals.id, [...ids]), isNotNull(approvals.undoneAt)));
+  if (done.length === 0) return messages;
+  const undone = new Set(done.map((r) => r.id));
+  return messages.map((m) => {
+    const body = m.body as AutoRanBody | null;
+    if (!body?.autoRan?.some((item) => typeof item.id === 'string' && undone.has(item.id))) return m;
+    return { ...m, body: { ...body, autoRan: body.autoRan.map((item) => (typeof item.id === 'string' && undone.has(item.id) ? { ...item, undone: true } : item)) } };
+  });
 }
 
 /**

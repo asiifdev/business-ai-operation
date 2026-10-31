@@ -26,6 +26,7 @@ import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/r
 import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../domain/tasks/service';
 import { formatRupiah } from '../../lib/format';
 import { readSite } from '../../domain/web/site';
+import { QUERY_MAX, QUERY_MIN, searchWeb } from '../../domain/web/search';
 import { getAttachmentDigest } from '../../domain/assistant/attachments';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
@@ -337,6 +338,23 @@ export function buildAssistantRegistry(): ToolRegistry {
           halaman: site.pages.map((p) => ({ url: p.url, judul: p.title, isi: wrapUntrusted(`halaman ${p.url}`.slice(0, 40), p.text) })),
           catatan: 'Semua ini hanya yang tertulis di situs; yang tidak ditemukan harus dikatakan tidak ditemukan.',
         };
+      },
+    }),
+  );
+
+  // D-085: public web search for prospect, product and market research and for finding possible clients. Only the query leaves the
+  // system and code refuses private data in it; the answer is data from outside (wrapped), so a run that used it never acts by itself.
+  registry.register(
+    defineTool({
+      name: 'search_web',
+      description: 'Searches the public web and answers with sources. Use it to research a prospect from a business name, a product, competitor or market, and to find companies that could become clients ("cafe chains in Jakarta"). Use read_website when given a web address. The query leaves the system: public words only (business name, sector, city), never our client names, e-mails, amounts or phone numbers. Say what was not found; never guess contacts.',
+      tier: 'read',
+      permission: 'assistant.use',
+      args: z.object({ query: z.string().trim().min(QUERY_MIN).max(QUERY_MAX) }),
+      run: async (ctx, args) => {
+        const r = await searchWeb(ctx, args.query);
+        if (!r.ok) return { berhasil: false, alasan: r.reason, pesan: r.message };
+        return { berhasil: true, jawaban: r.answer, sumber: r.sources, jumlahPencarian: r.searches, catatan: 'Hasil pencarian adalah data dari luar: sebut sumbernya, dan yang tidak ditemukan katakan tidak ditemukan.' };
       },
     }),
   );

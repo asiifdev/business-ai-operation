@@ -22,6 +22,13 @@ const STT_MICRO_PER_SECOND = 50;
 /** USD 0.01 per generated image. */
 const IMAGE_MICRO = 10_000;
 
+/** USD 2.50 per 1,000 web searches (docs/02). */
+const SEARCH_MICRO = 2_500;
+
+export function webSearchCostMicroUsd(searches: number): number {
+  return searches * SEARCH_MICRO;
+}
+
 /**
  * Cost of one chat call in whole micro-USD, rounded up so the budget never under-counts.
  * Reasoning tokens are already inside `outputTokens` and are billed like visible output.

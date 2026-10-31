@@ -4,6 +4,9 @@ import { isContributorModel } from '../pricing';
 import type { AiProvider } from '../provider';
 import type {
   ImageEditRequest,
+  WebSearchRequest,
+  WebSearchResult,
+  WebSource,
   InputImage,
   CallMeta,
   ChatMessage,
@@ -60,7 +63,7 @@ const chatResponse = z.object({
 });
 
 const responsesResponse = z.object({
-  output: z.array(z.object({ type: z.string(), content: z.array(z.object({ type: z.string(), text: z.string().nullish() })).nullish() })),
+  output: z.array(z.object({ type: z.string(), content: z.array(z.object({ type: z.string(), text: z.string().nullish(), annotations: z.array(z.object({ type: z.string(), url: z.string().nullish(), title: z.string().nullish() })).nullish() })).nullish() })),
   usage: z.object({ input_tokens: z.number().nullish(), output_tokens: z.number().nullish(), output_tokens_details: z.object({ reasoning_tokens: z.number().nullish() }).nullish() }).nullish(),
 });
 
@@ -187,6 +190,41 @@ export class MetaProvider implements AiProvider {
       .trim();
     if (!text) throw new AiProviderError('empty', 'The model returned no text about the video', { usage });
     return { text, toolCalls: [], finishReason: 'stop', usage, meta: { ...meta, model } };
+  }
+
+  /**
+   * `/responses` with the server-side `web_search` tool. The model decides what to open; we cap how many searches it may run.
+   * The output holds a short preamble message before the searches and the real answer in the LAST message, whose
+   * `url_citation` annotations name the pages it used (checked against the live API, D-085).
+   */
+  async webSearch(request: WebSearchRequest): Promise<WebSearchResult> {
+    const model = request.model ?? this.models.chat;
+    this.assertModelAllowed(model);
+    if (request.maxTokens < MIN_MAX_TOKENS) throw new AiProviderError('bad_request', `maxTokens must be at least ${MIN_MAX_TOKENS}: reasoning uses the same budget`);
+    const body = {
+      model,
+      max_output_tokens: request.maxTokens,
+      max_tool_calls: request.maxSearches ?? 3,
+      tools: [{ type: 'web_search' }],
+      input: [{ role: 'user', content: [{ type: 'input_text', text: request.query }] }],
+    };
+    const { body: raw, meta } = await this.http.post<unknown>({ path: '/responses', json: body });
+    const parsed = responsesResponse.safeParse(raw);
+    if (!parsed.success) throw new AiProviderError('invalid_output', 'Web search response did not have the expected shape');
+    const usage: Usage = { inputTokens: parsed.data.usage?.input_tokens ?? 0, outputTokens: parsed.data.usage?.output_tokens ?? 0, cachedTokens: 0, reasoningTokens: parsed.data.usage?.output_tokens_details?.reasoning_tokens ?? 0 };
+    const messages = parsed.data.output.filter((item) => item.type === 'message');
+    const parts = (messages.at(-1)?.content ?? []).filter((part) => part.type === 'output_text');
+    const text = parts.map((part) => part.text ?? '').join('').trim();
+    const seen = new Set<string>();
+    const sources: WebSource[] = [];
+    for (const note of parts.flatMap((part) => part.annotations ?? [])) {
+      if (note.type !== 'url_citation' || !note.url || seen.has(note.url)) continue;
+      seen.add(note.url);
+      sources.push({ url: note.url, title: note.title ?? null });
+    }
+    const searches = parsed.data.output.filter((item) => item.type === 'web_search_call').length;
+    if (!text) throw new AiProviderError('empty', 'The model returned no answer for the web search', { usage });
+    return { text, toolCalls: [], finishReason: 'stop', usage, meta: { ...meta, model }, sources, searches };
   }
 
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {

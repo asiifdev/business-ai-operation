@@ -1,4 +1,5 @@
 import { askAssistant } from '../ai/assistant';
+import { addAttachment, attachmentsForChat } from '../domain/assistant/attachments';
 import { getAiProvider } from '../ai';
 import { transcribeOnce } from '../ai/run';
 import { toSpokenIndonesian } from '../ai/spoken';
@@ -66,11 +67,13 @@ export function botDeps(clock: Clock = systemClock): BotDeps {
         throw err;
       }
     },
+    attach: (ctx, file) => addAttachment(ctx, { file }, { toWav: toWavSegments }),
     ask: async (ctx, question, person, opts) => {
       globalForBot.__chatHistory ??= new ChatHistory(clock);
       const history = globalForBot.__chatHistory;
       const before = history.recent(person.userId);
-      const reply = await askAssistant(db, ctx, { request: { messages: [...before, { role: 'user', content: question }] }, organizationName: person.organizationName, locale: person.locale, channel: opts?.spoken ? 'voice' : 'text' });
+      const attachments = opts?.attachmentIds?.length ? await attachmentsForChat(ctx, null, opts.attachmentIds) : [];
+      const reply = await askAssistant(db, ctx, { attachments, request: { messages: [...before, { role: 'user', content: question }] }, organizationName: person.organizationName, locale: person.locale, channel: opts?.spoken ? 'voice' : 'text' });
       // Pictures made while answering go out as photos after the text (D-080).
       for (const draft of reply.drafts) if (draft.tool === 'make_picture') opts?.onPicture?.(draft.id);
       for (const done of reply.autoRan) if (done.executed) opts?.onAutoRan?.({ id: done.id, summary: done.summary, undoable: done.undoable });

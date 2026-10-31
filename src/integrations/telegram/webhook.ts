@@ -28,6 +28,9 @@ const message = z.object({
   voice: z.object({ file_id: z.string(), duration: z.number(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
   audio: z.object({ file_id: z.string(), duration: z.number(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
   photo: z.array(z.object({ file_id: z.string(), width: z.number(), height: z.number(), file_size: z.number().optional() })).optional(),
+  document: z.object({ file_id: z.string(), file_name: z.string().optional(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
+  video: z.object({ file_id: z.string(), duration: z.number().optional(), file_name: z.string().optional(), mime_type: z.string().optional(), file_size: z.number().optional() }).optional(),
+  video_note: z.object({ file_id: z.string(), duration: z.number().optional(), file_size: z.number().optional() }).optional(),
 });
 
 const callbackQuery = z.object({
