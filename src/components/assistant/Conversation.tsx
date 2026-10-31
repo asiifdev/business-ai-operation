@@ -23,6 +23,8 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   get_ai_usage: 'srcGetAiUsage',
   get_business_summary: 'srcGetBusinessSummary',
   get_company_profile: 'srcGetCompanyProfile',
+  get_attachment: 'srcGetAttachment',
+  read_website: 'srcReadWebsite',
   make_picture: 'srcMakePicture',
   list_leads: 'srcListLeads',
   get_code_status: 'toolGetCodeStatus',
@@ -118,12 +120,12 @@ function Runs({ runs }: { runs: Run[] }) {
 /** The answer as text blocks only: the model never gets to put markup into the page. */
 function Answer({ text }: { text: string }) {
   return (
-    <div className="flex flex-col gap-2 text-base text-ink">
+    <div className="flex flex-col gap-1.5 text-sm leading-6 text-ink">
       {parseAnswer(text).map((block, i) =>
         block.kind === 'p' ? (
           <p key={i} className="m-0"><Runs runs={block.runs} /></p>
         ) : (
-          <ul key={i} className="m-0 list-disc pl-5">
+          <ul key={i} className="m-0 list-disc pl-5 marker:text-muted">
             {block.items.map((item, j) => <li key={j}><Runs runs={item} /></li>)}
           </ul>
         ),
@@ -205,7 +207,7 @@ export function Conversation({ turns, busy, role, onAsk, onRetry, compact = fals
           {turn.kind === 'user' && (
             <div className={cx(width, 'rounded-card rounded-br-sm bg-accent px-4 py-2.5 text-accent-ink')}>
               <p className="sr-only">{t('assistantYou')}</p>
-              <p className="m-0 whitespace-pre-wrap text-base">{turn.text}</p>
+              <p className="m-0 whitespace-pre-wrap text-sm leading-6">{turn.text}</p>
               {turn.attachments && turn.attachments.length > 0 && <div className="mt-2"><AttachmentChips chips={turn.attachments} onDark /></div>}
               {turn.at && <p className="m-0 mt-1 text-right text-xs text-accent-ink/70">{timeOf(turn.at, locale)}</p>}
             </div>
@@ -357,7 +359,7 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
     // Files with no words still mean something: ask for a reading of them.
     onSend(draft.trim() || t('attDefaultQuestion'), ready);
     setDraft('');
-    setChips((all) => all.filter((c) => c.status === 'error'));
+    setChips([]);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {

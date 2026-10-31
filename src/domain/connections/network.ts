@@ -1,3 +1,4 @@
+import type { LookupAddress } from 'node:dns';
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 import { env } from '../../lib/env';
@@ -51,6 +52,17 @@ export async function resolvePublicHost(host: string): Promise<{ address: string
   // One private answer among several is enough to refuse: a name must not mix public and internal addresses.
   if (addresses.some((a) => isPrivateAddress(a.address))) throw new DomainError('validation', 'host points to a private address');
   return addresses[0];
+}
+
+/**
+ * A `lookup` for `http(s).request` that always answers with the address that passed the check. Node 20+ asks for a list of
+ * addresses (`options.all`) and fails with "Invalid IP address: undefined" when given a single one, so both shapes are handled.
+ */
+export function pinnedLookup(pinned: { address: string; family: 4 | 6 }) {
+  return (_host: string, options: { all?: boolean }, callback: (error: null, address: string | LookupAddress[], family?: number) => void): void => {
+    if (options?.all) callback(null, [{ address: pinned.address, family: pinned.family }]);
+    else callback(null, pinned.address, pinned.family);
+  };
 }
 
 /** Validation at save time, when nothing is connected yet. */

@@ -25,6 +25,7 @@ import { getProduct, listProducts } from '../../domain/portfolio/products';
 import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
 import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../domain/tasks/service';
 import { formatRupiah } from '../../lib/format';
+import { readSite } from '../../domain/web/site';
 import { getAttachmentDigest } from '../../domain/assistant/attachments';
 import { can } from '../../domain/permissions';
 import { formatUsd } from '../../lib/usd';
@@ -303,6 +304,39 @@ export function buildAssistantRegistry(): ToolRegistry {
       run: async (ctx, args) => {
         const a = await getAttachmentDigest(ctx, args.attachmentId);
         return { nama: a.name, jenis: a.kind, sumber: a.sourceUrl, isi: wrapUntrusted(`lampiran ${a.name}`, a.digest) };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'read_website',
+      description: 'Opens a public website from its base address and reads it as a whole: the home page plus the pages that usually hold contact and company information (contact, about, services, team). Returns the e-mail addresses, phone numbers, WhatsApp links, social media profiles and postal addresses the code found, and the text of each page. Use it when the person gives a web address and asks for contacts, social profiles, services or anything else the site says. Only what is on the site: say what was not found, never guess.',
+      tier: 'read',
+      permission: 'assistant.use',
+      args: z.object({ url: z.string().trim().url().max(500) }),
+      run: async (_ctx, args) => {
+        let site;
+        try {
+          site = await readSite(args.url);
+        } catch {
+          return { dibaca: false, alasan: 'Situs tidak bisa dibuka: harus alamat https publik yang bisa dijangkau server.' };
+        }
+        return {
+          dibaca: true,
+          situs: site.base,
+          halamanDibaca: site.pages.length,
+          halamanGagal: site.skipped,
+          kontak: {
+            email: site.contacts.emails,
+            telepon: site.contacts.phones,
+            whatsapp: site.contacts.whatsapp,
+            mediaSosial: site.contacts.socials,
+            alamat: site.contacts.addresses.map((a) => wrapUntrusted('alamat situs', a)),
+          },
+          halaman: site.pages.map((p) => ({ url: p.url, judul: p.title, isi: wrapUntrusted(`halaman ${p.url}`.slice(0, 40), p.text) })),
+          catatan: 'Semua ini hanya yang tertulis di situs; yang tidak ditemukan harus dikatakan tidak ditemukan.',
+        };
       },
     }),
   );

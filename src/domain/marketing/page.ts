@@ -1,5 +1,5 @@
 import { request } from 'node:https';
-import { resolvePublicHost } from '../connections/network';
+import { pinnedLookup, resolvePublicHost } from '../connections/network';
 import { DomainError } from '../errors';
 
 const TIMEOUT_MS = 8_000;
@@ -25,7 +25,7 @@ function getOnce(target: URL, pinned: { address: string; family: 4 | 6 }): Promi
         timeout: TIMEOUT_MS,
         headers: { 'user-agent': 'Orbyte-Page/1.0', accept: 'text/html,text/plain;q=0.9' },
         // The name is only used for TLS and the Host header; the socket opens to the address that passed the check.
-        lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
+        lookup: pinnedLookup(pinned),
       },
       (res) => {
         const status = res.statusCode ?? 0;
@@ -92,6 +92,12 @@ export function readPage(url: string, html: string): PageFacts {
  * are capped. What comes back is data for the model to read, never instructions.
  */
 export async function fetchPage(rawUrl: string): Promise<PageFacts> {
+  const { html } = await fetchHtml(rawUrl);
+  return readPage(rawUrl, html);
+}
+
+/** The same guarded GET, but the raw HTML and the address it finally came from (after redirects), for readers that need the links. */
+export async function fetchHtml(rawUrl: string): Promise<{ url: string; html: string }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -107,7 +113,7 @@ export async function fetchPage(rawUrl: string): Promise<PageFacts> {
       url = new URL(res.location, url);
       continue;
     }
-    return readPage(rawUrl, res.body);
+    return { url: url.href, html: res.body };
   }
   throw new DomainError('validation', 'page redirects too much');
 }

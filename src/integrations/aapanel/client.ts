@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { pinnedLookup } from '../../domain/connections/network';
 
 /**
  * aaPanel API client (skill `aapanel-integration`). One connection option standing on its own (D-055). Only the signing
@@ -43,7 +44,7 @@ export function aapanelPost(cfg: AapanelConfig, apiKey: string, path: string, fo
   return new Promise((resolve, reject) => {
     const req = send(
       url,
-      { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'content-length': Buffer.byteLength(body) }, timeout: 15_000, ...(cfg.address ? { lookup: (_h: string, _o: unknown, cb: (e: null, a: string, f: number) => void) => cb(null, cfg.address!.address, cfg.address!.family) } : {}), ...(url.protocol === 'https:' ? { rejectUnauthorized: !cfg.tlsInsecure } : {}) },
+      { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'content-length': Buffer.byteLength(body) }, timeout: 15_000, ...(cfg.address ? { lookup: pinnedLookup(cfg.address) } : {}), ...(url.protocol === 'https:' ? { rejectUnauthorized: !cfg.tlsInsecure } : {}) },
       (res) => {
         const chunks: Buffer[] = [];
         let size = 0;

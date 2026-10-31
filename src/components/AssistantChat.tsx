@@ -68,8 +68,9 @@ export function AssistantChat({ role }: { role: Role }) {
       <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 lg:gap-4">
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 max-w-prose">
-            <h1 className="m-0 truncate text-2xl font-semibold text-ink lg:text-3xl">{a.title ?? t('assistantTitle')}</h1>
-            <p className="mt-1 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>
+            <h1 className={a.turns.length > 0 ? 'm-0 truncate text-base font-semibold text-ink' : 'm-0 truncate text-2xl font-semibold text-ink lg:text-3xl'}>{a.title ?? t('assistantTitle')}</h1>
+            {/* Once a conversation is open the page explains nothing more: the chat gets the room (the intro stays on the empty state). */}
+            {a.turns.length === 0 && <p className="mt-1 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" className="lg:hidden" onClick={() => { void a.loadSessions(query.current); setDrawer(true); }}>

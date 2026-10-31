@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../../errors';
-import { assertPublicHost, isPrivateAddress } from '../network';
+import { assertPublicHost, isPrivateAddress, pinnedLookup } from '../network';
 
 describe('private address check (SSRF guard)', () => {
   it.each([
@@ -27,5 +27,17 @@ describe('resolve once, connect to what was checked', () => {
     expect(await resolvePublicHost('8.8.8.8')).toEqual({ address: '8.8.8.8', family: 4 });
     await expect(resolvePublicHost('10.0.0.1')).rejects.toBeInstanceOf(DomainError);
     await expect(resolvePublicHost('localhost')).rejects.toBeInstanceOf(DomainError); // resolves to loopback
+  });
+});
+
+describe('pinnedLookup', () => {
+  it('answers with a list when Node asks for all addresses (Node 20+), and with one address otherwise', () => {
+    const lookup = pinnedLookup({ address: '203.0.113.7', family: 4 });
+    let all: unknown;
+    lookup('example.com', { all: true }, (_e, a) => { all = a; });
+    expect(all).toEqual([{ address: '203.0.113.7', family: 4 }]);
+    let single: unknown[] = [];
+    lookup('example.com', {}, (_e, a, f) => { single = [a, f]; });
+    expect(single).toEqual(['203.0.113.7', 4]);
   });
 });
