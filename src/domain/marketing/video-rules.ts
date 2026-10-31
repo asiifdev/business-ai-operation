@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { NARRATOR_KEYS } from '../../config/narrators';
-import { respellForSpeech } from '../../integrations/speech/lexicon';
 import { ASPECTS } from './rules';
 
 // D-086. Pure rules for the slideshow video: the sizes, what a scene says, the ffmpeg commands, the progress. No I/O here,
@@ -21,8 +20,6 @@ export interface StoredScene {
   to: number;
   visual: string;
   voiceover: string;
-  /** The narration written the way it is said aloud (English words spelled as an Indonesian says them). */
-  spoken?: string;
   onScreenText: string;
 }
 
@@ -30,14 +27,21 @@ export interface StoredScene {
 export const renderSchema = z.object({
   narrator: z.enum(NARRATOR_KEYS),
   aspect: z.enum(VIDEO_ASPECT_KEYS),
-  scenes: z.array(z.object({ spoken: z.string().trim().max(400), onScreenText: z.string().trim().max(60) })).max(12).optional(),
+  scenes: z.array(z.object({ voiceover: z.string().trim().max(400), onScreenText: z.string().trim().max(60) })).max(12).optional(),
 });
 export type RenderInput = z.input<typeof renderSchema>;
 
-/** What the narrator reads for a scene: the spoken form, or, when there is none, the written line spelled with the word list. */
-export function sceneSpeech(scene: Pick<StoredScene, 'voiceover' | 'spoken'>): string {
-  const text = scene.spoken?.trim() ? scene.spoken.trim() : respellForSpeech(scene.voiceover);
-  return text.replace(/\s+/g, ' ').trim().slice(0, 400);
+/**
+ * What the narrator reads for a scene: the written line, as it is (D-086). The only change is the company's own name, which
+ * is said the way the owner wrote it in the profile ("asif dev"); a name cannot be guessed from its spelling. No word list,
+ * and no respelling of other words.
+ */
+export function sceneSpeech(scene: Pick<StoredScene, 'voiceover'>, company?: { name: string; pronunciation?: string | null }): string {
+  let text = scene.voiceover.replace(/\s+/g, ' ').trim();
+  const say = company?.pronunciation?.trim();
+  const name = company?.name.replace(/\s+/g, ' ').trim();
+  if (say && name) text = text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), say);
+  return text.slice(0, 400);
 }
 
 /** The picture prompt for one scene. Pictures never carry text or a logo: code draws those (BR-M10-01). */
@@ -81,17 +85,22 @@ export const sceneSeconds = (audioMs: number) => Math.max(2.5, Math.round((audio
 export const FPS = 25;
 export const FADE_S = 0.3;
 
-/** ffmpeg arguments that turn one picture and its narration into a clip: slow zoom, short fades, h264 + aac. */
-export function clipArgs(input: { image: string; audio: string; out: string; w: number; h: number; seconds: number }): string[] {
+/**
+ * ffmpeg arguments that turn one picture and its narration into a clip: a slow zoom (in on one scene, out on the next, so a
+ * run of scenes does not feel the same), h264 + aac. Only the first clip fades in and only the last fades out: between
+ * scenes the video cuts, as short social videos do, instead of dipping to black every few seconds.
+ */
+export function clipArgs(input: { image: string; audio: string; out: string; w: number; h: number; seconds: number; first?: boolean; last?: boolean; zoomOut?: boolean }): string[] {
   const { w, h, seconds } = input;
   const frames = Math.round(seconds * FPS);
   const fadeOut = Math.max(0, seconds - FADE_S).toFixed(2);
+  const zoom = input.zoomOut ? "if(eq(on,0),1.12,max(zoom-0.0006,1))" : 'min(zoom+0.0006,1.12)';
   const vf = [
     `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase`,
     `crop=${w * 2}:${h * 2}`,
-    `zoompan=z='min(zoom+0.0006,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=${FPS}`,
-    `fade=t=in:st=0:d=${FADE_S}`,
-    `fade=t=out:st=${fadeOut}:d=${FADE_S}`,
+    `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=${FPS}`,
+    ...(input.first ? [`fade=t=in:st=0:d=${FADE_S}`] : []),
+    ...(input.last ? [`fade=t=out:st=${fadeOut}:d=${FADE_S}`] : []),
     'format=yuv420p',
   ].join(',');
   return ['-y', '-loop', '1', '-i', input.image, '-i', input.audio, '-vf', vf, '-af', `apad=whole_dur=${seconds},aresample=48000`, '-t', String(seconds), '-r', String(FPS), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-ac', '1', '-shortest', input.out];
@@ -105,6 +114,23 @@ export function concatArgs(input: { list: string; out: string; title: string }):
 
 /** The text file `concat` reads. Paths are ours (a temp folder), but a quote is escaped anyway. */
 export const concatList = (paths: readonly string[]) => paths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+
+const words = (text: string) => text.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+
+/**
+ * Did the voice stumble: a word said twice in a row that the written line does not repeat ("cerdas cerdas")? Checked by
+ * transcribing the recording (Muse Voice Transcribe) and comparing with the line. Only an immediate repeat counts, so a
+ * transcription that words things a little differently never triggers a new recording.
+ */
+export function stumbled(written: string, heard: string): boolean {
+  const w = words(written);
+  const h = words(heard);
+  const doubledInText = new Set(w.flatMap((t, i) => (w[i + 1] === t ? [t] : [])));
+  return h.some((t, i) => h[i + 1] === t && !doubledInText.has(t));
+}
+
+/** How many times a scene is recorded at most while the voice keeps stumbling. Each new try uses another seed. */
+export const MAX_TAKES = 3;
 
 export type VideoStage = 'check' | 'images' | 'voice' | 'assemble';
 

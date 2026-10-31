@@ -58,11 +58,11 @@ export async function getVideo(ctx: Ctx, id: string) {
   return { ...row, script: row.script as unknown as VideoScriptData, hasFile: row.fileId !== null, estimateMinutes: estimateMinutes((row.script as unknown as VideoScriptData).scenes.length, row.seconds) };
 }
 
-/** The scenes with the person's edits laid over them. Only the spoken line and the on-screen text can change. */
+/** The scenes with the person's edits laid over them. Only the narration and the on-screen text can change. */
 export function applyEdits(script: VideoScriptData, edits: NonNullable<RenderInput['scenes']> | undefined): VideoScriptData {
   if (!edits) return script;
   if (edits.length !== script.scenes.length) throw new DomainError('validation', 'scenes');
-  return { ...script, scenes: script.scenes.map((s, i) => ({ ...s, spoken: edits[i]!.spoken.trim() || s.spoken, onScreenText: edits[i]!.onScreenText.trim() })) };
+  return { ...script, scenes: script.scenes.map((s, i) => ({ ...s, voiceover: edits[i]!.voiceover.trim() || s.voiceover, onScreenText: edits[i]!.onScreenText.trim() })) };
 }
 
 /**

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Narrator } from '../../config/narrators';
 import { env } from '../../lib/env';
 
@@ -28,7 +30,7 @@ export interface Narration {
   /** Throws a `NarrationError` unless the engine is reachable, active and available. */
   check(): Promise<void>;
   /** A WAV of `text` read aloud. */
-  speak(text: string, narrator: Narrator): Promise<Uint8Array>;
+  speak(text: string, narrator: Narrator, opts?: { seed?: number }): Promise<Uint8Array>;
 }
 
 const baseUrl = () => (env('VOICESTUDIO_URL') ?? 'http://127.0.0.1:3900').replace(/\/+$/, '');
@@ -60,8 +62,53 @@ export function looksLikeWav(bytes: Uint8Array): boolean {
   return bytes.byteLength > 1000 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WAVE';
 }
 
+export interface ProfileRow {
+  id?: unknown;
+  name?: unknown;
+}
+
+/** Pure: the id of the profile with this name (case-insensitive), or null. */
+export function findProfileId(profiles: unknown, name: string): string | null {
+  if (!Array.isArray(profiles)) return null;
+  const hit = (profiles as ProfileRow[]).find((p) => typeof p.name === 'string' && p.name.toLowerCase() === name.toLowerCase());
+  return typeof hit?.id === 'string' ? hit.id : null;
+}
+
+/** Where the narrators' reference recordings live. The server runs from the project folder. */
+const referencePath = (file: string) => join(process.cwd(), 'src', 'config', 'voices', file);
+
 export class VoiceStudioNarration implements Narration {
   readonly engine = NARRATION_ENGINE;
+  /** Narrator key -> profile id, so the list is asked for once, not for every scene. */
+  private readonly profiles = new Map<string, string>();
+
+  /**
+   * The voice profile of this narrator, made from its reference recording the first time (D-086). One fixed reference is
+   * what keeps every scene in the same voice; a voice described only in words changed from scene to scene.
+   */
+  async profileOf(narrator: Narrator): Promise<string> {
+    const known = this.profiles.get(narrator.key);
+    if (known) return known;
+    const list = await call('/profiles');
+    if (!list.ok) throw new NarrationError('unreachable', `VoiceStudio answered ${list.status}`);
+    let id = findProfileId(await list.json().catch(() => null), narrator.profile);
+    if (!id) {
+      const form = new FormData();
+      form.set('name', narrator.profile);
+      form.set('kind', 'clone');
+      form.set('language', 'Indonesian');
+      form.set('seed', String(narrator.seed));
+      form.set('ref_text', narrator.reference.text);
+      form.set('ref_audio', new Blob([new Uint8Array(await readFile(referencePath(narrator.reference.file)))], { type: 'audio/wav' }), narrator.reference.file);
+      const made = await call('/profiles', { method: 'POST', body: form, timeoutMs: 60_000 });
+      if (!made.ok) throw new NarrationError('failed', `VoiceStudio could not create the voice (${made.status})`);
+      const row = (await made.json().catch(() => ({}))) as ProfileRow;
+      id = typeof row.id === 'string' ? row.id : null;
+    }
+    if (!id) throw new NarrationError('failed', 'VoiceStudio did not return a voice');
+    this.profiles.set(narrator.key, id);
+    return id;
+  }
 
   async check(): Promise<void> {
     const res = await call('/engines/tts');
@@ -70,11 +117,12 @@ export class VoiceStudioNarration implements Narration {
     if (!engineReady(list, this.engine)) throw new NarrationError('wrong_engine', `The voice engine ${this.engine} is not the active one`);
   }
 
-  async speak(text: string, narrator: Narrator): Promise<Uint8Array> {
+  async speak(text: string, narrator: Narrator, opts: { seed?: number } = {}): Promise<Uint8Array> {
+    const voice = await this.profileOf(narrator);
     const res = await call('/v1/audio/speech', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.engine, input: text, language: narrator.language, description: narrator.description, seed: narrator.seed, response_format: 'wav' }),
+      body: JSON.stringify({ model: this.engine, input: text, language: narrator.language, voice, seed: opts.seed ?? narrator.seed, response_format: 'wav' }),
       timeoutMs: SPEAK_TIMEOUT_MS,
     });
     if (!res.ok) throw new NarrationError('failed', `VoiceStudio could not speak (${res.status})`);

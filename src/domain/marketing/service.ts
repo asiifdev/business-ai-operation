@@ -447,7 +447,7 @@ export interface VideoScript {
   title: string;
   hook: string;
   seconds: VideoSeconds;
-  scenes: Array<{ from: number; to: number; visual: string; voiceover: string; spoken: string; onScreenText: string }>;
+  scenes: Array<{ from: number; to: number; visual: string; voiceover: string; onScreenText: string }>;
   cta: string;
 }
 
@@ -455,8 +455,6 @@ export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScript
   assertCan(ctx, 'marketing.use');
   const input = videoScriptSchema.parse(raw);
   const facts = await loadFacts(ctx, input.productId || null);
-  const [profile] = await db.select({ pronunciation: organizationProfiles.namePronunciation }).from(organizationProfiles).where(eq(organizationProfiles.orgId, ctx.orgId));
-  const pronunciation = profile?.pronunciation?.trim() || null;
   const data = `${factsText(facts.product, facts.brand)}\nTujuan: ${input.purpose}${input.direction ? `\nArahan tambahan: ${input.direction}` : ''}`;
   const out = await chatOnce({
     db,
@@ -467,7 +465,7 @@ export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScript
     inputSummary: `Naskah video ${input.purpose} ${input.seconds} detik`,
     entityType: 'product',
     request: {
-      messages: [{ role: 'developer', content: videoScriptInstructions(facts.locale, input.purpose, Boolean(facts.product.company), input.seconds, pronunciation) }, { role: 'user', content: wrapUntrusted('data pemasaran', data) }],
+      messages: [{ role: 'developer', content: videoScriptInstructions(facts.locale, input.purpose, Boolean(facts.product.company), input.seconds) }, { role: 'user', content: wrapUntrusted('data pemasaran', data) }],
       schema: { name: 'video_script', schema: videoScriptJsonSchema as unknown as Record<string, unknown>, strict: true },
       effort: 'low',
       maxTokens: 2500,
@@ -480,9 +478,9 @@ export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScript
   if (!parsed.success) return { ok: false, kind: 'bad_output', message: 'bad_output' };
   const a = parsed.data;
   const clean = (s: string, max: number) => s.trim().slice(0, max);
-  const scenes = a.scenes.slice(0, sceneCount(input.seconds)).map((s) => ({ visual: clean(s.visual, 400), voiceover: clean(s.voiceover, 300), spoken: clean(s.spoken, 400), onScreenText: clean(s.onScreenText, 60) }));
+  const scenes = a.scenes.slice(0, sceneCount(input.seconds)).map((s) => ({ visual: clean(s.visual, 400), voiceover: clean(s.voiceover, 300), onScreenText: clean(s.onScreenText, 60) }));
   const script = { title: clean(a.title, 120), hook: clean(a.hook, 300), cta: clean(a.cta, 100) };
-  const all = [script.title, script.hook, script.cta, ...scenes.flatMap((s) => [s.visual, s.voiceover, s.spoken, s.onScreenText])].join(' ');
+  const all = [script.title, script.hook, script.cta, ...scenes.flatMap((s) => [s.visual, s.voiceover, s.onScreenText])].join(' ');
   // The same guard as a caption: a figure the facts do not hold, or a price, means the script is not shown.
   if (!script.hook || scenes.length === 0 || /\b(rp|idr|usd)\b|\$/i.test(all) || foreignCaptionFigures(all, data).length > 0) return { ok: false, kind: 'foreign_figures', message: 'foreign_figures' };
   const full: VideoScript = { ...script, seconds: input.seconds, scenes: withTimings(input.seconds, scenes) };

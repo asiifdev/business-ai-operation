@@ -33,7 +33,7 @@ const STAGE_LABEL: Record<string, MessageKey> = { check: 'mkVideoStageCheck', im
 const STATUS_TONE = { script: 'neutral', queued: 'warn', rendering: 'accent', done: 'success', failed: 'danger' } as const;
 
 /** The script as plain text to paste into another tool. */
-function scriptText(s: { title: string; hook: string; cta: string; scenes: Array<{ from: number; to: number; visual: string; voiceover: string; spoken?: string; onScreenText: string }> }): string {
+function scriptText(s: { title: string; hook: string; cta: string; scenes: Array<{ from: number; to: number; visual: string; voiceover: string; onScreenText: string }> }): string {
   return [s.title, '', s.hook, '', ...s.scenes.flatMap((x, i) => [`${i + 1}. ${x.from}-${x.to}s`, `Visual: ${x.visual}`, `Voiceover: ${x.voiceover}`, ...(x.onScreenText ? [`On screen: ${x.onScreenText}`] : []), '']), s.cta].join('\n');
 }
 
@@ -132,7 +132,7 @@ function Writer({ products, onSaved }: { products: Array<{ id: string; name: str
 function Editor({ id, imagesLeft, onClose, onQueued }: { id: string; imagesLeft: number; onClose: () => void; onQueued: () => void }) {
   const t = useT();
   const load = useLoad(() => api<VideoDetail>('GET', `/api/marketing/videos/${id}`), [id]);
-  const [spoken, setSpoken] = useState<string[] | null>(null);
+  const [narration, setNarration] = useState<string[] | null>(null);
   const [screen, setScreen] = useState<string[]>([]);
   const [shape, setShape] = useState<keyof typeof SHAPE_LABEL>('story');
   const [narrator, setNarrator] = useState<keyof typeof NARRATORS>('sinta');
@@ -141,15 +141,15 @@ function Editor({ id, imagesLeft, onClose, onQueued }: { id: string; imagesLeft:
 
   const video = load.value.state === 'ready' ? load.value.data : null;
   useEffect(() => {
-    if (!video || spoken) return;
-    setSpoken(video.script.scenes.map((s) => s.spoken || s.voiceover));
+    if (!video || narration) return;
+    setNarration(video.script.scenes.map((s) => s.voiceover));
     setScreen(video.script.scenes.map((s) => s.onScreenText));
     setShape((video.aspect as keyof typeof SHAPE_LABEL) in SHAPE_LABEL ? (video.aspect as keyof typeof SHAPE_LABEL) : 'story');
-  }, [video, spoken]);
+  }, [video, narration]);
 
   if (load.value.state === 'loading') return <Panel aria-busy="true"><p className="m-0 text-sm text-muted">{t('mkVideoLoading')}</p></Panel>;
   if (load.value.state === 'error') return <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>;
-  if (!video || !spoken) return null;
+  if (!video || !narration) return null;
   const script = video.script;
   const canMake = video.status === 'script' || video.status === 'failed';
   const enough = imagesLeft >= script.scenes.length;
@@ -158,7 +158,7 @@ function Editor({ id, imagesLeft, onClose, onQueued }: { id: string; imagesLeft:
     setBusy(true);
     setNotice(null);
     try {
-      const r = await api<Queued>('POST', `/api/marketing/videos/${id}/render`, { narrator, aspect: shape, scenes: script.scenes.map((_, i) => ({ spoken: spoken![i] ?? '', onScreenText: screen[i] ?? '' })) });
+      const r = await api<Queued>('POST', `/api/marketing/videos/${id}/render`, { narrator, aspect: shape, scenes: script.scenes.map((_, i) => ({ voiceover: narration![i] ?? '', onScreenText: screen[i] ?? '' })) });
       if (r.ok) {
         toast(t('mkVideoQueued'));
         onQueued();
@@ -197,8 +197,8 @@ function Editor({ id, imagesLeft, onClose, onQueued }: { id: string; imagesLeft:
               <span className="font-medium text-ink tabular-nums">{i + 1} · {s.from}–{s.to}s</span>
               <span className="min-w-0 text-ink-2 [overflow-wrap:anywhere]"><span className="text-muted">{t('mkScriptVisual')}: </span>{s.visual}</span>
             </div>
-            <FormField label={t('mkVideoSpoken')} help={i === 0 ? t('mkVideoSpokenHelp') : undefined}>
-              <Textarea value={spoken[i] ?? ''} onChange={(e) => { const v = e.currentTarget.value; setSpoken((p) => (p ?? []).map((x, j) => (j === i ? v : x))); }} maxLength={400} rows={2} disabled={!canMake} />
+            <FormField label={t('mkVideoNarration')} help={i === 0 ? t('mkVideoNarrationHelp') : undefined}>
+              <Textarea value={narration[i] ?? ''} onChange={(e) => { const v = e.currentTarget.value; setNarration((p) => (p ?? []).map((x, j) => (j === i ? v : x))); }} maxLength={400} rows={2} disabled={!canMake} />
             </FormField>
             <FormField label={t('mkVideoOnScreen')}>
               <TextInput value={screen[i] ?? ''} onChange={(e) => { const v = e.currentTarget.value; setScreen((p) => p.map((x, j) => (j === i ? v : x))); }} maxLength={60} autoComplete="off" disabled={!canMake} />
@@ -249,14 +249,14 @@ function VideoCard({ video, onOpen, onChanged }: { video: VideoItem; onOpen: () 
 
   return (
     <li className="flex flex-col gap-3 rounded-card border border-rule-2 bg-paper-2 p-3">
-      {video.status === 'done' && video.hasFile && <video controls preload="metadata" src={file} className={`w-full rounded-input border border-rule-2 bg-paper ${video.aspect === 'story' ? 'max-h-96 object-contain' : ''}`} />}
+      {video.status === 'done' && video.hasFile && <video controls preload="metadata" src={`${file}#t=0.6`} className={`w-full rounded-input border border-rule-2 bg-black ${video.aspect === 'story' ? 'max-h-96 object-contain' : ''}`} />}
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 font-medium text-ink [overflow-wrap:anywhere]">{video.title}</span>
         <Badge tone={STATUS_TONE[video.status]}>{t(STATUS_LABEL[video.status])}</Badge>
         {video.status === 'done' && <Badge>{t('mkVideoAi')}</Badge>}
       </div>
       <p className="m-0 text-sm text-muted">
-        {video.productName ?? t('mkCompanyBadge')} · {t(PURPOSE_LABEL[video.purpose as (typeof PURPOSES)[number]] ?? 'mkPurposeBrand')} · {t('mkScriptSeconds', { n: video.seconds })} · {when}
+        {video.productName ?? t('mkCompanyBadge')} · {t(PURPOSE_LABEL[video.purpose as (typeof PURPOSES)[number]] ?? 'mkPurposeBrand')} · {video.status === 'done' && video.durationMs ? t('mkVideoActual', { n: Math.round(video.durationMs / 1000) }) : t('mkScriptSeconds', { n: video.seconds })} · {when}
       </p>
       {active && (
         <div className="flex flex-col gap-1" role="status" aria-live="polite">

@@ -7,10 +7,10 @@ import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { getAiProvider } from '../ai/index';
 import type { AiProvider } from '../ai/provider';
-import { generateImagesOnce } from '../ai/run';
+import { generateImagesOnce, transcribeOnce } from '../ai/run';
 import { db } from '../db/client';
 import { newId } from '../db/ids';
-import { files, users, videoProjects } from '../db/schema';
+import { files, organizationProfiles, organizations, users, videoProjects } from '../db/schema';
 import { narratorOf } from '../config/narrators';
 import { recordAudit } from '../domain/audit/service';
 import { userCtx, type Ctx } from '../domain/ctx';
@@ -24,10 +24,12 @@ import {
   concatArgs,
   concatList,
   imageSizeOf,
+  MAX_TAKES,
   progressOf,
   sceneImagePrompt,
   sceneSeconds,
   sceneSpeech,
+  stumbled,
   VIDEO_ASPECTS,
   wavDurationMs,
   type VideoAspect,
@@ -108,6 +110,18 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
   const dims = VIDEO_ASPECTS[aspect] ?? VIDEO_ASPECTS.story;
   const narrator = narratorOf(project.narrator);
   const dir = await mkdtemp(join(tmpdir(), 'orbyte-video-'));
+  const stumbledOnTake = async (wav: Uint8Array, line: string): Promise<boolean> => {
+    try {
+      const raw = join(dir, 'take.wav');
+      const small = join(dir, 'take-24k.wav');
+      await writeFile(raw, wav);
+      await deps.ffmpeg(['-y', '-i', raw, '-ac', '1', '-ar', '24000', '-sample_fmt', 's16', small]);
+      const heard = await transcribeOnce({ db, ctx, provider: deps.provider, locale, request: { wav: new Uint8Array(await readFile(small)), mode: 'ENDPOINTING', languageBias: ['Indonesian'] }, inputSummary: 'Pemeriksaan rekaman narasi video', entityType: 'organization', entityId: orgId });
+      return heard.ok ? stumbled(line, heard.value.turns.map((t) => t.transcript).join(' ')) : false;
+    } catch {
+      return false;
+    }
+  };
   try {
     await mark('check');
     try {
@@ -119,6 +133,9 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
 
     // 1. A picture per scene, with the scene's words and the real logo drawn by code on top.
     const logo = await resolveLogo(ctx, project.productId).catch(() => null);
+    const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, orgId));
+    const [profile] = await db.select({ pronunciation: organizationProfiles.namePronunciation }).from(organizationProfiles).where(eq(organizationProfiles.orgId, orgId));
+    const company = { name: org?.name ?? '', pronunciation: profile?.pronunciation ?? null };
     const images: string[] = [];
     for (const [i, scene] of script.scenes.entries()) {
       await mark('images', i, script.scenes.length);
@@ -138,7 +155,7 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
       let framed: Uint8Array = background;
       try {
         framed = scene.onScreenText.trim()
-          ? await renderPoster({ background, logo: logo?.bytes ?? null, text: { headline: scene.onScreenText.trim() }, priceLine: null, layout: 'gradient', textPosition: 'bottom', corner: 'top_right', accent: firstHex(null) })
+          ? await renderPoster({ background, logo: logo?.bytes ?? null, text: { headline: scene.onScreenText.trim() }, priceLine: null, layout: 'gradient', textPosition: 'bottom', corner: 'top_right', accent: firstHex(null), safeBottom: aspect === 'story' ? 0.16 : 0.08 })
           : logo
             ? await applyLogo(background, logo.bytes, 'top_right')
             : background;
@@ -154,12 +171,18 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
     const audio: Array<{ path: string; seconds: number }> = [];
     for (const [i, scene] of script.scenes.entries()) {
       await mark('voice', i, script.scenes.length);
-      let wav: Uint8Array;
-      try {
-        wav = await deps.narration.speak(sceneSpeech(scene), narrator);
-      } catch (err) {
-        console.error('video narration failed', err instanceof Error ? err.message : err);
-        throw new Stop('videoErrVoice');
+      const line = sceneSpeech(scene, company);
+      let wav: Uint8Array = new Uint8Array();
+      // The voice sometimes says a word twice. Each take is listened to with Muse Voice Transcribe and recorded again with
+      // another seed while it stumbles (best effort: a failed check keeps the take as it is).
+      for (let take = 0; take < MAX_TAKES; take += 1) {
+        try {
+          wav = await deps.narration.speak(line, narrator, { seed: narrator.seed + take });
+        } catch (err) {
+          console.error('video narration failed', err instanceof Error ? err.message : err);
+          throw new Stop('videoErrVoice');
+        }
+        if (take === MAX_TAKES - 1 || !(await stumbledOnTake(wav, line))) break;
       }
       const path = join(dir, `scene-${i}.wav`);
       await writeFile(path, wav);
@@ -172,7 +195,7 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
       for (const [i, a] of audio.entries()) {
         await mark('assemble', i, audio.length);
         const out = join(dir, `clip-${i}.mp4`);
-        await deps.ffmpeg(clipArgs({ image: images[i]!, audio: a.path, out, w: dims.w, h: dims.h, seconds: a.seconds }));
+        await deps.ffmpeg(clipArgs({ image: images[i]!, audio: a.path, out, w: dims.w, h: dims.h, seconds: a.seconds, first: i === 0, last: i === audio.length - 1, zoomOut: i % 2 === 1 }));
         clips.push(out);
       }
       const list = join(dir, 'clips.txt');

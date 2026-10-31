@@ -1,8 +1,10 @@
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { FakeProvider, sayJson } from '../../ai/fake-provider';
-import type { ImageResult } from '../../ai/types';
+import type { ImageResult, TranscribeResult } from '../../ai/types';
 import { NARRATORS } from '../../config/narrators';
 import { aiRuns, auditLog, files, videoProjects } from '../../db/schema';
 import { db, pg } from '../../db/client';
@@ -41,7 +43,7 @@ beforeEach(() => {
 });
 
 const WORD = ['', 'satu', 'dua'];
-const scene = (n: number) => ({ visual: `Tim berdiskusi di kantor, adegan ${WORD[n]}`, voiceover: `Kalimat narasi ${WORD[n]} tentang perusahaan`, spoken: `kalimat narasi ${WORD[n]} tentang perusahaan`, onScreenText: n === 1 ? 'Teknologi untuk bisnis' : '' });
+const scene = (n: number) => ({ visual: `Tim berdiskusi di kantor, adegan ${WORD[n]}`, voiceover: `Kalimat narasi ${WORD[n]} tentang perusahaan`, onScreenText: n === 1 ? 'Teknologi untuk bisnis' : '' });
 const SCRIPT = { title: 'Mengenal perusahaan', hook: 'Teknologi cerdas untuk bisnis nyata', cta: 'Hubungi kami', scenes: [scene(1), scene(2)] };
 
 async function pictures(n: number): Promise<ImageResult> {
@@ -52,12 +54,14 @@ async function pictures(n: number): Promise<ImageResult> {
 class FakeNarration implements Narration {
   readonly engine = 'voxcpm2';
   readonly spoken: string[] = [];
+  readonly seeds: Array<number | undefined> = [];
   constructor(private readonly problem?: NarrationError) {}
   async check() {
     if (this.problem) throw this.problem;
   }
-  async speak(text: string) {
+  async speak(text: string, _narrator: unknown, opts?: { seed?: number }) {
     this.spoken.push(text);
+    this.seeds.push(opts?.seed);
     return silentWav(1.2);
   }
 }
@@ -80,7 +84,7 @@ describe('video.render (D-086)', () => {
     const id = await projectFor(o);
     expect((await listVideos(o.ownerCtx)).find((v) => v.id === id)).toMatchObject({ status: 'script', hasFile: false });
 
-    const queued = await requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story', scenes: [{ spoken: 'kalimat satu disunting', onScreenText: 'Teks baru' }, { spoken: '', onScreenText: '' }] });
+    const queued = await requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story', scenes: [{ voiceover: 'Kalimat satu disunting', onScreenText: 'Teks baru' }, { voiceover: '', onScreenText: '' }] });
     expect(queued.ok).toBe(true);
     expect((await getVideo(o.ownerCtx, id)).status).toBe('queued');
     await rejects(requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story' }), 'invalid_state');
@@ -93,8 +97,8 @@ describe('video.render (D-086)', () => {
     const video = await getVideo(o.ownerCtx, id);
     expect(video).toMatchObject({ status: 'done', progress: 100, hasFile: true, speechEngine: 'voxcpm2', imagesUsed: 2 });
     expect(video.durationMs).toBeGreaterThan(4000);
-    // The person's edit is what was spoken; an empty edit keeps the written spoken line.
-    expect(narration.spoken).toEqual(['kalimat satu disunting', 'kalimat narasi dua tentang perusahaan']);
+    // The person's edit is what was spoken; an empty edit keeps the written line.
+    expect(narration.spoken).toEqual(['Kalimat satu disunting', 'Kalimat narasi dua tentang perusahaan']);
     expect(provider.imageCalls).toHaveLength(2);
     expect(provider.imageCalls[0]!.prompt).toMatch(/Tanpa teks/);
 
@@ -138,7 +142,7 @@ describe('video.render (D-086)', () => {
     expect((await getVideo(o.ownerCtx, id)).status).toBe('script');
     await rejects(requestRender(o.staffCtx, id, { narrator: 'sinta', aspect: 'story' }), 'forbidden');
     await rejects(deleteVideo(o.staffCtx, id), 'forbidden');
-    await rejects(requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story', scenes: [{ spoken: 'x', onScreenText: '' }] }), 'validation');
+    await rejects(requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story', scenes: [{ voiceover: 'x', onScreenText: '' }] }), 'validation');
   });
 
   it('keeps videos inside their organization, and deleting removes the project and its file', async () => {
@@ -155,8 +159,29 @@ describe('video.render (D-086)', () => {
     expect(await db.select().from(videoProjects).where(eq(videoProjects.id, id))).toHaveLength(0);
   }, 120_000);
 
+  it('records a scene again with another seed when the voice said a word twice, and keeps going when the check cannot run', async () => {
+    const heard = (text: string): TranscribeResult => ({ transcript: text, durationMs: 1200, turns: [{ turnId: 0, startMs: 0, endMs: 1200, transcript: text }], meta: { model: 'muse-voice-transcribe', rateLimit: {}, attempts: 1 } });
+    const o = await makeOrg();
+    const id = await projectFor(o);
+    await requestRender(o.ownerCtx, id, { narrator: 'sinta', aspect: 'story' });
+    const narration = new FakeNarration();
+    // Scene one stumbles once and is clean the second time; scene two is clean at once.
+    const provider = new FakeProvider({ image: [await pictures(1), await pictures(1)], transcribe: [heard('Kalimat narasi narasi satu tentang perusahaan'), heard('Kalimat narasi satu tentang perusahaan'), heard('Kalimat narasi dua tentang perusahaan')] });
+    expect(await renderVideo({ projectId: id }, deps(narration, provider))).toMatchObject({ done: true });
+    expect(narration.spoken).toHaveLength(3);
+    expect(narration.seeds).toEqual([7, 8, 7]);
+
+    // The check cannot run at all (nothing scripted): each scene is recorded once and the video is still made.
+    const id2 = await projectFor(o);
+    await requestRender(o.ownerCtx, id2, { narrator: 'sinta', aspect: 'story' });
+    const quiet = new FakeNarration();
+    expect(await renderVideo({ projectId: id2 }, deps(quiet, new FakeProvider({ image: [await pictures(1), await pictures(1)] })))).toMatchObject({ done: true });
+    expect(quiet.spoken).toHaveLength(2);
+  }, 120_000);
+
   it('knows the narrator the owner picked', () => {
-    expect(NARRATORS.sinta).toMatchObject({ seed: 7, language: 'id' });
-    expect(NARRATORS.sinta.description).toBe('perempuan dewasa, suara tenang, hangat, profesional, tempo sedang');
+    expect(NARRATORS.sinta).toMatchObject({ seed: 7, language: 'id', profile: 'Sinta (Orbyte)' });
+    // The reference recording that fixes the voice is shipped with the application.
+    expect(statSync(join(process.cwd(), 'src', 'config', 'voices', NARRATORS.sinta.reference.file)).size).toBeGreaterThan(100_000);
   });
 });

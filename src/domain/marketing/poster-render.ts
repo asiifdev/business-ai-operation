@@ -26,6 +26,8 @@ export interface RenderInput {
   corner: Corner;
   /** First brand colour as `#rrggbb`, used for the call to action button. */
   accent?: string | null;
+  /** For the `gradient` look with the words at the bottom: how far from the bottom edge the words stop, as a share of the height. Video keeps them clear of the player controls and the Reels or TikTok buttons (D-086). */
+  safeBottom?: number;
 }
 
 type Font = ReturnType<typeof fontkit.openSync>;
@@ -255,8 +257,9 @@ export async function renderPoster(input: RenderInput): Promise<Buffer> {
   } else {
     // gradient: a dark fade on the text side that reaches a little past the words and melts into the picture.
     const stack = buildStack(input, W, W - margin * 2, 'left', dark);
-    const top = input.textPosition === 'top' ? edge : H - edge - stack.height;
-    const reach = Math.min(H * 0.7, stack.height + edge * 2 + H * 0.12);
+    const bottomGap = input.safeBottom !== undefined ? H * input.safeBottom : edge;
+    const top = input.textPosition === 'top' ? edge : H - bottomGap - stack.height;
+    const reach = Math.min(H * 0.7, stack.height + (input.textPosition === 'top' ? edge : bottomGap) + edge + H * 0.12);
     const gy: [number, number] = input.textPosition === 'top' ? [0, reach] : [H - reach, H];
     const stops: Array<[number, number]> = input.textPosition === 'top' ? [[0, 0.86], [0.7, 0.62], [1, 0]] : [[0, 0], [0.3, 0.62], [1, 0.86]];
     svgBody = `<defs>${gradient('g', 0, gy[0], 0, gy[1], stops)}</defs><rect x="0" y="${gy[0].toFixed(2)}" width="${W}" height="${reach.toFixed(2)}" fill="url(#g)"/>${stack.draw(margin, top)}`;
