@@ -11,6 +11,9 @@ describe('video rules (D-086)', () => {
     expect(maxSceneWords(60)).toBe(13);
     expect(videoScriptInstructions('id', 'brand', true, 15)).toMatch(/MAKSIMAL 9 kata/);
     expect(videoScriptInstructions('en', 'brand', true, 30)).toMatch(/AT MOST 10 words/);
+    // The company is named in full, so the owner's pronunciation of that name always applies.
+    expect(videoScriptInstructions('id', 'brand', true, 30, 'ASIIFDEV Digital Agency')).toContain('"ASIIFDEV Digital Agency" (jangan disingkat)');
+    expect(videoScriptInstructions('id', 'brand', true, 30)).not.toContain('jangan disingkat');
   });
 
   it('reads the length of a WAV from its header, including 48 kHz and a streamed (unknown size) file', () => {

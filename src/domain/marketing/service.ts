@@ -455,6 +455,7 @@ export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScript
   assertCan(ctx, 'marketing.use');
   const input = videoScriptSchema.parse(raw);
   const facts = await loadFacts(ctx, input.productId || null);
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, ctx.orgId));
   const data = `${factsText(facts.product, facts.brand)}\nTujuan: ${input.purpose}${input.direction ? `\nArahan tambahan: ${input.direction}` : ''}`;
   const out = await chatOnce({
     db,
@@ -465,7 +466,7 @@ export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScript
     inputSummary: `Naskah video ${input.purpose} ${input.seconds} detik`,
     entityType: 'product',
     request: {
-      messages: [{ role: 'developer', content: videoScriptInstructions(facts.locale, input.purpose, Boolean(facts.product.company), input.seconds) }, { role: 'user', content: wrapUntrusted('data pemasaran', data) }],
+      messages: [{ role: 'developer', content: videoScriptInstructions(facts.locale, input.purpose, Boolean(facts.product.company), input.seconds, org?.name) }, { role: 'user', content: wrapUntrusted('data pemasaran', data) }],
       schema: { name: 'video_script', schema: videoScriptJsonSchema as unknown as Record<string, unknown>, strict: true },
       effort: 'low',
       maxTokens: 2500,
