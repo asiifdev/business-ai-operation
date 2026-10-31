@@ -17,6 +17,8 @@ type Role = 'owner' | 'admin' | 'staff';
 const SOURCE_LABEL: Record<string, MessageKey> = {
   get_ai_usage: 'srcGetAiUsage',
   get_business_summary: 'srcGetBusinessSummary',
+  get_company_profile: 'srcGetCompanyProfile',
+  make_picture: 'srcMakePicture',
   list_leads: 'srcListLeads',
   get_code_status: 'toolGetCodeStatus',
   get_pipeline_summary: 'srcGetPipelineSummary',
@@ -83,6 +85,7 @@ const DRAFT_HREF: Record<string, (id: string) => string> = {
   draft_proposal: (id) => `/app/dokumen/${id}`,
   draft_flow: (id) => `/app/flow/${id}`,
   plan_flow_run: (id) => `/app/setup/${id}`,
+  make_picture: () => '/app/marketing',
 };
 
 /** Every tool name becomes a business word; a name nobody labelled is never shown as it is. */

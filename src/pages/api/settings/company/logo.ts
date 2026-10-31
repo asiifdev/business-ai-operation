@@ -5,14 +5,14 @@ import { handle, ok, rateLimit, requireCtx } from '../../../../lib/api';
 
 export const prerender = false;
 
-/** The company logo picture (D-066). */
+/** The company logo picture (D-066, moved to the company profile by D-079). */
 export const GET: APIRoute = (context) =>
   handle(async () => {
     const logo = await readBrandLogo(requireCtx(context));
     return new Response(Buffer.from(logo.bytes), { headers: { 'content-type': logo.mime, 'cache-control': 'private, max-age=60', 'x-content-type-options': 'nosniff' } });
   });
 
-/** `POST` multipart with a `file` field. Owner and Admin only; the brand kit must be saved first. */
+/** `POST` multipart with a `file` field. Owner and Admin only. */
 export const POST: APIRoute = (context) =>
   handle(async () => {
     const ctx = requireCtx(context);

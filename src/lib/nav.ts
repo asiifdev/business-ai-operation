@@ -1,8 +1,8 @@
 import type { Role } from '../domain/permissions';
 import type { MessageKey } from './i18n';
 
-export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'marketing' | 'audit' | 'users' | 'orgsettings' | 'connections' | 'flows' | 'runs' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
-export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic' | 'history' | 'copy' | 'edit' | 'trash';
+export type NavId = 'dashboard' | 'actions' | 'briefing' | 'clients' | 'pipeline' | 'tasks' | 'meetings' | 'documents' | 'marketing' | 'audit' | 'users' | 'orgsettings' | 'company' | 'connections' | 'flows' | 'runs' | 'products' | 'assistant' | 'invoices' | 'subscriptions' | 'ai' | 'telegram';
+export type IconName = 'home' | 'clients' | 'pipeline' | 'products' | 'assistant' | 'usage' | 'more' | 'signout' | 'close' | 'search' | 'plus' | 'arrow' | 'alert' | 'pulse' | 'check' | 'invoice' | 'repeat' | 'bell' | 'chevron' | 'sun' | 'moon' | 'language' | 'briefing' | 'tasks' | 'send' | 'mic' | 'history' | 'copy' | 'edit' | 'trash' | 'building';
 
 /** The sidebar is split into labelled groups so a long list stays scannable as modules arrive. */
 /**
@@ -47,6 +47,7 @@ export const NAV: readonly NavItem[] = [
   { id: 'telegram', group: 'intelligence', href: '/app/settings/telegram', label: 'navTelegram', icon: 'send' },
   { id: 'audit', group: 'intelligence', href: '/app/audit', label: 'navAudit', icon: 'check', roles: ['owner', 'admin'] },
   { id: 'users', group: 'intelligence', href: '/app/settings/pengguna', label: 'navUsers', icon: 'clients', roles: ['owner', 'admin'] },
+  { id: 'company', group: 'intelligence', href: '/app/settings/perusahaan', label: 'navCompany', icon: 'building', roles: ['owner', 'admin'] },
   { id: 'orgsettings', group: 'intelligence', href: '/app/settings/organisasi', label: 'navOrgSettings', icon: 'home', roles: ['owner'] },
   { id: 'connections', group: 'intelligence', href: '/app/koneksi', label: 'navConnections', icon: 'pulse' },
   { id: 'flows', group: 'intelligence', href: '/app/flow', label: 'navFlows', icon: 'pipeline' },

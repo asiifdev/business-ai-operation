@@ -5,7 +5,7 @@ import { organizations } from './auth';
 import { files } from './meetings';
 import { products } from './portfolio';
 
-export const marketingPurpose = pgEnum('marketing_purpose', ['launch', 'promo', 'education', 'release', 'brand']);
+export const marketingPurpose = pgEnum('marketing_purpose', ['launch', 'promo', 'education', 'release', 'brand', 'free']);
 
 /** ERD 3.7, BRD-M10. One brand kit per organization: the words and colours every generated image and caption follows. */
 export const brandKits = pgTable(

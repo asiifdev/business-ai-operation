@@ -7,11 +7,12 @@ import { chatOnce, generateImagesOnce } from '../../ai/run';
 import { wrapUntrusted } from '../../ai/untrusted';
 import { db } from '../../db/client';
 import { newId } from '../../db/ids';
-import { aiRuns, brandKits, files, marketingAssets, organizations, packages, products } from '../../db/schema';
+import { aiRuns, brandKits, files, marketingAssets, organizationProfiles, organizations, packages, products } from '../../db/schema';
 import { storage } from '../../integrations/storage';
 import { env } from '../../lib/env';
 import { formatRupiah } from '../../lib/format';
 import { zonedDayStart } from '../ai/budget';
+import { companyFacts } from '../org/profile';
 import { readLogoFile } from '../portfolio/logo';
 import { applyLogo } from './poster';
 import { firstHex, renderPoster } from './poster-render';
@@ -44,11 +45,19 @@ import {
   type PosterCopy,
   type PromptSpace,
   spaceFor,
+  type AssetPurpose,
   type Purpose,
   type ProductFacts,
+  sceneCount,
+  videoScriptAnswer,
+  videoScriptInstructions,
+  videoScriptJsonSchema,
+  videoScriptSchema,
+  type VideoSeconds,
+  withTimings,
 } from './rules';
 
-type AssetRow = typeof marketingAssets.$inferSelect;
+export type AssetRow = typeof marketingAssets.$inferSelect;
 
 export type StudioResult<T> = ({ ok: true } & T) | { ok: false; message: string; kind: string };
 
@@ -63,8 +72,19 @@ export function dailyImageQuota(): number {
 /** The organization's brand kit, or null before anyone has filled it. Everyone who may use the studio can read it. */
 export async function getBrandKit(ctx: Ctx) {
   assertCan(ctx, 'marketing.use');
-  const [row] = await db.select().from(brandKits).where(eq(brandKits.orgId, ctx.orgId));
-  return row ?? null;
+  const [[row], [profile]] = await Promise.all([
+    db.select().from(brandKits).where(eq(brandKits.orgId, ctx.orgId)),
+    db.select({ logoFileId: organizationProfiles.logoFileId }).from(organizationProfiles).where(eq(organizationProfiles.orgId, ctx.orgId)),
+  ]);
+  // The logo lives on the company profile (D-079); the old column on the brand kit is no longer read.
+  return row ? { ...row, logoFileId: profile?.logoFileId ?? null } : null;
+}
+
+/** Whether the company has a logo, with or without a brand kit. */
+export async function hasCompanyLogo(ctx: Ctx): Promise<boolean> {
+  assertCan(ctx, 'marketing.use');
+  const [profile] = await db.select({ logoFileId: organizationProfiles.logoFileId }).from(organizationProfiles).where(eq(organizationProfiles.orgId, ctx.orgId));
+  return Boolean(profile?.logoFileId);
 }
 
 /** Owner and Admin only; the change is audited (BR-M10-11). */
@@ -92,13 +112,16 @@ export async function listStudioProducts(ctx: Ctx) {
  * The facts a model may repeat. For a product: its name, description and official packages with prices. For the company
  * (`productId` empty, D-066): the brand plus the names and descriptions of active products, and no prices at all.
  */
-async function loadFacts(ctx: Ctx, productId: string | null): Promise<{ product: ProductFacts; brand: BrandFacts; locale: 'id' | 'en' }> {
-  const [[kit], [org]] = await Promise.all([
+export async function loadFacts(ctx: Ctx, productId: string | null): Promise<{ product: ProductFacts; brand: BrandFacts; locale: 'id' | 'en' }> {
+  const [[kit], [org], company] = await Promise.all([
     db.select().from(brandKits).where(eq(brandKits.orgId, ctx.orgId)),
     db.select({ name: organizations.name, locale: organizations.locale }).from(organizations).where(eq(organizations.id, ctx.orgId)),
+    companyFacts(ctx),
   ]);
+  // The company profile (D-079) adds who the company is, for every kind of content; it never carries prices.
+  const about = { tagline: company.tagline, about: company.description, industry: company.industry, audience: company.targetAudience, valueProps: company.valueProps, website: company.website, services: company.services };
   // Without a brand kit the organization's own name stands in, so the studio works from the first day.
-  const brand: BrandFacts = kit ? { brandName: kit.brandName, colors: kit.colors, tone: kit.tone, prohibitions: kit.prohibitions } : { brandName: org?.name ?? '' };
+  const brand: BrandFacts = kit ? { brandName: kit.brandName, colors: kit.colors, tone: kit.tone, prohibitions: kit.prohibitions, ...about } : { brandName: org?.name ?? '', ...about };
   const locale = org?.locale ?? 'id';
   if (!productId) {
     const offerings = await db
@@ -122,14 +145,14 @@ async function loadFacts(ctx: Ctx, productId: string | null): Promise<{ product:
 }
 
 /** The logo a poster carries: the product's own, else the company's, else none (D-066). */
-async function resolveLogo(ctx: Ctx, productId: string | null): Promise<{ bytes: Uint8Array; mime: string } | null> {
+export async function resolveLogo(ctx: Ctx, productId: string | null): Promise<{ bytes: Uint8Array; mime: string } | null> {
   if (productId) {
     const [p] = await db.select({ logoFileId: products.logoFileId }).from(products).where(and(eq(products.orgId, ctx.orgId), eq(products.id, productId)));
     const own = await readLogoFile(ctx.orgId, p?.logoFileId ?? null);
     if (own) return own;
   }
-  const [kit] = await db.select({ logoFileId: brandKits.logoFileId }).from(brandKits).where(eq(brandKits.orgId, ctx.orgId));
-  return readLogoFile(ctx.orgId, kit?.logoFileId ?? null);
+  const [profile] = await db.select({ logoFileId: organizationProfiles.logoFileId }).from(organizationProfiles).where(eq(organizationProfiles.orgId, ctx.orgId));
+  return readLogoFile(ctx.orgId, profile?.logoFileId ?? null);
 }
 
 /** Images made today in the organization's time zone, counted from `ai_runs` so failed or blocked calls do not use quota. */
@@ -236,7 +259,7 @@ interface NewImage {
 }
 
 /** Stores the pictures and their rows together; nothing is left half-saved if the database refuses (BR-M10-09). */
-async function saveImages(ctx: Ctx, input: { productId: string | null; purpose: Purpose; prompt: string; parentAssetId: string | null; aiRunId: string }, images: NewImage[]) {
+export async function saveImages(ctx: Ctx, input: { productId: string | null; purpose: AssetPurpose; prompt: string; parentAssetId: string | null; aiRunId: string }, images: NewImage[]) {
   const keys: string[] = [];
   const put = async (bytes: Uint8Array) => {
     const key = `org/${ctx.orgId}/marketing/${newId()}.webp`;
@@ -305,6 +328,8 @@ export async function reviseAsset(ctx: Ctx, id: string, raw: z.input<typeof revi
   assertCan(ctx, 'marketing.use');
   const { instruction, logo, corner } = reviseSchema.parse(raw);
   const parent = await loadAsset(ctx, id);
+  // A picture made from a person's own request is changed with `refineFreeAsset`, which edits the picture itself (D-080).
+  if (parent.purpose === 'free') throw new DomainError('invalid_state', 'free asset');
   const quota = await imageQuotaStatus(ctx);
   if (quota.remaining < 1) return quotaRefusal(quota);
   const facts = await loadFacts(ctx, parent.productId);
@@ -313,7 +338,7 @@ export async function reviseAsset(ctx: Ctx, id: string, raw: z.input<typeof revi
   return render(ctx, provider, facts, { productId: parent.productId, purpose: parent.purpose, prompt, parentAssetId: parent.id, variants: 1, size: undefined, copy: copy?.success ? copy.data : null, plainLogo: logo ? corner : null });
 }
 
-function quotaRefusal(quota: { quota: number; used: number }): StudioResult<never> {
+export function quotaRefusal(quota: { quota: number; used: number }): StudioResult<never> {
   return { ok: false, kind: 'quota', message: `quota:${quota.used}/${quota.quota}` };
 }
 
@@ -401,13 +426,57 @@ export async function draftCaption(ctx: Ctx, id: string, provider: AiProvider = 
     inputSummary: `Caption ${asset.purpose}`,
     entityType: 'marketing_asset',
     entityId: id,
-    request: { messages: [{ role: 'developer', content: captionInstructions(facts.locale, asset.purpose, asset.productId === null) }, { role: 'user', content: data }], effort: 'low', maxTokens: 1200 },
+    request: { messages: [{ role: 'developer', content: captionInstructions(facts.locale, asset.purpose === 'free' ? 'brand' : asset.purpose, asset.productId === null) }, { role: 'user', content: data }], effort: 'low', maxTokens: 1200 },
   });
   if (!out.ok) return { ok: false, kind: out.kind, message: out.message };
   const caption = (out.value.text ?? '').trim();
   if (!caption || foreignCaptionFigures(caption, data).length > 0) return { ok: false, kind: 'foreign_figures', message: 'foreign_figures' };
   await saveCaption(ctx, id, caption, out.runId);
   return { ok: true, caption };
+}
+
+/** A video script and storyboard, as text (D-079). The Meta Model API makes no video, so nothing here claims to. Not stored. */
+export interface VideoScript {
+  title: string;
+  hook: string;
+  seconds: VideoSeconds;
+  scenes: Array<{ from: number; to: number; visual: string; voiceover: string; onScreenText: string }>;
+  cta: string;
+}
+
+export async function draftVideoScript(ctx: Ctx, raw: z.input<typeof videoScriptSchema>, provider: AiProvider = getAiProvider()): Promise<StudioResult<{ script: VideoScript }>> {
+  assertCan(ctx, 'marketing.use');
+  const input = videoScriptSchema.parse(raw);
+  const facts = await loadFacts(ctx, input.productId || null);
+  const data = `${factsText(facts.product, facts.brand)}\nTujuan: ${input.purpose}${input.direction ? `\nArahan tambahan: ${input.direction}` : ''}`;
+  const out = await chatOnce({
+    db,
+    ctx,
+    provider,
+    locale: facts.locale,
+    feature: 'agent',
+    inputSummary: `Naskah video ${input.purpose} ${input.seconds} detik`,
+    entityType: 'product',
+    request: {
+      messages: [{ role: 'developer', content: videoScriptInstructions(facts.locale, input.purpose, Boolean(facts.product.company), input.seconds) }, { role: 'user', content: wrapUntrusted('data pemasaran', data) }],
+      schema: { name: 'video_script', schema: videoScriptJsonSchema as unknown as Record<string, unknown>, strict: true },
+      effort: 'low',
+      maxTokens: 2500,
+    },
+  });
+  if (!out.ok) return { ok: false, kind: out.kind, message: out.message };
+  let json: unknown = out.value.json;
+  if (json === undefined && out.value.text) json = (() => { try { return JSON.parse(out.value.text!); } catch { return undefined; } })();
+  const parsed = videoScriptAnswer.safeParse(json);
+  if (!parsed.success) return { ok: false, kind: 'bad_output', message: 'bad_output' };
+  const a = parsed.data;
+  const clean = (s: string, max: number) => s.trim().slice(0, max);
+  const scenes = a.scenes.slice(0, sceneCount(input.seconds)).map((s) => ({ visual: clean(s.visual, 400), voiceover: clean(s.voiceover, 300), onScreenText: clean(s.onScreenText, 60) }));
+  const script = { title: clean(a.title, 120), hook: clean(a.hook, 300), cta: clean(a.cta, 100) };
+  const all = [script.title, script.hook, script.cta, ...scenes.flatMap((s) => [s.visual, s.voiceover, s.onScreenText])].join(' ');
+  // The same guard as a caption: a figure the facts do not hold, or a price, means the script is not shown.
+  if (!script.hook || scenes.length === 0 || /\b(rp|idr|usd)\b|\$/i.test(all) || foreignCaptionFigures(all, data).length > 0) return { ok: false, kind: 'foreign_figures', message: 'foreign_figures' };
+  return { ok: true, script: { ...script, seconds: input.seconds, scenes: withTimings(input.seconds, scenes) } };
 }
 
 /** A person's own edit of the caption. */
@@ -418,7 +487,7 @@ export async function updateCaption(ctx: Ctx, id: string, raw: z.input<typeof ca
   await saveCaption(ctx, id, caption, null);
 }
 
-async function saveCaption(ctx: Ctx, id: string, caption: string, runId: string | null) {
+export async function saveCaption(ctx: Ctx, id: string, caption: string, runId: string | null) {
   await db.transaction(async (tx) => {
     await tx.update(marketingAssets).set({ caption }).where(and(eq(marketingAssets.orgId, ctx.orgId), eq(marketingAssets.id, id)));
     await recordAudit(tx, who(ctx), { action: runId ? 'marketing_asset.caption_drafted' : 'marketing_asset.caption_edited', entityType: 'marketing_asset', entityId: id, summary: { runId, characters: caption.length } });
@@ -428,7 +497,7 @@ async function saveCaption(ctx: Ctx, id: string, caption: string, runId: string 
 // ---------------------------------------------------------------------------------------------------------------------
 // Gallery
 
-async function loadAsset(ctx: Ctx, id: string): Promise<AssetRow> {
+export async function loadAsset(ctx: Ctx, id: string): Promise<AssetRow> {
   const [row] = await db.select().from(marketingAssets).where(and(eq(marketingAssets.orgId, ctx.orgId), eq(marketingAssets.id, id)));
   if (!row) throw new DomainError('not_found', 'asset');
   return row;
@@ -447,7 +516,7 @@ export async function listAssets(ctx: Ctx, raw: z.input<typeof assetFilterSchema
       caption: marketingAssets.caption,
       posterCopy: marketingAssets.posterCopy,
       // The picture's logo is the product's, else the company's, and can be downloaded on its own.
-      hasLogo: sql<boolean>`coalesce(${products.logoFileId}, (select "logo_file_id" from "brand_kits" where "brand_kits"."org_id" = "marketing_assets"."org_id")) is not null`,
+      hasLogo: sql<boolean>`coalesce(${products.logoFileId}, (select "logo_file_id" from "organization_profiles" where "organization_profiles"."org_id" = "marketing_assets"."org_id")) is not null`,
       createdBy: marketingAssets.createdBy,
       createdAt: marketingAssets.createdAt,
     })

@@ -71,6 +71,8 @@ export function botDeps(clock: Clock = systemClock): BotDeps {
       const history = globalForBot.__chatHistory;
       const before = history.recent(person.userId);
       const reply = await askAssistant(db, ctx, { request: { messages: [...before, { role: 'user', content: question }] }, organizationName: person.organizationName, locale: person.locale, channel: opts?.spoken ? 'voice' : 'text' });
+      // Pictures made while answering go out as photos after the text (D-080).
+      for (const draft of reply.drafts) if (draft.tool === 'make_picture') opts?.onPicture?.(draft.id);
       if (reply.ok && reply.text) {
         history.remember(person.userId, question, reply.text);
         return reply.text;

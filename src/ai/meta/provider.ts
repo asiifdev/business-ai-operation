@@ -3,6 +3,8 @@ import { AiProviderError } from '../errors';
 import { isContributorModel } from '../pricing';
 import type { AiProvider } from '../provider';
 import type {
+  ImageEditRequest,
+  InputImage,
   CallMeta,
   ChatMessage,
   ChatRequest,
@@ -184,6 +186,16 @@ export class MetaProvider implements AiProvider {
   }
 
   async generateImage(request: ImageRequest): Promise<ImageResult> {
+    return this.makeImages('/images/generations', request);
+  }
+
+  /** `/images/edits`: the pictures are references (a logo to keep, a screenshot to show), 1 to 10, in the order the prompt names them. */
+  async editImage(request: ImageEditRequest): Promise<ImageResult> {
+    if (request.images.length < 1 || request.images.length > 10) throw new AiProviderError('bad_request', 'An edit needs 1 to 10 pictures');
+    return this.makeImages('/images/edits', request, request.images.map((img) => ({ image_url: toDataUri(img) })));
+  }
+
+  private async makeImages(path: '/images/generations' | '/images/edits', request: ImageRequest, references?: Array<{ image_url: string }>): Promise<ImageResult> {
     const prompt = request.prompt.trim();
     if (!prompt) throw new AiProviderError('bad_request', 'An image needs a prompt');
     const n = request.n ?? 1;
@@ -200,11 +212,12 @@ export class MetaProvider implements AiProvider {
       reasoning_strength: request.lowEffort ? 'low' : 'high',
       tool_enablement: { enable_image_search: grounding, enable_web_search: grounding, enable_shell: grounding },
     };
+    if (references) body.images = references;
     if (request.size) body.size = request.size;
     if (request.safetyIdentifier) body.user = request.safetyIdentifier.slice(0, 64);
 
     // Muse Image says a plain 500 is not retryable, so only 429 and 503 are retried.
-    const { body: raw, meta } = await this.http.post<unknown>({ path: '/images/generations', json: body, retry500: false });
+    const { body: raw, meta } = await this.http.post<unknown>({ path, json: body, retry500: false });
     const parsed = imageResponse.safeParse(raw);
     if (!parsed.success) throw new AiProviderError('invalid_output', 'Image response did not have the expected shape');
     if (parsed.data.data.length === 0) throw new AiProviderError('empty', 'The model returned no image');
@@ -236,8 +249,14 @@ function toWireMessage(message: ChatMessage): Record<string, unknown> {
         : {}),
     };
   }
+  if (message.role === 'user' && message.images?.length) {
+    // Chat Completions takes pictures as `image_url` parts beside the text (a data URI keeps them off the network).
+    return { role: 'user', content: [{ type: 'text', text: message.content }, ...message.images.map((img) => ({ type: 'image_url', image_url: { url: toDataUri(img) } }))] };
+  }
   return { role: message.role, content: message.content };
 }
+
+const toDataUri = (img: InputImage) => `data:${img.mime};base64,${Buffer.from(img.bytes).toString('base64')}`;
 
 function readUsage(usage: z.infer<typeof chatResponse>['usage']): Usage {
   return {

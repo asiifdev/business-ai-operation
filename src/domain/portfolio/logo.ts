@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { db } from '../../db/client';
 import { newId } from '../../db/ids';
-import { brandKits, files, products } from '../../db/schema';
+import { files, organizationProfiles, products } from '../../db/schema';
 import { storage } from '../../integrations/storage';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
@@ -94,16 +94,15 @@ export async function readProductLogo(ctx: Ctx, productId: string): Promise<{ by
 // ---------------------------------------------------------------------------------------------------------------------
 // Company logo (D-066): lives on the brand kit, laid onto every poster that has no product logo.
 
-async function loadBrandKit(orgId: string) {
-  const [row] = await db.select({ id: brandKits.id, logoFileId: brandKits.logoFileId }).from(brandKits).where(eq(brandKits.orgId, orgId));
-  if (!row) throw new DomainError('invalid_state', 'brand_kit');
-  return row;
+async function loadProfileLogo(orgId: string) {
+  const [row] = await db.select({ id: organizationProfiles.id, logoFileId: organizationProfiles.logoFileId }).from(organizationProfiles).where(eq(organizationProfiles.orgId, orgId));
+  return row ?? null;
 }
 
-/** Owner and Admin only, like the rest of the brand kit (BR-M10-11). The brand kit must be saved first. */
+/** Owner and Admin only (D-079). The logo lives on the company profile, which is created here if it does not exist yet. */
 export async function setBrandLogo(ctx: Ctx, bytes: Uint8Array): Promise<void> {
-  assertCan(ctx, 'marketing.brand_kit');
-  const kit = await loadBrandKit(ctx.orgId);
+  assertCan(ctx, 'org.profile.update');
+  const before = await loadProfileLogo(ctx.orgId);
   const webp = await encodeLogo(bytes);
   const fileId = newId();
   const key = `org/${ctx.orgId}/brand/${fileId}.webp`;
@@ -112,9 +111,9 @@ export async function setBrandLogo(ctx: Ctx, bytes: Uint8Array): Promise<void> {
   try {
     oldKey = await db.transaction(async (tx) => {
       await tx.insert(files).values({ id: fileId, orgId: ctx.orgId, kind: 'brand_logo', storageKey: key, mime: 'image/webp', sizeBytes: webp.byteLength, sha256: createHash('sha256').update(webp).digest('hex'), createdBy: ctx.userId });
-      await tx.update(brandKits).set({ logoFileId: fileId }).where(eq(brandKits.id, kit.id));
-      const [old] = kit.logoFileId ? await tx.delete(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, kit.logoFileId))).returning({ key: files.storageKey }) : [];
-      await recordAudit(tx, who(ctx), { action: 'brand_logo.set', entityType: 'brand_kit', entityId: kit.id, summary: { bytes: webp.byteLength } });
+      const [profile] = await tx.insert(organizationProfiles).values({ orgId: ctx.orgId, logoFileId: fileId }).onConflictDoUpdate({ target: organizationProfiles.orgId, set: { logoFileId: fileId } }).returning({ id: organizationProfiles.id });
+      const [old] = before?.logoFileId ? await tx.delete(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, before.logoFileId))).returning({ key: files.storageKey }) : [];
+      await recordAudit(tx, who(ctx), { action: 'brand_logo.set', entityType: 'organization_profile', entityId: profile!.id, summary: { bytes: webp.byteLength } });
       return old?.key;
     });
   } catch (err) {
@@ -125,13 +124,13 @@ export async function setBrandLogo(ctx: Ctx, bytes: Uint8Array): Promise<void> {
 }
 
 export async function removeBrandLogo(ctx: Ctx): Promise<void> {
-  assertCan(ctx, 'marketing.brand_kit');
-  const kit = await loadBrandKit(ctx.orgId);
-  if (!kit.logoFileId) return;
+  assertCan(ctx, 'org.profile.update');
+  const profile = await loadProfileLogo(ctx.orgId);
+  if (!profile?.logoFileId) return;
   const key = await db.transaction(async (tx) => {
-    await tx.update(brandKits).set({ logoFileId: null }).where(eq(brandKits.id, kit.id));
-    const [old] = await tx.delete(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, kit.logoFileId!))).returning({ key: files.storageKey });
-    await recordAudit(tx, who(ctx), { action: 'brand_logo.removed', entityType: 'brand_kit', entityId: kit.id });
+    await tx.update(organizationProfiles).set({ logoFileId: null }).where(eq(organizationProfiles.id, profile.id));
+    const [old] = await tx.delete(files).where(and(eq(files.orgId, ctx.orgId), eq(files.id, profile.logoFileId!))).returning({ key: files.storageKey });
+    await recordAudit(tx, who(ctx), { action: 'brand_logo.removed', entityType: 'organization_profile', entityId: profile.id });
     return old?.key;
   });
   if (key) await storage().delete(key).catch(() => undefined);
@@ -145,9 +144,8 @@ export async function readLogoFile(orgId: string, fileId: string | null): Promis
 }
 
 export async function readBrandLogo(ctx: Ctx): Promise<{ bytes: Uint8Array; mime: string }> {
-  assertCan(ctx, 'marketing.use');
-  const [kit] = await db.select({ logoFileId: brandKits.logoFileId }).from(brandKits).where(eq(brandKits.orgId, ctx.orgId));
-  const logo = await readLogoFile(ctx.orgId, kit?.logoFileId ?? null);
+  assertCan(ctx, 'org.profile.read');
+  const logo = await readLogoFile(ctx.orgId, (await loadProfileLogo(ctx.orgId))?.logoFileId ?? null);
   if (!logo) throw new DomainError('not_found', 'logo');
   return logo;
 }

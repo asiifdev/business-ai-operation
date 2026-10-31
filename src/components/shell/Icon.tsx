@@ -30,6 +30,7 @@ const paths: Record<IconName, string> = {
   copy: 'M9 9h10v11H9zM5 15V4h10',
   edit: 'M5 19l1-4L16.5 4.5a2 2 0 0 1 3 3L9 18zM14.5 6.5l3 3',
   trash: 'M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13M10 11v6M14 11v6',
+  building: 'M5 20V5.5L12 3l7 2.5V20M3.5 20h17M9 9h1.5M13.5 9H15M9 13h1.5M13.5 13H15M10.5 20v-3h3v3',
   briefing: 'M12 4v2M5.6 7.6 7 9M18.4 7.6 17 9M4 15h16M7 15a5 5 0 0 1 10 0M8 19h8',
 };
 

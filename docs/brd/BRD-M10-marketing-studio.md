@@ -50,7 +50,7 @@ Membuat konten promosi produk (gambar dan caption) dari **data produk yang sudah
 | BR-M10-07 | Prompt tidak memuat data pribadi klien; konten tidak menampilkan nama klien tanpa izin ⚠️ | Usulan |
 | BR-M10-08 | Respons yang terkena **filter keamanan** model ditampilkan sebagai gagal dengan pesan jelas dan tidak ditagih (sesuai dokumentasi) | Final |
 | BR-M10-09 | Gambar disimpan sebagai berkas di Storage (bukan base64 di basis data); format asal (WebP) dipertahankan atau dikonversi | Usulan |
-| BR-M10-10 | Fitur video/suara **tidak ditampilkan** di UI atau demo | Final (CR-17) |
+| BR-M10-10 | Fitur **pembuatan** video/suara **tidak ditampilkan** di UI atau demo. **Amandemen D-079 (2026-10-31, permintaan owner):** naskah dan storyboard video **berupa teks** boleh ada (dari profil perusahaan dan fakta produk), diberi keterangan jelas bahwa Orbyte tidak membuat video | Final (CR-17), diamandemen |
 | BR-M10-11 | Brand kit hanya dapat diubah Pemilik/Admin; perubahan tercatat di audit | Final |
 
 ## 6. Entitas bisnis & data kunci
@@ -76,7 +76,7 @@ Galeri aset; unduhan gambar; caption siap salin.
 - [ ] Harga di caption sama dengan paket resmi; tidak ada testimoni/metrik rekaan.
 - [ ] Melewati kuota/anggaran harian memblokir dengan pesan jelas.
 - [ ] Aset tersimpan sebagai berkas dengan penanda "dibuat AI".
-- [ ] Tidak ada elemen UI untuk video atau suara.
+- [ ] Tidak ada elemen UI untuk **membuat** video atau suara. Naskah/storyboard teks (D-079) boleh, dengan keterangan bahwa itu hanya teks.
 
 ## 11. Risiko & pertanyaan terbuka
 

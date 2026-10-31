@@ -4,6 +4,7 @@ import type {
   CallMeta,
   ChatRequest,
   ChatResult,
+  ImageEditRequest,
   ImageRequest,
   ImageResult,
   ToolCall,
@@ -44,6 +45,8 @@ export class FakeProvider implements AiProvider {
   readonly chatCalls: ChatRequest[] = [];
   readonly transcribeCalls: TranscribeRequest[] = [];
   readonly imageCalls: ImageRequest[] = [];
+  /** Edits (with reference pictures) are recorded apart from plain generation; they share one image queue. */
+  readonly editCalls: ImageEditRequest[] = [];
 
   private readonly chatQueue: ChatStep[];
   private readonly transcribeQueue: Array<TranscribeResult | AiProviderError>;
@@ -68,6 +71,11 @@ export class FakeProvider implements AiProvider {
   async generateImage(request: ImageRequest): Promise<ImageResult> {
     this.imageCalls.push(structuredClone(request));
     return next(this.imageQueue, 'generateImage');
+  }
+
+  async editImage(request: ImageEditRequest): Promise<ImageResult> {
+    this.editCalls.push(structuredClone(request));
+    return next(this.imageQueue, 'editImage');
   }
 }
 

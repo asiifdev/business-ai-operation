@@ -5,6 +5,7 @@ import { db, pg } from '../../../db/client';
 import { auditLog, invoices, telegramLinks } from '../../../db/schema';
 import type { TelegramUpdate } from '../../../integrations/telegram/webhook';
 import sharp from 'sharp';
+import { TelegramError } from '../../../integrations/telegram/errors';
 import { FakeProvider, say, sayJson } from '../../../ai/fake-provider';
 import { encodeApprovalCallback, encodePosterMake, encodePosterPick } from '../../../integrations/telegram/callback';
 import { createPackage, createProduct } from '../../portfolio/products';
@@ -350,5 +351,94 @@ describe('poster from Telegram (D-066)', () => {
     await handleUpdate(pressUpdate(chatId, encodePosterMake(mine.productId, 'launch')), other.deps);
     expect(other.photos).toHaveLength(0);
     expect(other.tg.sent.at(-1)!.text).toContain('belum bisa dibuat');
+  });
+});
+
+describe('pictures from Telegram (D-080)', () => {
+  const png = async (color = '#2554d0') => new Uint8Array(await sharp({ create: { width: 200, height: 200, channels: 3, background: color } }).png().toBuffer());
+  const webp = async () => new Uint8Array(await sharp({ create: { width: 300, height: 450, channels: 3, background: '#1F3A5F' } }).webp().toBuffer());
+  const made = async () => ({ images: [{ bytes: await webp(), mime: 'image/webp' as const }], meta: { model: 'muse-image-1.0', rateLimit: {}, attempts: 1 } });
+  const BRIEF = sayJson({ imagePrompt: 'A clean poster with a laptop mockup, navy and blue, headline at the top.', onImageText: ['Kelola sewa lebih rapi'], caption: 'Kelola sewa lebih rapi dengan satu aplikasi.' });
+  const read = (...text: string[]) => sayJson({ visibleText: text });
+  const photoUpdate = (chatId: number, extra: { caption?: string; group?: string } = {}): TelegramUpdate => ({ update_id: uid(), message: { message_id: uid(), from: { id: chatId, is_bot: false, language_code: 'id' }, chat: chat(chatId), date: 0, photo: [{ file_id: 'small', width: 90, height: 90 }, { file_id: 'big', width: 800, height: 800, file_size: 40_000 }], caption: extra.caption, media_group_id: extra.group } as never });
+
+  async function pictureOrg(provider: FakeProvider) {
+    const { o, tg, deps, link } = await linkedOrg();
+    const photos: Array<{ chatId: number; bytes: Uint8Array; caption?: string }> = [];
+    const png1 = await png();
+    deps.client = { ...tg.client, downloadFile: async () => png1, sendPhoto: async (p) => { photos.push({ chatId: p.chatId, bytes: p.bytes, caption: p.caption }); return { message_id: 900 }; } };
+    deps.aiProvider = provider;
+    return { o, tg, deps, link, photos };
+  }
+
+  it('turns a photo with a caption into a finished picture and sends it with its caption', async () => {
+    const provider = new FakeProvider({ chat: [read('Rp 12.450.000'), BRIEF, read('Kelola sewa lebih rapi')], image: [await made()] });
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await handleUpdate(photoUpdate(chatId, { caption: 'Poster fitur baru, judul "Kelola sewa lebih rapi"' }), deps);
+    expect(photos).toHaveLength(1);
+    expect(photos[0]!.caption).toContain('Gambar buatan AI');
+    expect(tg.sent.map((m) => m.text).join('\n')).toContain('Kelola sewa lebih rapi dengan satu aplikasi.');
+    expect(provider.editCalls).toHaveLength(1);
+    expect(provider.editCalls[0]!.images).toHaveLength(1); // the photo is a reference for the picture
+    const rows = await db.select().from(auditLog).where(and(eq(auditLog.orgId, o.orgId), eq(auditLog.action, 'telegram.picture_made')));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('keeps a photo without words until the next message, then makes the picture from both', async () => {
+    const provider = new FakeProvider({ chat: [read(), BRIEF, read('Kelola sewa lebih rapi')], image: [await made()] });
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await handleUpdate(photoUpdate(chatId), deps);
+    expect(tg.sent.at(-1)!.text).toContain('Foto diterima (1 menunggu)');
+    expect(photos).toHaveLength(0);
+    await handleUpdate(textUpdate(chatId, 'Poster fitur baru, judul "Kelola sewa lebih rapi"'), deps);
+    expect(photos).toHaveLength(1);
+    expect(provider.editCalls[0]!.images).toHaveLength(1);
+    // the photo was used up: the next message is an ordinary question again
+    await handleUpdate(textUpdate(chatId, '/status'), deps);
+    expect(photos).toHaveLength(1);
+  });
+
+  it('gives every photo of an album to one request and replies once', async () => {
+    const provider = new FakeProvider({ chat: [read(), BRIEF, read('Kelola sewa lebih rapi')], image: [await made()] });
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await handleUpdate(photoUpdate(chatId, { group: 'g1' }), deps);
+    await handleUpdate(photoUpdate(chatId, { group: 'g1', caption: 'Poster dengan dua gambar ini, judul "Kelola sewa lebih rapi"' }), deps);
+    expect(tg.sent.filter((m) => m.text.includes('Foto diterima'))).toHaveLength(0); // album members stay quiet
+    expect(photos).toHaveLength(1);
+    expect(provider.editCalls[0]!.images).toHaveLength(2);
+  });
+
+  it('tells the person when the picture claimed an offer nobody gave, and sends nothing', async () => {
+    const provider = new FakeProvider({ chat: [read(), BRIEF, read('Hingga 50% Desember'), read('Gratis ongkir')], image: [await made(), await made()] });
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await handleUpdate(photoUpdate(chatId, { caption: 'Poster fitur baru, judul "Kelola sewa lebih rapi"' }), deps);
+    expect(photos).toHaveLength(0);
+    expect(tg.sent.at(-1)!.text).toContain('klaim yang tidak pernah Anda berikan');
+  });
+
+  it('tells the person when a photo is too large, and sends nothing', async () => {
+    const provider = new FakeProvider({});
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    deps.client = { ...deps.client, downloadFile: async () => { throw new TelegramError('too_large', 'big'); } };
+    await handleUpdate(photoUpdate(chatId, { caption: 'Poster' }), deps);
+    expect(tg.sent.at(-1)!.text).toContain('terlalu besar');
+    expect(photos).toHaveLength(0);
+  });
+
+  it('keeps a waiting photo for ten minutes only', async () => {
+    const { pendingPictures } = await import('../picture');
+    const now = new Date('2026-11-01T10:00:00Z');
+    const file = { bytes: new Uint8Array([1]), name: 'a.jpg' };
+    pendingPictures.add(777, file, now);
+    expect(pendingPictures.has(777, new Date(now.getTime() + 9 * 60_000))).toBe(true);
+    expect(pendingPictures.has(777, new Date(now.getTime() + 11 * 60_000))).toBe(false);
+    for (let i = 0; i < 6; i++) pendingPictures.add(778, file, now);
+    expect(pendingPictures.take(778, now)).toHaveLength(4); // at most four are kept
+    expect(pendingPictures.take(778, now)).toHaveLength(0);
   });
 });

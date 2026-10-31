@@ -25,6 +25,16 @@ describe('mutationToastKey', () => {
     expect(mutationToastKey('POST', '/api/profile/password')).toBe('toastSaved');
   });
 
+  it('stays silent when the answer is a refusal (`ok: false`)', () => {
+    expect(mutationToastKey('POST', '/api/marketing/assets', { ok: false, kind: 'quota' })).toBeNull();
+    expect(mutationToastKey('POST', '/api/marketing/assets', { ok: true, assets: [] })).toBe('toastCreated');
+  });
+
+  it('stays silent when a save reports that nothing changed', () => {
+    expect(mutationToastKey('POST', '/api/settings/org', { changed: [] })).toBeNull();
+    expect(mutationToastKey('POST', '/api/settings/org', { changed: ['name'] })).toBe('toastSaved');
+  });
+
   it('stays silent for chat, sign-in and screens that raise their own toast', () => {
     expect(mutationToastKey('POST', '/api/assistant/chat')).toBeNull();
     expect(mutationToastKey('POST', '/api/auth/sign-in/email')).toBeNull();

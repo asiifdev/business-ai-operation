@@ -1,0 +1,12 @@
+---
+import AppShell from '../../../layouts/AppShell.astro';
+import { CompanyProfilePage } from '../../../components/settings/CompanyProfilePage';
+import { can } from '../../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+---
+
+<AppShell title="Profil perusahaan" current="company">
+  <CompanyProfilePage client:load canEdit={can(user.role, 'org.profile.update')} />
+</AppShell>

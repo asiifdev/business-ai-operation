@@ -1,0 +1,1 @@
+ALTER TYPE "public"."marketing_purpose" ADD VALUE 'free';

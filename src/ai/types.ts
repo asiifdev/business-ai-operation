@@ -21,8 +21,15 @@ export interface ToolCall {
   argumentsJson: string;
 }
 
+/** A picture handed to the model to look at. Bytes are re-encoded by the caller; the model only reads them. */
+export interface InputImage {
+  bytes: Uint8Array;
+  mime: 'image/png' | 'image/jpeg' | 'image/webp';
+}
+
 export type ChatMessage =
-  | { role: 'developer' | 'user'; content: string }
+  | { role: 'developer'; content: string }
+  | { role: 'user'; content: string; /** Pictures the model may look at (vision), for example to read the text on a finished poster. */ images?: InputImage[] }
   | { role: 'assistant'; content: string | null; toolCalls?: ToolCall[] }
   | { role: 'tool'; toolCallId: string; content: string };
 
@@ -96,6 +103,11 @@ export interface TranscribeResult {
   durationMs: number;
   turns: TranscribeTurn[];
   meta: CallMeta;
+}
+
+/** An edit or composition: the prompt says how to use each reference picture, in order (`/images/edits`, 1 to 10 pictures). */
+export interface ImageEditRequest extends ImageRequest {
+  images: InputImage[];
 }
 
 export interface ImageRequest {

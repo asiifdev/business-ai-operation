@@ -82,8 +82,8 @@ describe('portfolio tools read the real data of the organization', () => {
     // Anything that adds or changes a record is `act`; a `read` tool never changes anything; deleting has no tool at all.
     expect(tools.filter((t) => /^(create|update|move)_/.test(t.name) && t.tier !== 'act').map((t) => t.name)).toEqual([]);
     expect(tools.filter((t) => /^(delete|remove|archive|set|add)_/.test(t.name))).toEqual([]);
-    // Drafts only produce things a person still has to review: an unsent invoice, a task, a lead, a proposal, a poster, a flow diagram.
-    expect(tools.filter((t) => t.tier === 'draft').map((t) => t.name).sort()).toEqual(['draft_flow', 'draft_invoice', 'draft_lead', 'draft_marketing_caption', 'draft_proposal', 'draft_task', 'generate_marketing_asset', 'plan_flow_run']);
+    // Drafts only produce things a person still has to review: an unsent invoice, a task, a lead, a proposal, a poster or picture, a flow diagram.
+    expect(tools.filter((t) => t.tier === 'draft').map((t) => t.name).sort()).toEqual(['draft_flow', 'draft_invoice', 'draft_lead', 'draft_marketing_caption', 'draft_proposal', 'draft_task', 'generate_marketing_asset', 'make_picture', 'plan_flow_run']);
   });
 });
 

@@ -13,6 +13,9 @@ export const PERMISSIONS = {
   // Organization and users
   'org.settings.update': OWNER,
   'ai.budget.update': OWNER,
+  // Company profile (D-079): everyone reads it, Owner and Admin edit it.
+  'org.profile.read': ALL,
+  'org.profile.update': MANAGERS,
   'user.read': MANAGERS,
   'user.create': MANAGERS,
   'user.update_role': MANAGERS,

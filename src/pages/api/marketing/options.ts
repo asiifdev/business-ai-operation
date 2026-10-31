@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getBrandKit, imageQuotaStatus, listStudioProducts } from '../../../domain/marketing/service';
+import { getBrandKit, hasCompanyLogo, imageQuotaStatus, listStudioProducts } from '../../../domain/marketing/service';
 import { handle, ok, requireCtx } from '../../../lib/api';
 
 export const prerender = false;
@@ -8,6 +8,6 @@ export const prerender = false;
 export const GET: APIRoute = (context) =>
   handle(async () => {
     const ctx = requireCtx(context);
-    const [products, brandKit, quota] = await Promise.all([listStudioProducts(ctx), getBrandKit(ctx), imageQuotaStatus(ctx)]);
-    return ok({ products, brandKit, quota });
+    const [products, brandKit, quota, companyLogo] = await Promise.all([listStudioProducts(ctx), getBrandKit(ctx), imageQuotaStatus(ctx), hasCompanyLogo(ctx)]);
+    return ok({ products, brandKit, quota, companyLogo });
   });

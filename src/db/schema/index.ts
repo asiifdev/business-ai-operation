@@ -7,3 +7,4 @@ export * from './pipeline';
 export * from './documents';
 export * from './operations';
 export * from './marketing';
+export * from './profile';

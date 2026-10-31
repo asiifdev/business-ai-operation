@@ -50,7 +50,7 @@
 | `job_status` | `queued` · `running` · `done` · `failed` |
 | `meeting_status` | `uploaded` · `processing` · `done` · `failed` |
 | `file_kind` | `meeting_audio` · `marketing_image` · `product_logo` · `brand_logo` |
-| `marketing_purpose` | `launch` · `promo` · `education` · `release` · `brand` (D-066) |
+| `marketing_purpose` | `launch` · `promo` · `education` · `release` · `brand` (D-066) · `free` (D-080: gambar dari permintaan bebas, bukan dari pilihan tujuan) |
 | `deployment_status` | `active` · `inactive` |
 | `connection_kind` | `github` · `ssh` · `aapanel` (CyberPanel dan cPanel ditambahkan lewat migrasi saat didukung, D-055) |
 | `connection_test` | `untested` · `ok` · `failed` |
@@ -170,6 +170,25 @@ Unik parsial: `UNIQUE (user_id) WHERE unlinked_at IS NULL`.
 
 **`telegram_updates`**: `update_id bigint PK`, `received_at`. Menolak pemrosesan ganda saat Telegram mengirim ulang webhook (idempotensi).
 
+**`organization_profiles`** (D-079): satu baris per organisasi (`org_id` **`UNIQUE`**), dibuat saat pertama disimpan. Profil perusahaan sebagai **sumber tunggal** identitas bisnis, dipakai tampilan (logo di poster) dan menjadi **konteks AI** (asisten, Marketing Studio, naskah video). Tidak memuat angka keuangan.
+
+| Kolom | Tipe | Aturan |
+|---|---|---|
+| `id` | text PK | ULID |
+| `org_id` | text | FK `organizations`, UNIQUE |
+| `tagline` | text N | maks 160 |
+| `description` | text N | tentang perusahaan, maks 2000 |
+| `industry` | text N | bidang usaha, maks 120 |
+| `website` | text N | alamat web `https://…`, maks 300 |
+| `contact_email`, `contact_phone`, `address` | text N | kontak publik, maks 254/40/500 |
+| `socials` | jsonb | peta `instagram`, `facebook`, `linkedin`, `tiktok`, `youtube`, `x` ke URL `https://…`; kunci lain ditolak |
+| `target_audience` | text N | siapa pelanggannya, maks 1000 |
+| `value_props` | text N | keunggulan dan pembeda, maks 1000 |
+| `logo_file_id` | text N | ref `files` dengan `kind = brand_logo` (komposit `org_id, logo_file_id`). **Menggantikan `brand_kits.logo_file_id`**: kolom lama dibiarkan (tidak dipakai lagi), isinya disalin ke sini saat migrasi |
+| `created_at`, `updated_at` | timestamptz | |
+
+**`org_services`** (D-079): layanan atau jasa yang ditawarkan **di luar produk** Portfolio (produk dan paket resmi tetap dari M02, tidak diduplikasi di sini). `id`, `org_id`, `name` (wajib, maks 120, unik per organisasi tanpa membedakan huruf besar), `description text N` (maks 600), `sort_order smallint` (default 0), `created_at`, `updated_at`.
+
 ### 3.2 Portofolio (M02)
 
 **`products`** · BR-M02-01, -02, -05, -06
@@ -268,7 +287,7 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`brand_kits`**: `id`, `org_id` (**`UNIQUE`**, satu per organisasi), `brand_name`, `colors text N` (daftar kode warna), `tone text N`, `prohibitions text N`, `logo_file_id N` (ref `files` dengan `kind = brand_logo`; logo perusahaan, D-066), timestamps.
 
-**`marketing_assets`**: `id`, `org_id`, `product_id N` (ref; kosong = pemasaran tingkat perusahaan, D-066), `purpose marketing_purpose`, `prompt text`, `parent_asset_id N` (ref diri sendiri, rantai revisi, yang lama tetap), `file_id` (ref `files`), `caption text N`, `background_file_id N` (ref `files`: gambar latar dari model tanpa teks dan tanpa logo; ada bila poster memakai teks, D-067), `poster_copy jsonb N` (judul, subjudul, ajakan, posisi teks, tampilkan harga, logo, sudut; D-067), `ai_run_id N`, `created_by text`, `created_at`. Bila `poster_copy` terisi, `file_id` adalah poster jadi yang dirender kode dari `background_file_id`.
+**`marketing_assets`**: `id`, `org_id`, `product_id N` (ref; kosong = pemasaran tingkat perusahaan, D-066), `purpose marketing_purpose`, `prompt text` (untuk `purpose = free`: kata-kata orang itu sendiri; lampiran acuan tidak disimpan, hanya dipakai saat membuat), `parent_asset_id N` (ref diri sendiri, rantai revisi, yang lama tetap), `file_id` (ref `files`), `caption text N`, `background_file_id N` (ref `files`: gambar latar dari model tanpa teks dan tanpa logo; ada bila poster memakai teks, D-067), `poster_copy jsonb N` (judul, subjudul, ajakan, posisi teks, tampilkan harga, logo, sudut; D-067), `ai_run_id N`, `created_by text`, `created_at`. Bila `poster_copy` terisi, `file_id` adalah poster jadi yang dirender kode dari `background_file_id`.
 
 ### 3.8 AI, Action Center, audit (M07, M08, M15)
 
@@ -350,10 +369,11 @@ Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); per
 | `documents.ts` | `documents`, `document_items` |
 | `meetings.ts` | `files`, `meetings`, `meeting_turns` |
 | `marketing.ts` | `brand_kits`, `marketing_assets` |
+| `profile.ts` | `organization_profiles`, `org_services` (D-079) |
 | `operations.ts` | `connections`, `product_setups`, `playbook_runs`, `playbook_steps` |
 | `ai.ts` | `ai_runs`, `ai_budgets`, `findings`, `approvals`, `automation_runs`, `audit_log`, `jobs`, `briefings`, `assistant_sessions`, `assistant_messages` |
 
-Total **40 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
+Total **42 tabel** (termasuk `users` dan 3 tabel pendukung Better Auth). Relasi silang kelompok (mis. `leads.meeting_id` → `meetings`) dideklarasikan lewat impor satu arah; migrasi dibuat berurutan sehingga tabel induk ada lebih dulu (leads/tasks/documents memerlukan `meetings`, `meetings` memerlukan `files` dan `documents`: **siklus** `meetings.minutes_document_id` ↔ `documents.meeting_id` diselesaikan dengan menambah FK `minutes_document_id` di migrasi terpisah).
 
 ## 5. Penjaga di database (pemicu dan batasan)
 

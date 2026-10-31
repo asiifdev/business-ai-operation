@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import type { getBrandKit, imageQuotaStatus, listAssets, listStudioProducts } from '../../domain/marketing/service';
-import { api, badFields, errorKey, upload } from '../../lib/api-client';
+import { api, badFields, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
 import { useLoad } from '../../lib/use-load';
 import { useT } from '../../lib/use-t';
-import { FileInput } from '../forms/FileInput';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
@@ -16,13 +15,15 @@ import { Button, buttonClasses } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
+import { FreeCreatePanel } from './FreeCreatePanel';
+import { VideoScriptPanel } from './VideoScriptPanel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
-import { LOGO_MAX_BYTES, LOGO_TYPES } from '../portfolio/ProductLogo';
 
 type Options = Jsonify<{
   products: Awaited<ReturnType<typeof listStudioProducts>>;
   brandKit: Awaited<ReturnType<typeof getBrandKit>>;
   quota: Awaited<ReturnType<typeof imageQuotaStatus>>;
+  companyLogo: boolean;
 }>;
 type Asset = Jsonify<Awaited<ReturnType<typeof listAssets>>[number]>;
 /** What the generate, revise and caption endpoints answer: a result the page can show, not an HTTP error (BR-M10-08). */
@@ -30,6 +31,8 @@ type Outcome = { ok: true } | { ok: false; kind: string; message: string };
 
 const PURPOSES = ['launch', 'promo', 'education', 'release', 'brand'] as const;
 const PURPOSE_LABEL: Record<(typeof PURPOSES)[number], MessageKey> = { launch: 'mkPurposeLaunch', promo: 'mkPurposePromo', education: 'mkPurposeEducation', release: 'mkPurposeRelease', brand: 'mkPurposeBrand' };
+/** A picture made from a person's own request has no chosen purpose; it is labelled as their request (D-080). */
+const purposeLabel = (p: keyof typeof PURPOSE_LABEL | 'free'): MessageKey => (p === 'free' ? 'mkPurposeFree' : PURPOSE_LABEL[p]);
 const CORNER_LABEL = { bottom_right: 'mkCornerBottomRight', bottom_left: 'mkCornerBottomLeft', top_right: 'mkCornerTopRight', top_left: 'mkCornerTopLeft' } as const satisfies Record<string, MessageKey>;
 const LAYOUT_LABEL = { gradient: 'mkLayoutGradient', center: 'mkLayoutCenter', card: 'mkLayoutCard', band: 'mkLayoutBand', side: 'mkLayoutSide' } as const satisfies Record<string, MessageKey>;
 /** Looks that place the words themselves; the top or bottom choice only matters for the others. */
@@ -40,7 +43,7 @@ const COMPANY = 'company';
 type PosterCopy = { headline: string; subheadline: string | null; cta: string | null; showPrice: boolean; layout: keyof typeof LAYOUT_LABEL; textPosition: 'top' | 'bottom'; logo: boolean; corner: keyof typeof CORNER_LABEL };
 const ASPECT_LABEL = { square: 'mkAspectSquare', portrait: 'mkAspectPortrait', story: 'mkAspectStory', wide: 'mkAspectWide' } as const satisfies Record<string, MessageKey>;
 
-/** Brand kit, image maker and gallery in one page (BRD-M10). No video or voice anywhere (BR-M10-10). */
+/** Brand kit, image maker, video script and gallery in one page (BRD-M10). No video or voice is made (BR-M10-10); the script is text only (D-079). */
 export function StudioPage({ canEditBrand, canDeleteAny, userId }: { canEditBrand: boolean; canDeleteAny: boolean; userId: string }) {
   const t = useT();
   const options = useLoad(() => api<Options>('GET', '/api/marketing/options'), []);
@@ -62,8 +65,15 @@ export function StudioPage({ canEditBrand, canDeleteAny, userId }: { canEditBran
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('mkTitle')} intro={t('mkIntro')} />
-      <BrandKitPanel brandKit={opts.brandKit} canEdit={canEditBrand} onSaved={refresh} />
-      <MakePanel options={opts} onDone={refresh} />
+      <BrandKitPanel brandKit={opts.brandKit} companyLogo={opts.companyLogo} canEdit={canEditBrand} onSaved={refresh} />
+      <FreeCreatePanel products={opts.products} hasLogo={opts.companyLogo} remaining={opts.quota.remaining} quota={opts.quota.quota} onDone={refresh} />
+      <details className="group rounded-card border border-rule bg-paper">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-ink-2 marker:hidden hover:text-ink">{t('mkAdvancedTitle')}</summary>
+        <div className="p-4 pt-0">
+          <MakePanel options={opts} onDone={refresh} />
+        </div>
+      </details>
+      <VideoScriptPanel products={opts.products} />
       <Panel className="flex flex-col gap-4">
         <h2 className="m-0 text-lg font-semibold text-ink">{t('mkGalleryTitle')}</h2>
         <div className="grid gap-3 sm:max-w-lg sm:grid-cols-2">
@@ -85,7 +95,7 @@ export function StudioPage({ canEditBrand, canDeleteAny, userId }: { canEditBran
   );
 }
 
-function BrandKitPanel({ brandKit, canEdit, onSaved }: { brandKit: Options['brandKit']; canEdit: boolean; onSaved: () => void }) {
+function BrandKitPanel({ brandKit, companyLogo, canEdit, onSaved }: { brandKit: Options['brandKit']; companyLogo: boolean; canEdit: boolean; onSaved: () => void }) {
   const t = useT();
   const [brandName, setBrandName] = useState(brandKit?.brandName ?? '');
   const [colors, setColors] = useState(brandKit?.colors ?? '');
@@ -134,7 +144,7 @@ function BrandKitPanel({ brandKit, canEdit, onSaved }: { brandKit: Options['bran
           </FormField>
         </div>
         {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
-        <BrandLogoEditor saved={Boolean(brandKit)} hasLogo={Boolean(brandKit?.logoFileId)} canEdit={canEdit} onChanged={onSaved} />
+        <CompanyLogoNote hasLogo={companyLogo} />
         {canEdit && (
           <div className="flex items-center gap-3">
             <Button type="submit" variant="primary" loading={busy}>{t('mkBrandSave')}</Button>
@@ -146,51 +156,15 @@ function BrandKitPanel({ brandKit, canEdit, onSaved }: { brandKit: Options['bran
   );
 }
 
-/** The company logo: shown, replaced or removed. It needs a saved brand kit to hang on (D-066). */
-function BrandLogoEditor({ saved, hasLogo, canEdit, onChanged }: { saved: boolean; hasLogo: boolean; canEdit: boolean; onChanged: () => void }) {
+/** The company logo is kept on the company profile (D-079); the Studio only shows it and points there. */
+function CompanyLogoNote({ hasLogo }: { hasLogo: boolean }) {
   const t = useT();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
-  async function send(file: File) {
-    setBusy(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      form.set('file', file);
-      await upload('/api/marketing/brand-kit/logo', form);
-      setVersion((v) => v + 1);
-      onChanged();
-    } catch (err) {
-      setError(String((err as { code?: string }).code) === 'validation' ? t('pLogoBad') : t(errorKey(err)));
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function remove() {
-    setBusy(true);
-    setError(null);
-    try {
-      await api('DELETE', '/api/marketing/brand-kit/logo');
-      onChanged();
-    } catch (err) {
-      setError(t(errorKey(err)));
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <div className="flex flex-col gap-3">
       <span className="text-sm font-medium text-ink">{t('mkBrandLogo')}</span>
-      {hasLogo && (
-        <div className="flex items-center gap-3">
-          <img src={`/api/marketing/brand-kit/logo?v=${version}`} alt="" className="size-16 rounded-input border border-rule-2 bg-paper object-contain" />
-          {canEdit && <ConfirmButton message={t('cfmRemoveLogo')} variant="danger" busy={busy} onConfirm={remove}>{t('pLogoRemove')}</ConfirmButton>}
-        </div>
-      )}
-      {canEdit && (saved ? <FileInput accept={LOGO_TYPES} maxSize={LOGO_MAX_BYTES} disabled={busy} onChange={(files) => files[0] && void send(files[0])} onReject={() => setError(t('pLogoBad'))} /> : <p className="m-0 text-sm text-muted">{t('mkBrandLogoNeedsKit')}</p>)}
-      <p className="m-0 text-sm text-muted">{t('mkBrandLogoHelp')}</p>
-      {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+      {hasLogo && <img src="/api/settings/company/logo" alt="" className="size-16 rounded-input border border-rule-2 bg-paper object-contain" />}
+      <p className="m-0 text-sm text-muted">{t('mkBrandLogoMoved')}</p>
+      <a href="/app/settings/perusahaan" className={buttonClasses('secondary', 'sm', 'self-start')}>{t('mkBrandLogoLink')}</a>
     </div>
   );
 }
@@ -199,6 +173,7 @@ function BrandLogoEditor({ saved, hasLogo, canEdit, onChanged }: { saved: boolea
 function outcomeMessage(t: ReturnType<typeof useT>, r: Extract<Outcome, { ok: false }>): string {
   if (r.kind === 'quota') return t('mkQuotaReached');
   if (r.kind === 'foreign_figures') return t('mkCaptionDiscarded');
+  if (r.kind === 'unverified') return t('mkFreeUnverified');
   return r.message;
 }
 
@@ -221,7 +196,7 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
   const bad = badFields(error);
   const noQuota = options.quota.remaining < 1;
   const company = productId === COMPANY;
-  const hasLogo = Boolean(options.brandKit?.logoFileId) || (!company && Boolean(options.products.find((p) => p.id === productId)?.hasLogo));
+  const hasLogo = options.companyLogo || (!company && Boolean(options.products.find((p) => p.id === productId)?.hasLogo));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -342,7 +317,7 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
   const save = () => run('save', () => api('PUT', `/api/marketing/assets/${asset.id}/caption`, { caption }).then(onChanged));
   const revise = () =>
     run('revise', async () => {
-      const r = await api<Outcome>('POST', `/api/marketing/assets/${asset.id}/revise`, { instruction });
+      const r = await api<Outcome>('POST', `/api/marketing/assets/${asset.id}/${asset.purpose === 'free' ? 'refine' : 'revise'}`, { instruction });
       if (r.ok) {
         setInstruction('');
         setReviseOpen(false);
@@ -362,10 +337,10 @@ function AssetCard({ asset, canDelete, onChanged }: { asset: Asset; canDelete: b
 
   return (
     <li className="flex flex-col gap-3 rounded-card border border-rule-2 bg-paper-2 p-3">
-      <img src={`${file}?v=${imageVersion}`} alt={`${asset.productName ?? t('mkScopeCompany')} · ${t(PURPOSE_LABEL[asset.purpose])}`} loading="lazy" className="w-full rounded-input border border-rule-2 bg-paper object-contain" />
+      <img src={`${file}?v=${imageVersion}`} alt={`${asset.productName ?? t('mkScopeCompany')} · ${t(purposeLabel(asset.purpose))}`} loading="lazy" className="w-full rounded-input border border-rule-2 bg-paper object-contain" />
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-ink">{asset.productName ?? t('mkCompanyBadge')}</span>
-        <Badge tone="accent">{t(PURPOSE_LABEL[asset.purpose])}</Badge>
+        <Badge tone="accent">{t(purposeLabel(asset.purpose))}</Badge>
         <Badge>{t('mkAiLabel')}</Badge>
         {asset.parentAssetId && <Badge tone="neutral">{t('mkRevisionOf')}</Badge>}
       </div>

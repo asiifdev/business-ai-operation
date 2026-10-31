@@ -11,7 +11,9 @@ import { setStorage, type Storage } from '../../../integrations/storage';
 import { makeOrg } from '../../ai/__tests__/support';
 import { DomainError } from '../../errors';
 import { createPackage, createProduct, updatePackage } from '../../portfolio/products';
-import { deleteAsset, draftCaption, generateAssets, getBrandKit, imageQuotaStatus, listAssets, readAssetFile, readAssetLogo, reviseAsset, saveBrandKit, updateCaption, updatePosterCopy } from '../service';
+import { saveCompanyProfile } from '../../org/profile';
+import { sceneCount, withTimings } from '../rules';
+import { deleteAsset, draftCaption, draftVideoScript, generateAssets, getBrandKit, imageQuotaStatus, listAssets, readAssetFile, readAssetLogo, reviseAsset, saveBrandKit, updateCaption, updatePosterCopy } from '../service';
 
 afterAll(async () => {
   setStorage(undefined);
@@ -321,7 +323,6 @@ describe('M10 marketing studio', () => {
   it('the company logo needs a saved brand kit, is for Owner and Admin, and replacing or removing it cleans storage', async () => {
     const s = await seed();
     const png = new Uint8Array(await logoPng('#ff0000'));
-    await rejects(setBrandLogo(s.o.ownerCtx, png), 'invalid_state'); // no brand kit yet
     await saveBrandKit(s.o.ownerCtx, { brandName: 'Aksara Studio' });
     await rejects(setBrandLogo(s.o.staffCtx, png), 'forbidden');
     await setBrandLogo(s.o.adminCtx, png);
@@ -493,5 +494,38 @@ describe('M10 marketing studio', () => {
     const rev = await reviseAsset(s.o.ownerCtx, parent.assets[0].id, { instruction: 'lebih terang' }, new FakeProvider({ image: [await realPicture()] }));
     if (!rev.ok) throw new Error('revision failed');
     expect(rev.assets[0].posterCopy).toMatchObject({ layout: 'card', textPosition: 'top' });
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Video script (D-079)
+  const SCRIPT = { title: 'Sewa alat lebih rapi', hook: 'Masih mencatat sewa di buku?', scenes: [{ visual: 'Meja kerja dengan buku catatan', voiceover: 'Catatan sewa sering tercecer.', onScreenText: 'Tercecer?' }, { visual: 'Layar dasbor yang rapi', voiceover: 'Orbit CRM merapikan semuanya.', onScreenText: '' }, { visual: 'Tim tersenyum', voiceover: 'Coba sekarang.', onScreenText: 'Coba' }], cta: 'Coba sekarang' };
+
+  it('splits the video length into scene times in code, never by the model', () => {
+    expect(sceneCount(15)).toBe(3);
+    expect(withTimings(15, [{ a: 1 }, { a: 2 }, { a: 3 }]).map((x) => [x.from, x.to])).toEqual([[0, 5], [5, 10], [10, 15]]);
+    expect(withTimings(30, new Array(4).fill({})).at(-1)?.to).toBe(30);
+  });
+
+  it('writes a script from the company profile and product facts, with scene times from code, as text only', async () => {
+    const s = await seed();
+    await saveCompanyProfile(s.o.ownerCtx, { description: 'Studio software untuk usaha persewaan', valueProps: 'Cepat dipasang' });
+    const provider = new FakeProvider({ chat: [sayJson(SCRIPT)] });
+    const r = await draftVideoScript(s.o.ownerCtx, { productId: s.productId, purpose: 'launch', seconds: 15 }, provider);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.script.scenes.map((x) => [x.from, x.to])).toEqual([[0, 5], [5, 10], [10, 15]]);
+    expect(provider.chatCalls[0].schema?.name).toBe('video_script');
+    const sent = JSON.stringify(provider.chatCalls[0].messages);
+    expect(sent).toContain('Studio software untuk usaha persewaan'); // the profile is part of the facts
+    expect(sent).toContain('data_tidak_tepercaya'); // and is handed over as data
+    expect(await db.select().from(files).where(eq(files.orgId, s.o.orgId))).toHaveLength(0); // nothing is stored
+  });
+
+  it('refuses a script that carries a price or a figure the facts do not hold, and lets Staff use it', async () => {
+    const s = await seed();
+    const bad = { ...SCRIPT, hook: 'Mulai dari 99 ribu dan dipakai 5000 klien' };
+    const r = await draftVideoScript(s.o.staffCtx, { productId: s.productId, purpose: 'promo', seconds: 30 }, new FakeProvider({ chat: [sayJson(bad)] }));
+    expect(r).toMatchObject({ ok: false, kind: 'foreign_figures' });
+    expect((await draftVideoScript(s.o.staffCtx, { productId: null, purpose: 'brand', seconds: 15 }, new FakeProvider({ chat: [sayJson(SCRIPT)] }))).ok).toBe(true);
   });
 });

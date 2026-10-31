@@ -24,7 +24,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   });
   const parsed = await res.json().catch(() => null);
   if (!res.ok || !parsed?.ok) throw new ApiError(res.status, parsed?.error?.code ?? 'internal', parsed?.error?.fields ?? []);
-  const key = mutationToastKey(method, url);
+  const key = mutationToastKey(method, url, parsed.data);
   if (key) toast(t(key), 'success', { carry: true });
   return parsed.data as T;
 }

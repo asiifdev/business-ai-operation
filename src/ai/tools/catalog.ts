@@ -5,6 +5,7 @@ import { approvals, auditLog, organizations, users } from '../../db/schema';
 import { addDays, todayIn } from '../../domain/billing/dates';
 import { getAiOverview } from '../../domain/ai/service';
 import { listConnections } from '../../domain/connections/service';
+import { createFromPrompt } from '../../domain/marketing/free';
 import { draftCaption, generateAssets, listAssets } from '../../domain/marketing/service';
 import { ASPECTS, CORNERS, LAYOUTS, PURPOSES, TEXT_POSITIONS } from '../../domain/marketing/rules';
 import { listMeetings } from '../../domain/meetings/service';
@@ -14,6 +15,8 @@ import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billi
 import { listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
 import { getBusinessSummary } from '../../domain/metrics/summary';
+import { companyFacts } from '../../domain/org/profile';
+import { wrapUntrusted } from '../untrusted';
 import { createLead, getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
 import { STAGES } from '../../domain/pipeline/stages';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
@@ -280,6 +283,36 @@ export function buildAssistantRegistry(): ToolRegistry {
           pipeline: { nilaiTerbuka: money(s.pipeline.value), leadTerbuka: s.pipeline.openLeads, leadStagnan: s.pipeline.stagnant },
           klienDenganLanggananAktif: s.clients.active,
           tugas: { terbuka: s.tasks.open, terlambat: s.tasks.late, untukSaya: s.tasks.mine },
+        };
+      },
+    }),
+  );
+
+  // Company profile (D-079): who the company is and what it offers, so content and answers speak for it. Everyone may read
+  // it. Free text was typed by a person, so it is handed over as data and never as instructions; there are no prices here.
+  registry.register(
+    defineTool({
+      name: 'get_company_profile',
+      description: 'Shows the company profile: tagline, what the company does, industry, target customers, what sets it apart, website, contact, social media, its services and the names of its active products (no prices). Use it before writing about the company or its offer, or when asked who the company is.',
+      tier: 'read',
+      permission: 'org.profile.read',
+      args: z.object({}),
+      run: async (ctx) => {
+        const f = await companyFacts(ctx);
+        const text = (v: string | null | undefined) => (v && v.trim() ? wrapUntrusted('profil perusahaan', v.trim()) : null);
+        return {
+          perusahaan: f.name,
+          tagline: text(f.tagline),
+          tentang: text(f.description),
+          bidangUsaha: text(f.industry),
+          pelanggan: text(f.targetAudience),
+          keunggulan: text(f.valueProps),
+          situsWeb: f.website ?? null,
+          kontak: { email: f.contactEmail ?? null, telepon: f.contactPhone ?? null, alamat: text(f.address) },
+          mediaSosial: f.socials ?? {},
+          layanan: (f.services ?? []).map((s) => ({ nama: s.name, isi: text(s.description) })),
+          produkAktif: (f.products ?? []).map((p) => ({ nama: p.name, deskripsi: text(p.description) })),
+          profilTerisi: Boolean(f.description || f.tagline || f.industry || f.targetAudience || f.valueProps || (f.services ?? []).length),
         };
       },
     }),
@@ -571,7 +604,7 @@ export function buildAssistantRegistry(): ToolRegistry {
   registry.register(
     defineTool({
       name: 'generate_marketing_asset',
-      description: 'Makes a DRAFT marketing poster (1 to 4 variants) for a product (productId from list_products) or for the company (leave productId out), for a purpose: launch, promo, education, release or brand. The picture has no text of its own; the system draws a headline, call to action and the logo on it. Facts and prices come from the catalogue, never from you. Uses the daily image quota. Nothing is posted anywhere.',
+      description: 'Advanced: use make_picture instead unless the person asked for a specific purpose, layout or several variants. Makes a DRAFT marketing poster (1 to 4 variants) for a product (productId from list_products) or for the company (leave productId out), for a purpose: launch, promo, education, release or brand. The picture has no text of its own; the system draws a headline, call to action and the logo on it. Facts and prices come from the catalogue, never from you. Uses the daily image quota. Nothing is posted anywhere.',
       tier: 'draft',
       permission: 'marketing.use',
       args: z.object({
@@ -589,6 +622,28 @@ export function buildAssistantRegistry(): ToolRegistry {
         const out = await generateAssets(ctx, args);
         if (!out.ok) return { berhasil: false, pesan: out.message };
         return { berhasil: true, jumlah: out.assets.length, asetId: out.assets.map((a) => a.id), catatan: 'Poster dibuat sebagai draf di Marketing Studio. Orang yang meninjau, mengunduh, dan memostingnya.' };
+      },
+    }),
+  );
+
+  // One-step picture (D-080): a request in plain words becomes a finished picture, the way people ask for one. It is a draft
+  // that a person reviews; nothing is posted anywhere. The output carries `id` so the interface can show and send it.
+  registry.register(
+    defineTool({
+      name: 'make_picture',
+      description: 'Makes a finished picture (poster, banner, social post) with a caption from a request in plain words, ready to post. Use it whenever someone asks for a picture, poster or image; never ask them to pick a purpose or layout first. Company profile, product facts and the logo are added automatically. Pass prompt exactly as they wrote it, with any headline or figure they gave; productId (from list_products) only for one product; url only for a public https link. A picture that claims an offer, percentage or date nobody gave is refused.',
+      tier: 'draft',
+      permission: 'marketing.use',
+      args: z.object({
+        prompt: z.string().trim().min(3).max(1500),
+        productId: z.string().min(1).max(40).optional(),
+        url: z.string().trim().max(500).optional(),
+        aspect: z.enum(Object.keys(ASPECTS) as [keyof typeof ASPECTS, ...(keyof typeof ASPECTS)[]]).default('portrait'),
+      }),
+      run: async (ctx, args) => {
+        const out = await createFromPrompt(ctx, args);
+        if (!out.ok) return { berhasil: false, jenis: out.kind, pesan: out.kind === 'unverified' ? 'Gambar dibuang karena memuat klaim yang tidak diberikan pengguna: ' + out.message : out.message };
+        return { id: out.asset.id, berhasil: true, caption: out.caption, catatan: 'Gambar jadi sudah dibuat sebagai draf di Marketing Studio dan dikirim ke pengguna. Orang yang meninjau, mengunduh, dan memostingnya.' };
       },
     }),
   );

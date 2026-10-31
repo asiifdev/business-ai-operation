@@ -4,7 +4,7 @@ import type { Db } from '../db/client';
 import { AiProviderError, type AiErrorKind } from './errors';
 import { AI_LABEL, NOT_AI_LABEL, friendlyAiError, type Locale } from './messages';
 import type { AiProvider } from './provider';
-import type { ChatRequest, ChatResult, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult } from './types';
+import type { ChatRequest, ChatResult, ImageEditRequest, ImageRequest, ImageResult, TranscribeRequest, TranscribeResult } from './types';
 
 export type AiOutcome<T> =
   | { ok: true; value: T; runId: string; costMicroUsd: number; label: string }
@@ -71,6 +71,14 @@ export function transcribeOnce(options: Options & { request: TranscribeRequest }
     const result = await options.provider.transcribe(options.request);
     run.addAudio(result.durationMs);
     return { value: result, summary: `${Math.round(result.durationMs / 1000)} detik audio, ${result.turns.length} giliran` };
+  });
+}
+
+export function editImagesOnce(options: Options & { request: ImageEditRequest }): Promise<AiOutcome<ImageResult>> {
+  return guardedCall(options, { feature: 'image', model: 'muse-image-1.0' }, async (run) => {
+    const result = await options.provider.editImage(options.request);
+    run.addImages(result.images.length);
+    return { value: result, summary: `${result.images.length} gambar` };
   });
 }
 

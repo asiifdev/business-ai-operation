@@ -8,7 +8,7 @@ import { TelegramError } from '../../integrations/telegram/errors';
 import { parseStartCommand } from '../../integrations/telegram/pairing';
 import { spokenText } from '../../integrations/speech/spoken';
 import { answerToTelegramParts, escapeHtml } from '../../integrations/telegram/text';
-import type { TelegramMessage, TelegramUpdate } from '../../integrations/telegram/webhook';
+import { pickPhoto, type TelegramMessage, type TelegramUpdate } from '../../integrations/telegram/webhook';
 import type { Clock } from '../../lib/clock';
 import { formatDate, formatDateTime, formatRupiah } from '../../lib/format';
 import { translate, type Locale, type MessageKey } from '../../lib/i18n';
@@ -26,6 +26,7 @@ import { createMeeting } from '../meetings/service';
 import { listTasks } from '../tasks/service';
 import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
+import { pendingPictures, makePicture, pictureJpeg } from './picture';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
 /** What the handler needs from the outside world, so tests can pass fakes and never reach Telegram or a model. */
@@ -37,7 +38,7 @@ export interface BotDeps {
   /** Public address of the web app, for links in messages. */
   appUrl?: string;
   /** Free text goes to the grounded assistant (M07). Left out, the bot answers with the command list instead. */
-  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean }) => Promise<string>;
+  ask?: (ctx: Ctx, question: string, person: LinkedUser, opts?: { spoken?: boolean; /** Called for each picture the assistant made while answering; the bot then sends it as a photo (D-080). */ onPicture?: (assetId: string) => void }) => Promise<string>;
   /** Reads an answer aloud (D-052). Left out, or returning null, the answer stays text only. */
   speak?: (text: string, locale: 'id' | 'en', ctx: Ctx, person: LinkedUser) => Promise<{ ogg: Uint8Array; durationMs: number } | null>;
   /** Short speech to text for a chat voice note (M09 STT). Left out, a voice note is treated as a meeting recording. */
@@ -128,16 +129,20 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
 
   const audio = message.voice ?? message.audio;
   if (audio) return onVoice(audio, { forceMeeting: Boolean(message.audio) || /^\/(rapat|meeting)\b/i.test(message.caption?.trim() ?? '') }, ctx, person, deps);
-  if (message.photo) return send(deps, chatId, escapeHtml(t('tgMediaLater')));
+  if (message.photo) return onPhoto(message, ctx, person, deps);
   if (!text) return;
+  // Photos were sent and the words come now: that is the request for a picture (D-080).
+  if (pendingPictures.has(chatId, deps.clock.now()) && can(person.role, 'marketing.use')) return onPicture(text.slice(0, 1500), ctx, person, deps);
   if (!deps.ask) return send(deps, chatId, helpText(person.locale));
   if (!limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
 
   // The words are data for the grounded assistant, never a command: it can read and draft, and anything risky becomes
   // an approval that a person decides (CR-12).
   await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
-  const answer = await deps.ask(ctx, text.slice(0, 2000), person);
+  const pictures: string[] = [];
+  const answer = await deps.ask(ctx, text.slice(0, 2000), person, { onPicture: (id) => pictures.push(id) });
   for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
+  await sendPictures(pictures, ctx, person, deps);
 }
 
 /**
@@ -178,9 +183,10 @@ async function onVoiceChat(bytes: Uint8Array, ctx: Ctx, person: LinkedUser, deps
   if (!heard.ok) return send(deps, person.chatId, escapeHtml(heard.message));
   const words = heard.text.trim().slice(0, 2000);
   if (!words) return send(deps, person.chatId, escapeHtml(t('tgVoiceUnclear')));
-  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice) });
-  if (await replyAloud(answer, ctx, person, deps)) return;
-  for (const part of answerToTelegramParts(answer)) await send(deps, person.chatId, part);
+  const pictures: string[] = [];
+  const answer = await deps.ask!(ctx, words, person, { spoken: Boolean(deps.speak && deps.client.sendVoice), onPicture: (id) => pictures.push(id) });
+  if (!(await replyAloud(answer, ctx, person, deps))) for (const part of answerToTelegramParts(answer)) await send(deps, person.chatId, part);
+  await sendPictures(pictures, ctx, person, deps);
 }
 
 /**
@@ -205,6 +211,85 @@ async function replyAloud(answer: string, ctx: Ctx, person: LinkedUser, deps: Bo
       return true; // nobody is there to read the text either
     }
     return false;
+  }
+}
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+/** Photos of one album arrive as separate updates; the one with the words waits this long for the rest. */
+const ALBUM_WAIT_MS = 1_200;
+const PICTURES_PER_MINUTE = 3;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A photo is material for a picture (D-080). With words in its caption the picture is made at once; without, the photo waits
+ * for the next message of this chat. An album gives all its photos to one request. Photos are only looked at, never stored.
+ */
+async function onPhoto(message: TelegramMessage, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
+  if (!can(person.role, 'marketing.use')) return send(deps, person.chatId, escapeHtml(t('errForbidden')));
+  const photo = pickPhoto(message.photo);
+  if (!photo) return send(deps, person.chatId, escapeHtml(t('tgPictureTooLarge')));
+  let bytes: Uint8Array;
+  try {
+    bytes = await deps.client.downloadFile(photo.file_id, MAX_PHOTO_BYTES);
+  } catch (err) {
+    if (err instanceof TelegramError && err.kind === 'too_large') return send(deps, person.chatId, escapeHtml(t('tgPictureTooLarge')));
+    throw err;
+  }
+  const waiting = pendingPictures.add(person.chatId, { bytes, name: `foto-${message.message_id}.jpg` }, deps.clock.now());
+  const words = message.caption?.trim();
+  if (!words) {
+    // The other photos of an album would each get this reply; one is enough.
+    if (message.media_group_id) return;
+    return send(deps, person.chatId, escapeHtml(t('tgPictureReceived', { n: waiting })));
+  }
+  if (message.media_group_id) await sleep(ALBUM_WAIT_MS);
+  return onPicture(words.slice(0, 1500), ctx, person, deps);
+}
+
+/** Makes the picture for the words and the waiting photos, and sends it with its caption (D-080). */
+async function onPicture(words: string, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const chatId = person.chatId;
+  const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
+  if (!deps.client.sendPhoto) return send(deps, chatId, escapeHtml(t('tgPictureFailed')));
+  // Checked before the photos are taken, so a person told to slow down does not lose them.
+  if (!limiter.allow(`telegram-picture:${person.userId}`, PICTURES_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
+  const files = pendingPictures.take(chatId, deps.clock.now());
+  await send(deps, chatId, escapeHtml(t('tgPictureMaking')));
+  await deps.client.sendChatAction(chatId, 'upload_photo').catch(() => undefined);
+  try {
+    const result = await makePicture(ctx, words, files, deps.aiProvider);
+    if (!result.ok) {
+      const key: MessageKey = result.reason === 'quota' ? 'mkQuotaReached' : result.reason === 'unverified' ? 'mkFreeUnverified' : result.reason === 'url' ? 'mkFreeUrlBad' : 'tgPictureFailed';
+      return send(deps, chatId, escapeHtml(t(key)));
+    }
+    await deliverPicture(result, ctx, person, deps);
+  } catch (err) {
+    if (err instanceof DomainError) return send(deps, chatId, escapeHtml(t(err.code === 'forbidden' ? 'errForbidden' : 'tgPictureFailed')));
+    throw err;
+  }
+}
+
+/** The finished picture as a photo, then its caption as text to copy, and an audit row. */
+async function deliverPicture(result: { jpeg: Uint8Array; assetId: string; caption: string | null }, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const chatId = person.chatId;
+  const t = (key: MessageKey) => translate(person.locale, key);
+  await deps.client.sendPhoto!({ chatId, bytes: result.jpeg, filename: 'gambar.jpg', caption: escapeHtml(t('tgPictureDone')), parseMode: 'HTML' });
+  const link = deps.appUrl ? `\n\n<a href="${escapeHtml(`${deps.appUrl.replace(/\/$/, '')}/app/marketing`)}">${escapeHtml(t('tgPosterOpenWeb'))}</a>` : '';
+  if (result.caption) await send(deps, chatId, `<b>${escapeHtml(t('mkCaption'))}</b>\n${escapeHtml(result.caption)}${link}`);
+  else if (link) await send(deps, chatId, link.trim());
+  await recordAudit(db, { orgId: person.orgId, actor: `user:${person.userId}`, userId: person.userId }, { action: 'telegram.picture_made', entityType: 'marketing_asset', entityId: result.assetId, summary: { source: 'telegram' } });
+}
+
+/** Pictures the assistant made while answering are sent as photos after the answer (D-080). */
+async function sendPictures(assetIds: string[], ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  if (assetIds.length === 0 || !deps.client.sendPhoto) return;
+  for (const id of assetIds.slice(0, 2)) {
+    try {
+      await deliverPicture({ jpeg: await pictureJpeg(ctx, id), assetId: id, caption: null }, ctx, person, deps);
+    } catch (err) {
+      if (!(err instanceof DomainError)) throw err;
+    }
   }
 }
 
