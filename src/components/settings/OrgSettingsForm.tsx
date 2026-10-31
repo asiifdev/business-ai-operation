@@ -67,60 +67,62 @@ function Form({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
-      <Section title={t('orgSectionGeneral')}>
-        <FormField label={t('orgName')} required error={bad.name ? t('errValidation') : null}>
-          <TextInput value={v.name} onChange={(e) => set('name', e.currentTarget.value)} maxLength={120} disabled={!canEdit} />
-        </FormField>
-        <FormField label={t('orgTimezone')} help={t('orgTimezoneHelp')} error={bad.timezone ? t('errValidation') : null}>
-          <TextInput value={v.timezone} onChange={(e) => set('timezone', e.currentTarget.value)} maxLength={60} disabled={!canEdit} />
-        </FormField>
-        <FormField label={t('orgLocale')}>
-          <SelectMenu value={v.locale} onChange={(x) => set('locale', x as 'id' | 'en')} searchable={false} disabled={!canEdit} options={[{ value: 'id', label: 'Indonesia' }, { value: 'en', label: 'English' }]} />
-        </FormField>
-        <FormField label={t('orgCurrency')} help={t('orgCurrencyHelp')}>
-          <TextInput value={v.currency} disabled readOnly />
-        </FormField>
-      </Section>
-      <Section title={t('orgSectionBilling')}>
-        <FormField label={t('orgNumberFormat')} help={t('orgNumberFormatHelp')} error={bad.invoiceNumberFormat ? t('errValidation') : null}>
-          <TextInput value={v.invoiceNumberFormat} onChange={(e) => set('invoiceNumberFormat', e.currentTarget.value)} maxLength={40} disabled={!canEdit} />
-        </FormField>
-        <FormField label={t('orgTax')} help={t('orgTaxHelp')} error={bad.taxRateBps ? t('errValidation') : null}>
-          <NumberInput value={v.taxRateBps / 100} onChange={(n) => set('taxRateBps', Math.round((n ?? 0) * 100))} min={0} max={100} step={0.01} disabled={!canEdit} />
-        </FormField>
-        {num('graceDays', 0, 365, 'orgGraceDays', 'orgGraceDaysHelp')}
-        {num('draftOffsetDays', 0, 90, 'orgDraftOffset', 'orgDraftOffsetHelp')}
-        <FormField label={t('orgBankName')} help={t('orgBankHelp')}>
-          <TextInput value={v.bankName} onChange={(e) => set('bankName', e.currentTarget.value)} maxLength={80} disabled={!canEdit} />
-        </FormField>
-        <FormField label={t('orgBankAccountName')}>
-          <TextInput value={v.bankAccountName} onChange={(e) => set('bankAccountName', e.currentTarget.value)} maxLength={120} disabled={!canEdit} />
-        </FormField>
-        <FormField label={t('orgBankAccountNumber')}>
-          <TextInput value={v.bankAccountNumber} onChange={(e) => set('bankAccountNumber', e.currentTarget.value)} maxLength={40} inputMode="numeric" disabled={!canEdit} />
-        </FormField>
-      </Section>
-      <Section title={t('orgSectionAutomation')}>
-        {num('schedulerHour', 0, 23, 'orgSchedulerHour', 'orgSchedulerHourHelp')}
-        {num('briefingHour', 0, 23, 'orgBriefingHour', 'orgBriefingHourHelp')}
-        {num('stagnantDays', 1, 365, 'orgStagnantDays', 'orgStagnantDaysHelp')}
-        {num('approvalTtlHours', 1, 720, 'orgApprovalTtl', 'orgApprovalTtlHelp')}
-      </Section>
-      <Panel className="flex flex-col gap-3">
-        <h2 className="m-0 text-lg font-semibold text-ink">{t('orgSectionAi')}</h2>
-        <p className="m-0 max-w-prose text-sm text-muted">{t('orgAiBudgetHelp')}</p>
-        <a href="/app/ai?tab=budget" className={buttonClasses('secondary') + ' self-start'}>{t('orgAiBudgetLink')}</a>
-      </Panel>
-      <AutonomyCard canEdit={canEdit} />
-      {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
-      {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
-      {canEdit && (
-        <div className="flex items-center gap-3">
-          <Button type="submit" variant="primary" loading={busy}>{t('orgSave')}</Button>
-          {done && <span role="status" className="text-sm text-success">{done === 'saved' ? t('orgSaved') : t('orgNothing')}</span>}
-        </div>
-      )}
-    </form>
+    <div className="flex flex-col gap-6">
+      <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+        <Section title={t('orgSectionGeneral')}>
+          <FormField label={t('orgName')} required error={bad.name ? t('errValidation') : null}>
+            <TextInput value={v.name} onChange={(e) => set('name', e.currentTarget.value)} maxLength={120} disabled={!canEdit} />
+          </FormField>
+          <FormField label={t('orgTimezone')} help={t('orgTimezoneHelp')} error={bad.timezone ? t('errValidation') : null}>
+            <TextInput value={v.timezone} onChange={(e) => set('timezone', e.currentTarget.value)} maxLength={60} disabled={!canEdit} />
+          </FormField>
+          <FormField label={t('orgLocale')}>
+            <SelectMenu value={v.locale} onChange={(x) => set('locale', x as 'id' | 'en')} searchable={false} disabled={!canEdit} options={[{ value: 'id', label: 'Indonesia' }, { value: 'en', label: 'English' }]} />
+          </FormField>
+          <FormField label={t('orgCurrency')} help={t('orgCurrencyHelp')}>
+            <TextInput value={v.currency} disabled readOnly />
+          </FormField>
+        </Section>
+        <Section title={t('orgSectionBilling')}>
+          <FormField label={t('orgNumberFormat')} help={t('orgNumberFormatHelp')} error={bad.invoiceNumberFormat ? t('errValidation') : null}>
+            <TextInput value={v.invoiceNumberFormat} onChange={(e) => set('invoiceNumberFormat', e.currentTarget.value)} maxLength={40} disabled={!canEdit} />
+          </FormField>
+          <FormField label={t('orgTax')} help={t('orgTaxHelp')} error={bad.taxRateBps ? t('errValidation') : null}>
+            <NumberInput value={v.taxRateBps / 100} onChange={(n) => set('taxRateBps', Math.round((n ?? 0) * 100))} min={0} max={100} step={0.01} disabled={!canEdit} />
+          </FormField>
+          {num('graceDays', 0, 365, 'orgGraceDays', 'orgGraceDaysHelp')}
+          {num('draftOffsetDays', 0, 90, 'orgDraftOffset', 'orgDraftOffsetHelp')}
+          <FormField label={t('orgBankName')} help={t('orgBankHelp')}>
+            <TextInput value={v.bankName} onChange={(e) => set('bankName', e.currentTarget.value)} maxLength={80} disabled={!canEdit} />
+          </FormField>
+          <FormField label={t('orgBankAccountName')}>
+            <TextInput value={v.bankAccountName} onChange={(e) => set('bankAccountName', e.currentTarget.value)} maxLength={120} disabled={!canEdit} />
+          </FormField>
+          <FormField label={t('orgBankAccountNumber')}>
+            <TextInput value={v.bankAccountNumber} onChange={(e) => set('bankAccountNumber', e.currentTarget.value)} maxLength={40} inputMode="numeric" disabled={!canEdit} />
+          </FormField>
+        </Section>
+        <Section title={t('orgSectionAutomation')}>
+          {num('schedulerHour', 0, 23, 'orgSchedulerHour', 'orgSchedulerHourHelp')}
+          {num('briefingHour', 0, 23, 'orgBriefingHour', 'orgBriefingHourHelp')}
+          {num('stagnantDays', 1, 365, 'orgStagnantDays', 'orgStagnantDaysHelp')}
+          {num('approvalTtlHours', 1, 720, 'orgApprovalTtl', 'orgApprovalTtlHelp')}
+        </Section>
+        {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
+        {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
+        {canEdit && (
+          <div className="flex items-center gap-3">
+            <Button type="submit" variant="primary" loading={busy}>{t('orgSave')}</Button>
+            {done && <span role="status" className="text-sm text-success">{done === 'saved' ? t('orgSaved') : t('orgNothing')}</span>}
+          </div>
+        )}
+      </form>
+        <Panel className="flex flex-col gap-3">
+          <h2 className="m-0 text-lg font-semibold text-ink">{t('orgSectionAi')}</h2>
+          <p className="m-0 max-w-prose text-sm text-muted">{t('orgAiBudgetHelp')}</p>
+          <a href="/app/ai?tab=budget" className={buttonClasses('secondary') + ' self-start'}>{t('orgAiBudgetLink')}</a>
+        </Panel>
+        <AutonomyCard canEdit={canEdit} />
+    </div>
   );
 }

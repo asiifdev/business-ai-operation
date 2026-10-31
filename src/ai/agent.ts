@@ -229,7 +229,16 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
         autoRan.push({ id: approval.id, tool: tool.name, summary, executed: outcome.executed, reason: outcome.reason, undoable: outcome.undoable === true });
         log(outcome.executed ? 'ok' : 'failed');
         return outcome.executed
-          ? toJson({ status: 'sudah_dijalankan', approvalId: approval.id, ringkasan: summary, catatan: 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan. Jika bisa dibatalkan, pengguna memakai tombol Batalkan pada kartu "Sudah dikerjakan asisten" tepat di bawah jawabanmu; jangan menyebut halaman persetujuan atau tempat lain.' })
+          ? toJson({
+              status: 'sudah_dijalankan',
+              approvalId: approval.id,
+              ringkasan: summary,
+              bisaDibatalkan: outcome.undoable === true,
+              catatan:
+                outcome.undoable === true
+                  ? 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan. Pembatalannya lewat tombol Batalkan pada kartu "Sudah dikerjakan asisten" tepat di bawah jawabanmu; jangan menyebut halaman persetujuan atau tempat lain.'
+                  : 'Aksi sudah dijalankan untuk pengguna ini. Katakan apa yang sudah dilakukan. Aksi ini TIDAK bisa dibatalkan satu ketukan: jangan menyebut tombol Batalkan atau menjanjikan pembatalan, dan sarankan mengubahnya lewat halaman yang bersangkutan bila perlu.',
+            })
           : toJson({ status: 'ditolak_sistem', alasan: outcome.reason ?? 'ditolak', catatan: 'Aksi tidak dijalankan karena data sudah berubah atau aturan menolaknya.' });
       }
       pendingApprovals.push({ id: approval.id, tool: tool.name });
