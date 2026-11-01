@@ -15,6 +15,7 @@ const TOOL_LINE: Record<string, MessageKey> = {
 /** The line shown while the assistant works: the real step, not a fixed sentence. */
 export function progressLabel(progress: AgentProgress | null, t: T): string {
   if (!progress) return t('assistantThinking');
+  if (progress.step === 'attachment') return t('progReadingFile', { name: progress.name.slice(0, 40) });
   if (progress.step === 'think') return progress.round > 1 ? t('progWriting') : t('progUnderstanding');
   const own = TOOL_LINE[progress.name];
   if (own) // Without a detail ('Mencari di web: ') the dangling colon becomes an ellipsis.

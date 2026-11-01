@@ -1,5 +1,5 @@
 import { askAssistant } from '../ai/assistant';
-import { addAttachment, attachmentsForChat } from '../domain/assistant/attachments';
+import { addAndReadAttachment, attachmentsForChat } from '../domain/assistant/attachments';
 import { getAiProvider } from '../ai';
 import { transcribeOnce } from '../ai/run';
 import { toSpokenIndonesian } from '../ai/spoken';
@@ -67,7 +67,7 @@ export function botDeps(clock: Clock = systemClock): BotDeps {
         throw err;
       }
     },
-    attach: (ctx, file) => addAttachment(ctx, { file }, { toWav: toWavSegments }),
+    attach: (ctx, file) => addAndReadAttachment(ctx, { file }, { toWav: toWavSegments }),
     ask: async (ctx, question, person, opts) => {
       globalForBot.__chatHistory ??= new ChatHistory(clock);
       const history = globalForBot.__chatHistory;

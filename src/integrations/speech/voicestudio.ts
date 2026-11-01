@@ -16,7 +16,7 @@ export const NARRATION_ENGINE = 'voxcpm2';
 
 export class NarrationError extends Error {
   constructor(
-    public readonly kind: 'unreachable' | 'wrong_engine' | 'failed',
+    public readonly kind: 'unreachable' | 'wrong_engine' | 'voice_missing' | 'failed',
     message: string,
   ) {
     super(message);
@@ -92,7 +92,9 @@ export class VoiceStudioNarration implements Narration {
     const list = await call('/profiles');
     if (!list.ok) throw new NarrationError('unreachable', `VoiceStudio answered ${list.status}`);
     let id = findProfileId(await list.json().catch(() => null), narrator.profile);
-    if (!id) {
+    // A voice kept only in VoiceStudio (no reference recording here) cannot be made by this application: say it is not there.
+    if (!id && !narrator.reference) throw new NarrationError('voice_missing', `The voice profile "${narrator.profile}" is not saved in VoiceStudio`);
+    if (!id && narrator.reference) {
       const form = new FormData();
       form.set('name', narrator.profile);
       form.set('kind', 'clone');

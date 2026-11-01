@@ -35,6 +35,9 @@ export function HistoryList({ sessions, currentId, onOpen, onNew, onSearch, onRe
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Groups the person folded away.
+  const [folded, setFolded] = useState<ReadonlySet<Group>>(new Set());
+  const toggle = (key: Group) => setFolded((all) => { const next = new Set(all); if (!next.delete(key)) next.add(key); return next; });
   const first = useRef(true);
 
   // Search on the server after a short pause, so a long history is never filtered in the browser.
@@ -52,6 +55,8 @@ export function HistoryList({ sessions, currentId, onOpen, onNew, onSearch, onRe
     .map((key) => ({ key, items: (sessions ?? []).filter((s) => groupOf(s.updatedAt, now) === key) }))
     .filter((g) => g.items.length > 0);
   const when = (iso: string) => new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
+  const isFolded = (g: { key: Group }) => folded.has(g.key);
 
   function save(id: string) {
     if (draft.trim()) onRename(id, draft);
@@ -85,8 +90,20 @@ export function HistoryList({ sessions, currentId, onOpen, onNew, onSearch, onRe
         {sessions !== null && sessions.length === 0 && <p className="m-0 px-1 text-sm text-muted">{query.trim() ? t('historyNoMatch') : t('historyEmpty')}</p>}
         {groups.map((g) => (
           <section key={g.key} aria-label={t(g.key)}>
-            <h3 className="m-0 mb-1 px-2 text-xs font-medium text-muted">{t(g.key)}</h3>
-            <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+            <h3 className="m-0 mb-1">
+              <button
+                type="button"
+                onClick={() => toggle(g.key)}
+                aria-expanded={!isFolded(g)}
+                aria-label={t('historyGroupToggle', { group: t(g.key) })}
+                className="flex min-h-8 w-full items-center gap-1 rounded-input px-2 text-left text-xs font-medium text-muted hover:bg-paper-2 hover:text-ink"
+              >
+                <Icon name="chevron" className={cx('size-4 shrink-0 transition-transform duration-(--duration-micro)', isFolded(g) && '-rotate-90')} />
+                <span className="flex-1">{t(g.key)}</span>
+                <span className="tabular-nums">{g.items.length}</span>
+              </button>
+            </h3>
+            <ul className={cx('m-0 flex list-none flex-col gap-0.5 p-0', isFolded(g) && 'hidden')}>
               {g.items.map((s) => (
                 <li key={s.id} className={cx('group rounded-input', s.id === currentId ? 'bg-accent-wash' : 'hover:bg-paper-2')}>
                   {editing === s.id ? (

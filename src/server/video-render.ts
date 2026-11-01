@@ -76,7 +76,7 @@ export function runFfmpeg(args: string[], timeoutMs = 6 * 60_000): Promise<void>
 
 const defaultDeps = (): VideoDeps => ({ provider: getAiProvider(), narration: getNarration(), storage: configuredStorage(), ffmpeg: runFfmpeg, clock: systemClock });
 
-type ErrKey = 'videoErrVoiceDown' | 'videoErrWrongEngine' | 'videoErrQuota' | 'videoErrImage' | 'videoErrVoice' | 'videoErrAssemble' | 'videoErrFfmpeg' | 'videoErrInactive' | 'videoErrBudget';
+type ErrKey = 'videoErrVoiceDown' | 'videoErrWrongEngine' | 'videoErrQuota' | 'videoErrImage' | 'videoErrVoice' | 'videoErrVoiceMissing' | 'videoErrAssemble' | 'videoErrFfmpeg' | 'videoErrInactive' | 'videoErrBudget';
 
 class Stop extends Error {
   constructor(public readonly key: ErrKey) {
@@ -180,7 +180,7 @@ export async function renderVideo(payload: Record<string, unknown>, deps: VideoD
           wav = await deps.narration.speak(line, narrator, { seed: narrator.seed + take });
         } catch (err) {
           console.error('video narration failed', err instanceof Error ? err.message : err);
-          throw new Stop('videoErrVoice');
+          throw new Stop(err instanceof NarrationError && err.kind === 'voice_missing' ? 'videoErrVoiceMissing' : 'videoErrVoice');
         }
         if (take === MAX_TAKES - 1 || !(await stumbledOnTake(wav, line))) break;
       }

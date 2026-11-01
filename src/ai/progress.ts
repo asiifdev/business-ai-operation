@@ -6,7 +6,9 @@ export type AgentProgress =
   /** The model is reading the question or, after tools ran, writing the answer. */
   | { step: 'think'; round: number }
   /** A tool is about to run. `detail` is a short, human fact about it: the search words or the site being read. */
-  | { step: 'tool'; name: string; detail?: string };
+  | { step: 'tool'; name: string; detail?: string }
+  /** A file or link the person attached is being read (D-090): this happens after the message is sent, not at upload. */
+  | { step: 'attachment'; name: string };
 
 /** A short detail worth showing for a tool call, taken from its already validated arguments. Never long, never a secret. */
 export function progressDetail(name: string, args: unknown): string | undefined {

@@ -3,27 +3,29 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, auditLog, organizations, users } from '../../db/schema';
 import { addDays, todayIn } from '../../domain/billing/dates';
+import { getBriefing } from '../../domain/action-center/briefing';
+import { listFindings } from '../../domain/action-center/findings';
 import { getAiOverview } from '../../domain/ai/service';
 import { listConnections } from '../../domain/connections/service';
 import { createFromPrompt } from '../../domain/marketing/free';
 import { draftCaption, generateAssets, listAssets } from '../../domain/marketing/service';
 import { ASPECTS, CORNERS, LAYOUTS, PURPOSES, TEXT_POSITIONS } from '../../domain/marketing/rules';
-import { listMeetings } from '../../domain/meetings/service';
-import { createDocument, listDocuments } from '../../domain/documents/service';
+import { getMeeting, listMeetings } from '../../domain/meetings/service';
+import { createDocument, getDocument, listDocuments } from '../../domain/documents/service';
 import { getFlow, getRun, listFlows, listRuns, planRun, useTemplate } from '../../domain/flows/service';
 import { createInvoiceDraft, getInvoice, listInvoices } from '../../domain/billing/invoices';
-import { listSubscriptions } from '../../domain/billing/subscriptions';
+import { getSubscription, listSubscriptions } from '../../domain/billing/subscriptions';
 import { getFinanceSummary } from '../../domain/billing/summary';
 import { getBusinessSummary } from '../../domain/metrics/summary';
 import { companyFacts } from '../../domain/org/profile';
 import { wrapUntrusted } from '../untrusted';
-import { createLead, getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
+import { createLead, getLead, getPipelineSummary, listLeads } from '../../domain/pipeline/leads';
 import { STAGES } from '../../domain/pipeline/stages';
 import { getClient360, listClients } from '../../domain/portfolio/clients';
 import { listDeployments } from '../../domain/portfolio/deployments';
 import { getProduct, listProducts } from '../../domain/portfolio/products';
 import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
-import { createTask, findSimilarTasks, getTaskSummary, listTasks } from '../../domain/tasks/service';
+import { createTask, findSimilarTasks, getTask, getTaskSummary, listTasks } from '../../domain/tasks/service';
 import { formatRupiah } from '../../lib/format';
 import { readSite } from '../../domain/web/site';
 import { QUERY_MAX, QUERY_MIN, searchWeb } from '../../domain/web/search';
@@ -889,6 +891,182 @@ export function buildAssistantRegistry(): ToolRegistry {
       run: async (ctx, args) => {
         const r = await getRun(ctx, args.runId);
         return { status: r.status, galat: r.error, langkah: r.steps.map((s) => ({ langkah: s.node, alat: s.tool, status: s.status, galat: s.error })) };
+      },
+    }),
+  );
+
+  // Detail and "what needs attention" tools: the assistant can open one record the person asks about, not only list them.
+  const id = z.string().trim().min(1).max(40);
+  const text = (label: string, v: string | null | undefined) => (v && v.trim() ? wrapUntrusted(label, v.trim()) : null);
+
+  registry.register(
+    defineTool({
+      name: 'get_task',
+      description: 'Opens one task by id (from list_tasks): kind, status, priority, due date, assignee, client, product, deployment, lead, description, where it came from, and the tasks linked to it as duplicates. Use it before talking about the details of a task.',
+      tier: 'read',
+      permission: 'task.read',
+      args: z.object({ taskId: id }),
+      run: async (ctx, args) => {
+        const t = await getTask(ctx, args.taskId);
+        return {
+          id: t.id,
+          judul: t.title,
+          jenis: taskKind[t.kind],
+          status: taskStatus[t.status],
+          prioritas: taskPriority[t.priority],
+          tenggat: t.dueDate,
+          penanggungJawab: t.assigneeName ?? 'belum ditetapkan',
+          klien: t.clientName,
+          produk: t.productName,
+          deployment: t.deploymentLabel,
+          lead: t.leadName,
+          drafAI: t.isDraft,
+          sumber: t.source,
+          deskripsi: text('deskripsi tugas', t.description),
+          kutipanSumber: text('kutipan sumber tugas', t.sourceQuote),
+          terkait: t.related.map((r) => ({ id: r.id, judul: r.title, status: taskStatus[r.status], hubungan: r.direction === 'parent' ? 'tugas utama' : 'duplikat' })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_lead',
+      description: 'Opens one sales lead by id (from list_leads): contact, source, needs summary, estimated value, stage, days in the stage, lost reason, and whether it became a client.',
+      tier: 'read',
+      permission: 'lead.read',
+      args: z.object({ leadId: id }),
+      run: async (ctx, args) => {
+        const l = await getLead(ctx, args.leadId);
+        return {
+          id: l.id,
+          nama: l.name,
+          kontak: l.contactName,
+          email: l.email,
+          telepon: l.phone,
+          sumber: l.source,
+          kebutuhan: text('kebutuhan lead', l.needsSummary),
+          tahap: stageLabel[l.stage],
+          nilaiEstimasi: l.estimatedValue != null ? money(l.estimatedValue) : 'belum diisi',
+          hariDiTahapIni: l.daysInStage,
+          stagnan: l.isStagnant,
+          alasanKalah: l.lostReason,
+          penanggungJawab: l.assigneeName ?? 'belum ditetapkan',
+          sudahJadiKlien: l.convertedClientId !== null,
+          drafAI: l.isDraft,
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_document',
+      description: 'Opens one document by id (from list_documents): proposal, quotation or minutes with its status, number, version, line items, subtotal, tax and total, and the meeting it came from.',
+      tier: 'read',
+      permission: 'document.read',
+      args: z.object({ documentId: id }),
+      run: async (ctx, args) => {
+        const d = await getDocument(ctx, args.documentId);
+        return {
+          id: d.id,
+          jenis: documentKindLabel[d.kind],
+          judul: d.title,
+          status: d.status === 'final' ? 'final' : 'draf',
+          nomor: d.number ?? 'belum bernomor',
+          versi: d.version,
+          untuk: d.clientName ?? d.leadName,
+          rapatAsal: d.meetingTitle,
+          berlakuSampai: d.validUntil,
+          ...(d.kind === 'minutes' ? {} : { subtotal: money(d.subtotal), pajak: money(d.taxAmount), total: money(d.total) }),
+          baris: d.items.map((i) => ({ uraian: i.description, jumlah: i.quantity, hargaSatuan: money(i.unitPrice), total: money(i.lineTotal) })),
+          narasi: text('narasi dokumen', d.narrative),
+          semuaVersi: d.versions.map((v) => ({ id: v.id, versi: v.version, status: v.status === 'final' ? 'final' : 'draf', nomor: v.number })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_subscription',
+      description: 'Opens one subscription by id (from list_subscriptions): client, product, package, amount, interval, next due date, grace days, start and stop dates, and every invoice it produced with status and total.',
+      tier: 'read',
+      permission: 'billing.read',
+      args: z.object({ subscriptionId: id }),
+      run: async (ctx, args) => {
+        const d = await getSubscription(ctx, args.subscriptionId);
+        const s = d.subscription;
+        return {
+          id: s.id,
+          klien: s.clientName,
+          produk: s.productName,
+          paket: s.packageName,
+          nominal: money(s.amount),
+          intervalBulan: s.intervalMonths,
+          jatuhTempoBerikutnya: s.nextDueDate,
+          status: s.status === 'active' ? 'aktif' : 'berhenti',
+          hariTenggang: d.graceDays,
+          mulai: d.startedOn,
+          berhenti: d.stoppedOn,
+          invoice: d.invoices.map((i) => ({ id: i.id, nomor: i.number, status: invoiceStatus[i.status], jatuhTempo: i.dueDate, total: money(i.total) })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_meeting',
+      description: 'Opens one meeting by id (from list_meetings): status, duration, whether minutes exist, the tasks and leads it produced (drafts included), and the minutes text. The raw transcript is not returned.',
+      tier: 'read',
+      permission: 'meeting.read_own',
+      args: z.object({ meetingId: id }),
+      run: async (ctx, args) => {
+        const m = await getMeeting(ctx, args.meetingId);
+        return {
+          id: m.id,
+          judul: m.title,
+          status: m.status,
+          menit: m.durationMs === null ? null : Math.round(m.durationMs / 60000),
+          notulen: m.minutes ? { drafAI: m.minutes.isAiDraft, isi: text('notulen rapat', m.minutes.narrative) } : null,
+          tugas: m.tasks.map((t) => ({ id: t.id, judul: t.title, status: t.status, draf: t.isDraft })),
+          lead: m.leads.map((l) => ({ id: l.id, nama: l.name, tahap: l.stage, draf: l.isDraft })),
+        };
+      },
+    }),
+  );
+
+  const findingView = z.enum(['open', 'snoozed', 'closed']);
+  registry.register(
+    defineTool({
+      name: 'list_findings',
+      description: 'Lists what the Action Center found that needs attention (overdue invoices, renewals coming, late tasks, stagnant leads, outdated deployments) with its rule, priority level, status and the page where it can be handled. view: open (default), snoozed or closed.',
+      tier: 'read',
+      permission: 'finding.read_nonfinancial',
+      args: z.object({ view: findingView.default('open') }),
+      run: async (ctx, args) => {
+        const { findings } = await listFindings(ctx, args.view);
+        return {
+          jumlah: findings.length,
+          dipotong: findings.length > LIMIT,
+          temuan: findings.slice(0, LIMIT).map((f) => ({ aturan: f.rule, prioritas: f.priority.level, status: f.status, menyangkutUang: f.financial, halaman: f.href, sejak: f.createdAt.toISOString().slice(0, 10) })),
+        };
+      },
+    }),
+  );
+
+  registry.register(
+    defineTool({
+      name: 'get_briefing',
+      description: "Reads today's business briefing: the numbers it collected (invoices, tasks, pipeline, renewals). Use it for 'what should I focus on today'. It says so when no briefing was made yet.",
+      tier: 'read',
+      permission: 'dashboard.read_financial',
+      args: z.object({}),
+      run: async (ctx) => {
+        const { today, briefing } = await getBriefing(ctx);
+        return briefing ? { tanggal: briefing.date, fakta: briefing.facts } : { tanggal: today, catatan: 'Ringkasan hari ini belum dibuat.' };
       },
     }),
   );

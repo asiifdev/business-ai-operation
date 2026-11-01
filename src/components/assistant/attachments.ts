@@ -4,8 +4,8 @@ import { ApiError, api, upload } from '../../lib/api-client';
 export interface Chip {
   key: string;
   name: string;
-  status: 'reading' | 'ready' | 'error';
-  /** Set once the server has read it. */
+  status: 'uploading' | 'ready' | 'error';
+  /** Set once the server has stored it. It is read later, when the message is sent (D-090). */
   id?: string;
   kind?: string;
   /** Why it could not be used: a `reason` from the server, or `generic`. */
@@ -17,7 +17,8 @@ export const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.mp4,.mov,.webm,.mp3,.wav
 
 type Outcome = { ok: true; attachment: { id: string; name: string; kind: string } } | { ok: false; reason: string };
 
-export async function readFile(file: File): Promise<Outcome> {
+/** Uploads the file only (D-090): the assistant reads it after the message is sent. */
+export async function uploadFile(file: File): Promise<Outcome> {
   const form = new FormData();
   form.append('file', file);
   try {
@@ -27,7 +28,8 @@ export async function readFile(file: File): Promise<Outcome> {
   }
 }
 
-export async function readLink(url: string): Promise<Outcome> {
+/** Stores the link only; the page is read after the message is sent. */
+export async function uploadLink(url: string): Promise<Outcome> {
   try {
     return await api<Outcome>('POST', '/api/assistant/attachments', { url });
   } catch (error) {

@@ -14,6 +14,7 @@ import type { ToolRegistry } from './tools/registry';
 import type { ChatMessage, ChatRequest, Effort } from './types';
 import { UNTRUSTED_NOTICE } from './untrusted';
 import { progressDetail, type AgentProgress } from './progress';
+import { entitiesFromOutput, type EntityRef } from '../lib/entity-links';
 
 /** BR-M07-06 default: five rounds of tool calls per run. */
 export const DEFAULT_MAX_ROUNDS = 5;
@@ -90,6 +91,8 @@ export interface AgentResult {
   autoRan?: Array<{ id: string; tool: string; summary: string; executed: boolean; reason?: string; undoable: boolean }>;
   /** Drafts this run made (a `draft` tool that returned an id): the interface links to each so a person reviews it at once. */
   drafts?: Array<{ tool: string; id: string }>;
+  /** Things the tools named (tasks, invoices, clients...) with their ids: the caller links the ones the answer mentions. */
+  entities?: EntityRef[];
   /** Numbers in the answer that no tool result contained (BR-M07-10). The caller decides what to do with them. */
   unverifiedNumbers: string[];
   /** True when the answer followed at least one successful tool result (always true for a normal strict answer). */
@@ -168,6 +171,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   /** Once the run has read text that came from somebody else, nothing it proposes may run by itself (D-082). */
   let readUntrusted = input.untrustedInput === true;
   const drafts: Array<{ tool: string; id: string }> = [];
+  const entities: EntityRef[] = [];
   let invalidCalls = 0;
   let rejectedCall = false;
   let outOfScope = false;
@@ -255,6 +259,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       }
       log('ok');
       toolOutputs.push(text);
+      entities.push(...entitiesFromOutput(call.name, output));
       if (!TRUSTED_READ_TOOLS.has(call.name) || text.includes('data_tidak_tepercaya')) readUntrusted = true;
       const draftId = (output as { id?: unknown } | null)?.id;
       if (tool.tier === 'draft' && typeof draftId === 'string') drafts.push({ tool: tool.name, id: draftId });
@@ -324,6 +329,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
             pendingApprovals,
             autoRan,
             drafts,
+            entities,
             unverifiedNumbers: unverified,
             grounded,
             refused: true,
@@ -347,6 +353,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           pendingApprovals,
           autoRan,
           drafts,
+          entities,
           unverifiedNumbers: unverified,
           grounded,
           refused: false,
@@ -370,6 +377,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
           pendingApprovals,
           autoRan,
           drafts,
+          entities,
           unverifiedNumbers: [],
           grounded: false,
           refused: true,

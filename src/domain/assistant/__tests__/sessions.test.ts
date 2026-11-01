@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { pg } from '../../../db/client';
 import { makeOrg } from '../../ai/__tests__/support';
-import { appendTurns, deleteSession, getSession, listSessions, renameSession, titleFrom } from '../sessions';
+import { appendTurns, beginAnswer, endAnswer, deleteSession, getSession, listSessions, renameSession, titleFrom } from '../sessions';
 
 afterAll(async () => {
   await pg.end();
@@ -56,5 +56,21 @@ describe('assistant sessions (D-078)', () => {
   it('shortens a long first question to one line', () => {
     expect(titleFrom('a\n\n b   c')).toBe('a b c');
     expect(titleFrom('x'.repeat(200)).length).toBe(80);
+  });
+});
+
+describe('a question that is still being answered (D-090)', () => {
+  it('is stored at once and the conversation says it is pending until the answer is stored', async () => {
+    const o = await makeOrg();
+    const id = await appendTurns(o.ownerCtx, null, [user('Berapa tagihan yang belum dibayar?')], 'Berapa tagihan yang belum dibayar?');
+    beginAnswer(id);
+    const during = await getSession(o.ownerCtx, id);
+    expect(during.pending).toBe(true);
+    expect(during.messages.map((m) => m.kind)).toEqual(['user']);
+    await appendTurns(o.ownerCtx, id, [reply('Dua invoice.')], '');
+    endAnswer(id);
+    const after = await getSession(o.ownerCtx, id);
+    expect(after.pending).toBe(false);
+    expect(after.messages.map((m) => m.kind)).toEqual(['user', 'assistant']);
   });
 });

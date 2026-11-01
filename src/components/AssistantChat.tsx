@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '../lib/use-t';
 import { HistoryList } from './assistant/HistoryList';
 import { Composer, Conversation } from './assistant/Conversation';
+import { ExportMenu } from './assistant/ExportMenu';
 import { useAssistant } from './assistant/useAssistant';
 import { Icon } from './shell/Icon';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 
 type Role = 'owner' | 'admin' | 'staff';
+
+const FOLDED = 'orbyte.assistant.history.folded';
 
 /**
  * The assistant page, full screen: the person's earlier conversations on the left (a drawer on a phone) and the open
@@ -17,10 +20,27 @@ type Role = 'owner' | 'admin' | 'staff';
  */
 export function AssistantChat({ role }: { role: Role }) {
   const t = useT();
-  const a = useAssistant();
+  const a = useAssistant({ resumeLatest: typeof window === 'undefined' || !new URLSearchParams(window.location.search).has('q') });
   const composer = useRef<HTMLTextAreaElement>(null);
   const query = useRef('');
   const [drawer, setDrawer] = useState(false);
+  // The history column can be folded away on a wide screen to give the chat the room; the choice is remembered in this browser.
+  const [folded, setFolded] = useState(false);
+  useEffect(() => {
+    try {
+      setFolded(localStorage.getItem(FOLDED) === '1');
+    } catch {
+      /* the column then simply starts open */
+    }
+  }, []);
+  const fold = (next: boolean) => {
+    setFolded(next);
+    try {
+      localStorage.setItem(FOLDED, next ? '1' : '0');
+    } catch {
+      /* not remembered */
+    }
+  };
 
   // The drawer is the phone's way to the history; on a wide screen the list is beside the conversation, so the drawer closes.
   useEffect(() => {
@@ -60,7 +80,7 @@ export function AssistantChat({ role }: { role: Role }) {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-6">
-      <aside aria-label={t('historyTitle')} className="hidden w-72 shrink-0 flex-col gap-3 lg:flex">
+      <aside id="assistant-history" aria-label={t('historyTitle')} className={folded ? 'hidden' : 'hidden w-72 shrink-0 flex-col gap-3 lg:flex'}>
         <h2 className="m-0 text-sm font-medium text-muted">{t('historyTitle')}</h2>
         {history()}
       </aside>
@@ -70,13 +90,18 @@ export function AssistantChat({ role }: { role: Role }) {
           <div className="min-w-0 max-w-prose">
             <h1 className={a.turns.length > 0 ? 'm-0 truncate text-base font-semibold text-ink' : 'm-0 truncate text-2xl font-semibold text-ink lg:text-3xl'}>{a.title ?? t('assistantTitle')}</h1>
             {/* Once a conversation is open the page explains nothing more: the chat gets the room (the intro stays on the empty state). */}
-            {a.turns.length === 0 && <p className="mt-1 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>}
+            {a.turns.length === 0 && !a.opening && <p className="mt-1 mb-0 hidden text-muted md:block">{t('assistantIntro')}</p>}
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" className="hidden lg:inline-flex" onClick={() => fold(!folded)} aria-expanded={!folded} aria-controls="assistant-history">
+              <Icon name="sidebar" className="size-4" />
+              <span className="max-xl:sr-only">{folded ? t('historyExpand') : t('historyCollapse')}</span>
+            </Button>
             <Button size="sm" className="lg:hidden" onClick={() => { void a.loadSessions(query.current); setDrawer(true); }}>
               <Icon name="history" className="size-4" />
               {t('historyTitle')}
             </Button>
+            {a.turns.length > 0 && <ExportMenu sessionId={a.sessionId} />}
             {a.turns.length > 0 && (
               <Button size="sm" onClick={() => { a.newChat(); composer.current?.focus(); }} disabled={a.busy}>{t('assistantClear')}</Button>
             )}
@@ -84,10 +109,10 @@ export function AssistantChat({ role }: { role: Role }) {
         </header>
 
         <section className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2" aria-label={t('assistantTitle')} aria-busy={a.opening}>
-          <Conversation turns={a.turns} busy={a.busy || a.opening} progress={a.progress} role={role} onAsk={a.ask} onRetry={a.retry} />
+          <Conversation turns={a.turns} busy={a.busy} loading={a.opening} progress={a.progress} role={role} onAsk={a.ask} onRetry={a.retry} />
         </section>
 
-        <Composer ref={composer} busy={a.busy} onSend={a.ask} attachable />
+        <Composer ref={composer} busy={a.busy} onSend={a.ask} rows={3} maxHeight={280} attachable />
       </div>
 
       <Modal open={drawer} onClose={() => setDrawer(false)} title={t('historyTitle')} placement="bottom" bodyClassName="flex min-h-[50dvh] flex-col">

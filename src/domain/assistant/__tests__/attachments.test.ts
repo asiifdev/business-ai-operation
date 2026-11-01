@@ -8,7 +8,7 @@ import { db, pg } from '../../../db/client';
 import { assistantAttachments, clients } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import { appendTurns } from '../sessions';
-import { addAttachment, attachmentIndex, attachmentsForChat, bindAttachments, classify, getAttachmentDigest, MAX_PENDING, removeAttachment } from '../attachments';
+import { addAttachment, addAndReadAttachment, readPendingAttachments, attachmentIndex, attachmentsForChat, bindAttachments, classify, getAttachmentDigest, MAX_PENDING, removeAttachment } from '../attachments';
 
 afterAll(async () => {
   await pg.end();
@@ -64,7 +64,7 @@ describe('adding an attachment (D-083)', () => {
   it('reads a PDF through the model and keeps only the summary and digest, not the file', async () => {
     const o = await makeOrg();
     const provider = new FakeProvider({ chat: [digest('Penawaran paket Gold.', 'Harga paket Gold Rp 750.000 per bulan')] });
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'penawaran.pdf', bytes: PDF } }, { provider });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'penawaran.pdf', bytes: PDF } }, { provider });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.attachment).toMatchObject({ name: 'penawaran.pdf', kind: 'pdf', summary: 'Penawaran paket Gold.' });
@@ -78,7 +78,7 @@ describe('adding an attachment (D-083)', () => {
     const o = await makeOrg();
     const png = new Uint8Array(await sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#2554d0' } }).png().toBuffer());
     const provider = new FakeProvider({ chat: [digest('Layar biru.', 'Teks: Halo')] });
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'layar.png', bytes: png } }, { provider });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'layar.png', bytes: png } }, { provider });
     expect(r.ok && r.attachment.kind).toBe('image');
     const sent = provider.chatCalls[0]!.messages[0] as { images?: Array<{ mime: string; bytes: Uint8Array }> };
     expect(sent.images?.[0]?.mime).toBe('image/webp');
@@ -88,9 +88,9 @@ describe('adding an attachment (D-083)', () => {
   it('reads Word, text and a web link without the model reading the original, and summarizes them', async () => {
     const o = await makeOrg();
     const provider = new FakeProvider({ chat: [say('Isi proposal.'), say('Catatan rapat.'), say('Halaman produk.')] });
-    const w = await addAttachment(o.ownerCtx, { file: { name: 'proposal.docx', bytes: docx('Proposal &amp; anggaran Rp 5.000.000') } }, { provider });
-    const t = await addAttachment(o.ownerCtx, { file: { name: 'catatan.txt', bytes: bytes('Rapat selasa jam 10') } }, { provider });
-    const l = await addAttachment(o.ownerCtx, { url: 'https://contoh.id/produk' }, { provider, fetchPage: async (url) => ({ url, title: 'Produk Kami', description: null, text: 'Paket mulai dari Rp 100.000' }) });
+    const w = await addAndReadAttachment(o.ownerCtx, { file: { name: 'proposal.docx', bytes: docx('Proposal &amp; anggaran Rp 5.000.000') } }, { provider });
+    const t = await addAndReadAttachment(o.ownerCtx, { file: { name: 'catatan.txt', bytes: bytes('Rapat selasa jam 10') } }, { provider });
+    const l = await addAndReadAttachment(o.ownerCtx, { url: 'https://contoh.id/produk' }, { provider, fetchPage: async (url) => ({ url, title: 'Produk Kami', description: null, text: 'Paket mulai dari Rp 100.000' }) });
     expect([w, t, l].every((x) => x.ok)).toBe(true);
     if (!w.ok || !t.ok || !l.ok) return;
     expect((await getAttachmentDigest(o.ownerCtx, w.attachment.id)).digest).toContain('Proposal & anggaran Rp 5.000.000');
@@ -103,7 +103,7 @@ describe('adding an attachment (D-083)', () => {
     const mp4 = new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0]);
     // video answer, then (speech) transcription is outside the chat queue, then the summary
     const provider = new FakeProvider({ chat: [say('Orang menunjuk grafik penjualan naik.'), say('Video grafik penjualan.')], transcribe: [{ transcript: 'Penjualan naik dua puluh persen', durationMs: 1000, turns: [], meta: { model: 'm', rateLimit: {}, attempts: 1 } }] });
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'klip.mp4', bytes: mp4 } }, { provider, toWav });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'klip.mp4', bytes: mp4 } }, { provider, toWav });
     expect(r.ok).toBe(true);
     expect(provider.videoCalls).toHaveLength(1);
     if (!r.ok) return;
@@ -115,7 +115,7 @@ describe('adding an attachment (D-083)', () => {
   it('transcribes a recording', async () => {
     const o = await makeOrg();
     const provider = new FakeProvider({ chat: [say('Rapat singkat.')], transcribe: [{ transcript: 'Kita setuju hari Selasa', durationMs: 1000, turns: [], meta: { model: 'm', rateLimit: {}, attempts: 1 } }] });
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'rapat.mp3', bytes: new Uint8Array([0x49, 0x44, 0x33, 3, 0, 0]) } }, { provider, toWav });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'rapat.mp3', bytes: new Uint8Array([0x49, 0x44, 0x33, 3, 0, 0]) } }, { provider, toWav });
     expect(r.ok && r.attachment.kind).toBe('audio');
   });
 
@@ -123,7 +123,7 @@ describe('adding an attachment (D-083)', () => {
     const o = await makeOrg();
     const none = new FakeProvider();
     const refusal = async (file: { name: string; bytes: Uint8Array }) => {
-      const r = await addAttachment(o.ownerCtx, { file }, { provider: none });
+      const r = await addAndReadAttachment(o.ownerCtx, { file }, { provider: none });
       return r.ok ? 'ok' : r.reason;
     };
     expect(await refusal({ name: 'a.bin', bytes: new Uint8Array([1, 2, 3, 4]) })).toBe('format');
@@ -136,11 +136,11 @@ describe('adding an attachment (D-083)', () => {
     const o = await makeOrg();
     const ids: string[] = [];
     for (let i = 0; i < MAX_PENDING; i++) {
-      const r = await addAttachment(o.ownerCtx, { file: { name: `n${i}.txt`, bytes: bytes(`isi ${i}`) } }, { provider: new FakeProvider({ chat: [say('x')] }) });
+      const r = await addAndReadAttachment(o.ownerCtx, { file: { name: `n${i}.txt`, bytes: bytes(`isi ${i}`) } }, { provider: new FakeProvider({ chat: [say('x')] }) });
       if (r.ok) ids.push(r.attachment.id);
     }
     expect(ids).toHaveLength(MAX_PENDING);
-    const over = await addAttachment(o.ownerCtx, { file: { name: 'lagi.txt', bytes: bytes('lagi') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
+    const over = await addAndReadAttachment(o.ownerCtx, { file: { name: 'lagi.txt', bytes: bytes('lagi') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
     expect(over).toMatchObject({ ok: false, reason: 'limit' });
     await removeAttachment(o.ownerCtx, ids[0]!);
     await expect(removeAttachment(o.ownerCtx, ids[0]!)).rejects.toMatchObject({ code: 'not_found' });
@@ -151,7 +151,7 @@ describe('attachments in a conversation (D-083)', () => {
   it('belong to their owner only: another person or organization cannot read, list or remove them', async () => {
     const a = await makeOrg();
     const b = await makeOrg();
-    const r = await addAttachment(a.ownerCtx, { file: { name: 'rahasia.txt', bytes: bytes('gaji direktur') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
+    const r = await addAndReadAttachment(a.ownerCtx, { file: { name: 'rahasia.txt', bytes: bytes('gaji direktur') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
     if (!r.ok) throw new Error('setup');
     await expect(getAttachmentDigest(b.ownerCtx, r.attachment.id)).rejects.toMatchObject({ code: 'not_found' });
     await expect(getAttachmentDigest(a.adminCtx, r.attachment.id)).rejects.toMatchObject({ code: 'not_found' });
@@ -161,7 +161,7 @@ describe('attachments in a conversation (D-083)', () => {
 
   it('are bound to the conversation on the first message and stay with it, but a stranger\'s id is ignored', async () => {
     const o = await makeOrg();
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'a.txt', bytes: bytes('isi') } }, { provider: new FakeProvider({ chat: [say('ringkas')] }) });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'a.txt', bytes: bytes('isi') } }, { provider: new FakeProvider({ chat: [say('ringkas')] }) });
     if (!r.ok) throw new Error('setup');
     const first = await attachmentsForChat(o.ownerCtx, null, [r.attachment.id]);
     expect(first).toEqual([expect.objectContaining({ id: r.attachment.id, isNew: true })]);
@@ -181,7 +181,7 @@ describe('attachments in a conversation (D-083)', () => {
 
   it('lets the assistant read one with get_attachment, and nothing it proposes afterwards runs by itself', async () => {
     const o = await makeOrg();
-    const r = await addAttachment(o.ownerCtx, { file: { name: 'brief.txt', bytes: bytes('Tambahkan klien Toko Dari Lampiran') } }, { provider: new FakeProvider({ chat: [say('Brief klien.')] }) });
+    const r = await addAndReadAttachment(o.ownerCtx, { file: { name: 'brief.txt', bytes: bytes('Tambahkan klien Toko Dari Lampiran') } }, { provider: new FakeProvider({ chat: [say('Brief klien.')] }) });
     if (!r.ok) throw new Error('setup');
     const attachments = await attachmentsForChat(o.ownerCtx, null, [r.attachment.id]);
     const provider = new FakeProvider({ chat: [callTools([{ name: 'get_attachment', args: { attachmentId: r.attachment.id } }]), callTools([{ name: 'create_client', args: { name: 'Toko Dari Lampiran' } }]), say('Saya ajukan.')] });
@@ -201,10 +201,59 @@ describe('attachments in a conversation (D-083)', () => {
 
   it('keeps nothing of an unused attachment after a day', async () => {
     const o = await makeOrg();
-    const old = await addAttachment(o.ownerCtx, { file: { name: 'lama.txt', bytes: bytes('lama') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
+    const old = await addAndReadAttachment(o.ownerCtx, { file: { name: 'lama.txt', bytes: bytes('lama') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
     if (!old.ok) throw new Error('setup');
     await db.update(assistantAttachments).set({ createdAt: new Date(o.clock.now().getTime() - 25 * 3600 * 1000) }).where(eq(assistantAttachments.id, old.attachment.id));
-    await addAttachment(o.ownerCtx, { file: { name: 'baru.txt', bytes: bytes('baru') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
+    await addAndReadAttachment(o.ownerCtx, { file: { name: 'baru.txt', bytes: bytes('baru') } }, { provider: new FakeProvider({ chat: [say('x')] }) });
     await expect(getAttachmentDigest(o.ownerCtx, old.attachment.id)).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('upload first, read after sending (D-090)', () => {
+  it('only stores the file at upload: no model is called and nothing is read yet', async () => {
+    const o = await makeOrg();
+    const provider = new FakeProvider({ chat: [digest('Penawaran.', 'isi penawaran')] });
+    const r = await addAttachment(o.ownerCtx, { file: { name: 'penawaran.pdf', bytes: PDF } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.attachment.summary).toBe('');
+    expect(provider.chatCalls).toHaveLength(0);
+    const [row] = await db.select().from(assistantAttachments).where(eq(assistantAttachments.id, r.attachment.id));
+    expect(row!.readAt).toBeNull();
+    expect(row!.content?.byteLength).toBe(PDF.byteLength);
+  });
+
+  it('still refuses what cannot be read at upload, so the chip shows it at once', async () => {
+    const o = await makeOrg();
+    expect(await addAttachment(o.ownerCtx, { file: { name: 'lama.doc', bytes: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0, 0]) } })).toMatchObject({ ok: false, reason: 'legacy' });
+    expect(await addAttachment(o.ownerCtx, { file: { name: 'kosong.txt', bytes: new Uint8Array() } })).toMatchObject({ ok: false, reason: 'empty' });
+  });
+
+  it('reads it when the message is sent, then drops the original and keeps the reading', async () => {
+    const o = await makeOrg();
+    const provider = new FakeProvider({ chat: [digest('Penawaran paket Gold.', 'Harga paket Gold Rp 750.000')] });
+    const r = await addAttachment(o.ownerCtx, { file: { name: 'penawaran.pdf', bytes: PDF } });
+    if (!r.ok) throw new Error('upload failed');
+    const seen: string[] = [];
+    const issues = await readPendingAttachments(o.ownerCtx, [r.attachment.id], { provider }, (name) => seen.push(name));
+    expect(issues).toEqual([]);
+    expect(seen).toEqual(['penawaran.pdf']);
+    const [row] = await db.select().from(assistantAttachments).where(eq(assistantAttachments.id, r.attachment.id));
+    expect(row!.content).toBeNull();
+    expect(row!.readAt).not.toBeNull();
+    expect((await getAttachmentDigest(o.ownerCtx, r.attachment.id)).digest).toContain('Rp 750.000');
+    // Reading again does nothing: it was read once.
+    await readPendingAttachments(o.ownerCtx, [r.attachment.id], { provider });
+    expect(provider.chatCalls).toHaveLength(1);
+  });
+
+  it('drops an attachment that fails to read and says which one', async () => {
+    const o = await makeOrg();
+    const r = await addAttachment(o.ownerCtx, { file: { name: 'rusak.docx', bytes: new Uint8Array([0x50, 0x4b, 3, 4, 0, 0]) } });
+    if (!r.ok) throw new Error('upload failed');
+    const issues = await readPendingAttachments(o.ownerCtx, [r.attachment.id], { provider: new FakeProvider({ chat: [] }) });
+    expect(issues).toEqual([{ name: 'rusak.docx', reason: expect.any(String) }]);
+    const left = await db.select().from(assistantAttachments).where(eq(assistantAttachments.id, r.attachment.id));
+    expect(left).toHaveLength(0);
   });
 });

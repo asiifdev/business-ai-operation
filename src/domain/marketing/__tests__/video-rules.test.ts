@@ -94,6 +94,7 @@ describe('video rules (D-086)', () => {
 
   it('accepts only known narrators and shapes, and bounded edits', () => {
     expect(renderSchema.safeParse({ narrator: 'sinta', aspect: 'story' }).success).toBe(true);
+    expect(renderSchema.safeParse({ narrator: 'personal', aspect: 'story' }).success).toBe(true);
     expect(renderSchema.safeParse({ narrator: 'orang-lain', aspect: 'story' }).success).toBe(false);
     expect(renderSchema.safeParse({ narrator: 'sinta', aspect: 'tall' }).success).toBe(false);
     expect(renderSchema.safeParse({ narrator: 'sinta', aspect: 'wide', scenes: [{ voiceover: 'x'.repeat(401), onScreenText: '' }] }).success).toBe(false);

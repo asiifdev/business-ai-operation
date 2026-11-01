@@ -4,6 +4,6 @@ import { handle, ok, requireCtx } from '../../../../lib/api';
 
 export const prerender = false;
 
-/** `GET /api/assistant/sessions?q=`: the caller's own conversations with the assistant, newest first. */
+/** `GET /api/assistant/sessions?q=`: the caller's own conversations with the assistant, newest first (`limit` up to 200). */
 export const GET: APIRoute = (context) =>
-  handle(async () => ok({ sessions: await listSessions(requireCtx(context), { q: context.url.searchParams.get('q') ?? undefined }) }));
+  handle(async () => ok({ sessions: await listSessions(requireCtx(context), { q: context.url.searchParams.get('q') ?? undefined, limit: Number(context.url.searchParams.get('limit')) || undefined }) }));

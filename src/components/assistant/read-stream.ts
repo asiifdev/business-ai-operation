@@ -1,7 +1,7 @@
 import type { AgentProgress } from '../../ai/progress';
 
 /** Reads the NDJSON answer: progress lines go to `onProgress`; the result is shaped like the plain JSON reply (`{ ok, data }`). */
-export async function readStream(res: Response, onProgress: (e: AgentProgress) => void): Promise<{ ok: boolean; data?: unknown } | null> {
+export async function readStream(res: Response, onProgress: (e: AgentProgress) => void, onSession?: (id: string) => void): Promise<{ ok: boolean; data?: unknown } | null> {
   const reader = res.body?.getReader();
   if (!reader) return null;
   const decoder = new TextDecoder();
@@ -15,7 +15,8 @@ export async function readStream(res: Response, onProgress: (e: AgentProgress) =
     } catch {
       return;
     }
-    if (msg.event === 'progress' && (msg.step === 'think' || msg.step === 'tool')) onProgress(msg as unknown as AgentProgress);
+    if (msg.event === 'progress' && (msg.step === 'think' || msg.step === 'tool' || msg.step === 'attachment')) onProgress(msg as unknown as AgentProgress);
+    else if (msg.event === 'session' && typeof (msg as { sessionId?: unknown }).sessionId === 'string') onSession?.((msg as { sessionId: string }).sessionId);
     else if (msg.event === 'done') result = { ok: true, data: msg.data };
     else if (msg.event === 'error') result = { ok: false };
   };

@@ -6,6 +6,10 @@
  *
  * `sinta` is the voice the owner picked after the first listening test (2026-10-31). A male narrator is not offered yet:
  * descriptions in English give a male voice but read acronyms letter by letter, and Indonesian ones came out female.
+ *
+ * `personal` is a voice the owner saved in VoiceStudio themselves (the profile "Personal", 2026-11-01). It has no reference
+ * recording here on purpose: this repository is public and that is a real person's voice, so the recording stays in
+ * VoiceStudio and the application only asks for the profile by name. If the profile is not there, the video says so.
  */
 export interface Narrator {
   key: string;
@@ -14,8 +18,11 @@ export interface Narrator {
   blurb: string;
   /** The name of the voice profile kept in the voice engine; created from the reference the first time it is needed. */
   profile: string;
-  /** The recording in `src/config/voices/`, and the exact words spoken in it. */
-  reference: { file: string; text: string };
+  /**
+   * The recording in `src/config/voices/` and the exact words spoken in it, from which the profile is made when it is not
+   * in the voice engine yet. Absent for a voice that only ever lives in the voice engine (it is never committed here).
+   */
+  reference?: { file: string; text: string };
   seed: number;
   language: 'id';
 }
@@ -30,6 +37,14 @@ export const NARRATORS = {
       file: 'sinta.wav',
       text: 'ASIIFDEV Digital Agency adalah perusahaan teknologi yang berfokus pada AI Engineering, Software Development, dan IT Outsourcing. Kami mengutamakan pemahaman proses bisnis sebelum menentukan solusi teknologi yang tepat.',
     },
+    seed: 7,
+    language: 'id',
+  },
+  personal: {
+    key: 'personal',
+    name: 'Personal',
+    blurb: 'Suara pribadi Anda, dari profil "Personal" yang tersimpan di VoiceStudio',
+    profile: 'Personal',
     seed: 7,
     language: 'id',
   },

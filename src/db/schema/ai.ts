@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
-  boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, smallint, text, unique, uniqueIndex,
+  boolean, check, customType, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, smallint, text, unique, uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { bigAmount, createdAtColumn, idColumn, tstz, updatedAtColumn } from './_shared';
 import { organizations, users } from './auth';
@@ -11,6 +11,8 @@ export const jobStatus = pgEnum('job_status', ['queued', 'running', 'done', 'fai
 export const approvalStatus = pgEnum('approval_status', ['pending', 'approved', 'rejected', 'expired']);
 export const findingStatus = pgEnum('finding_status', ['new', 'handled', 'ignored', 'snoozed', 'auto_resolved']);
 export const findingRule = pgEnum('finding_rule', ['invoice_overdue', 'invoice_draft_ready', 'renewal_upcoming', 'task_late', 'lead_stagnant', 'deployment_outdated', 'deployment_down']);
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
 /** ERD 3.8. One row per model call (BR-M15-05). Summaries only, never full document text (BR-M15-06). */
 export const aiRuns = pgTable(
@@ -82,7 +84,7 @@ export const assistantMessages = pgTable(
   ],
 );
 
-/** ERD 3.8, D-083. What a person attached to the assistant: the original is not kept, only what the model read from it. */
+/** ERD 3.8, D-083, D-090. What a person attached to the assistant. The upload only stores the file (`content`); it is read when the message is sent, then `content` is cleared and only what the model read is kept. */
 export const assistantAttachments = pgTable(
   'assistant_attachments',
   {
@@ -95,8 +97,12 @@ export const assistantAttachments = pgTable(
     mime: text('mime'),
     sizeBytes: integer('size_bytes').notNull().default(0),
     sourceUrl: text('source_url'),
-    summary: text('summary').notNull(),
-    digest: text('digest').notNull(),
+    summary: text('summary').notNull().default(''),
+    digest: text('digest').notNull().default(''),
+    /** The uploaded file until it is read (D-090); null once read, and for links. */
+    content: bytea('content'),
+    /** Null until the assistant has read it (when the message that carries it is sent). */
+    readAt: tstz('read_at'),
     createdAt: createdAtColumn(),
   },
   (t) => [

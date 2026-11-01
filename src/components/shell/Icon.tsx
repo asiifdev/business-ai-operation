@@ -39,6 +39,9 @@ const paths: Record<IconName, string> = {
   expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
   shrink: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
   tidy: 'M4 6h8M4 12h16M12 18h8M16 3l2 3-2 3M8 15l-2 3 2 3',
+  download: 'M12 4v11M7.5 11 12 15.5 16.5 11M5 19.5h14',
+  sidebar: 'M4 5h16v14H4zM9.5 5v14',
+  stop: 'M7 7h10v10H7z',
   briefing: 'M12 4v2M5.6 7.6 7 9M18.4 7.6 17 9M4 15h16M7 15a5 5 0 0 1 10 0M8 19h8',
 };
 

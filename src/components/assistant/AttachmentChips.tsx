@@ -7,7 +7,7 @@ import type { Chip } from './attachments';
 const KIND: Record<string, MessageKey> = { pdf: 'attKindPdf', image: 'attKindImage', video: 'attKindVideo', audio: 'attKindAudio', document: 'attKindDocument', sheet: 'attKindSheet', slides: 'attKindSlides', text: 'attKindText', link: 'attKindLink' };
 const REASON: Record<string, MessageKey> = { format: 'attErrFormat', legacy: 'attErrLegacy', size: 'attErrSize', empty: 'attErrEmpty', url: 'attErrUrl', unreachable: 'attErrUnreachable', limit: 'attErrLimit', ai: 'attErrAi', quota: 'attErrQuota', audio: 'attErrAudio', rate: 'attErrRate' };
 
-/** What is attached: a name, what kind it was read as, and while it is being read a pulse. `onRemove` shows the cross (the composer); the message bubble leaves it out. */
+/** What is attached: a name, what kind it was read as, and while it is uploading a pulse. `onRemove` shows the cross (the composer); the message bubble leaves it out. */
 export function AttachmentChips({ chips, onRemove, onDark = false }: { chips: readonly Chip[]; onRemove?: (chip: Chip) => void; onDark?: boolean }) {
   const t = useT();
   if (chips.length === 0) return null;
@@ -20,11 +20,11 @@ export function AttachmentChips({ chips, onRemove, onDark = false }: { chips: re
             'flex max-w-full items-center gap-1.5 rounded-input border px-2 py-1 text-sm',
             chip.status === 'error' ? 'border-danger bg-danger-wash text-ink' : onDark ? 'border-accent-ink/30 bg-accent-ink/10 text-accent-ink' : 'border-rule-2 bg-paper-2 text-ink',
           )}
-          aria-busy={chip.status === 'reading' || undefined}
+          aria-busy={chip.status === 'uploading' || undefined}
         >
-          <Icon name={chip.kind === 'link' ? 'link' : 'attach'} className={cx('size-4 shrink-0', chip.status === 'reading' && 'animate-pulse')} />
+          <Icon name={chip.kind === 'link' ? 'link' : 'attach'} className={cx('size-4 shrink-0', chip.status === 'uploading' && 'animate-pulse')} />
           <span className="truncate" title={chip.name}>{chip.name}</span>
-          {chip.status === 'reading' && <span className="shrink-0 text-xs opacity-70">{t('attReading')}</span>}
+          {chip.status === 'uploading' && <span className="shrink-0 text-xs opacity-70">{t('attUploading')}</span>}
           {chip.status === 'ready' && chip.kind && KIND[chip.kind] && <span className="shrink-0 text-xs opacity-70">{t(KIND[chip.kind]!)}</span>}
           {chip.status === 'error' && <span role="alert" className="shrink-0 text-xs text-danger">{t(REASON[chip.error ?? ''] ?? 'attErrGeneric')}</span>}
           {onRemove && (

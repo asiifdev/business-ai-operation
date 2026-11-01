@@ -5,6 +5,7 @@ import { Icon } from '../shell/Icon';
 import { buttonClasses } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Composer, Conversation } from './Conversation';
+import { ExportMenu } from './ExportMenu';
 import { HistoryList } from './HistoryList';
 import { ASK_EVENT, useAssistant } from './useAssistant';
 
@@ -81,6 +82,7 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
           >
             <Icon name="history" className="size-5" />
           </button>
+          {turns.length > 0 && <ExportMenu sessionId={a.sessionId} size="md" />}
           {turns.length > 0 && (
             <button type="button" onClick={() => { a.newChat(); setView('chat'); composer.current?.focus(); }} disabled={busy} className={buttonClasses('secondary', 'sm')}>
               {t('assistantClear')}
@@ -108,10 +110,10 @@ export function AssistantDock({ role, open, onOpenChange }: { role: Role; open: 
       ) : (
         <>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4">
-            <Conversation turns={turns} busy={busy || a.opening} progress={a.progress} role={role} onAsk={ask} onRetry={retry} compact />
+            <Conversation turns={turns} busy={busy} loading={a.opening} progress={a.progress} role={role} onAsk={ask} onRetry={retry} compact />
           </div>
           <div className="shrink-0 border-t border-rule bg-paper px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <Composer ref={composer} busy={busy} onSend={ask} rows={1} attachable />
+            <Composer ref={composer} busy={busy} onSend={ask} rows={2} maxHeight={200} attachable />
             <p className="mt-2 mb-0 text-xs text-muted">{t('dockHint')}</p>
           </div>
         </>

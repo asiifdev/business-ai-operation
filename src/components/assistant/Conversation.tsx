@@ -3,6 +3,7 @@ import { ACT_TOOL_LABEL } from '../../lib/act-tool-labels';
 import type { AssistantReply } from '../../ai/assistant';
 import { parseAnswer, type Run } from '../../lib/answer';
 import { cx } from '../../lib/cx';
+import { Skeleton } from '../ui/states';
 import type { MessageKey } from '../../lib/i18n';
 import { formatUsd } from '../../lib/usd';
 import { useLocale, useT } from '../../lib/use-t';
@@ -12,7 +13,9 @@ import { Icon } from '../shell/Icon';
 import { Button } from '../ui/Button';
 import { AttachmentChips } from './AttachmentChips';
 import { AutoRanCard } from './AutoRanCard';
-import { ACCEPT, dropAttachment, readFile, readLink, type Chip } from './attachments';
+import { ACCEPT, dropAttachment, uploadFile, uploadLink, type Chip } from './attachments';
+import { readDraft, writeDraft } from './draft';
+import { useDictation } from './useDictation';
 import { FilePickButton } from '../forms/FilePickButton';
 import { TextInput } from '../forms/TextInput';
 import { MAX_LENGTH, type Turn } from './useAssistant';
@@ -63,28 +66,14 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
   generate_marketing_asset: 'srcGenerateAsset',
   draft_marketing_caption: 'srcDraftCaption',
   list_meetings: 'srcListMeetings',
+  get_task: 'srcGetTask',
+  get_lead: 'srcGetLead',
+  get_document: 'srcGetDocument',
+  get_subscription: 'srcGetSubscription',
+  get_meeting: 'srcGetMeeting',
+  list_findings: 'srcListFindings',
+  get_briefing: 'srcGetBriefing',
   get_finding_facts: 'srcGetFindingFacts',
-};
-
-/** Questions worth asking next, by what the answer rested on. Plain suggestions, not generated: they never promise a tool that is not there. */
-const FOLLOW_UP: Record<string, MessageKey[]> = {
-  list_invoices: ['fuBilling', 'fuTasks'],
-  get_billing_summary: ['fuInvoices', 'fuPipeline'],
-  get_invoice: ['fuInvoices', 'fuBilling'],
-  list_subscriptions: ['fuInvoices', 'fuBilling'],
-  list_tasks: ['fuApprovals', 'fuInvoices'],
-  list_leads: ['fuPipeline', 'fuProducts'],
-  get_pipeline_summary: ['fuTasks', 'fuInvoices'],
-  list_clients: ['fuClients', 'fuInvoices'],
-  list_deployments: ['fuClients', 'fuTasks'],
-  list_products: ['fuClients', 'fuProducts'],
-  get_product_packages: ['fuClients', 'fuInvoices'],
-  get_business_summary: ['fuInvoices', 'fuTasks', 'fuPipeline'],
-  list_pending_approvals: ['fuInvoices', 'fuTasks'],
-};
-const followUps = (reply: AssistantReply): MessageKey[] => {
-  if (reply.pendingApprovals.length > 0) return ['fuApprovals'];
-  return [...new Set(reply.sources.flatMap((s) => FOLLOW_UP[s] ?? []))].slice(0, 3);
 };
 
 /** Where a draft the assistant made can be reviewed. */
@@ -150,9 +139,11 @@ export function AssistantMark({ className }: { className?: string }) {
  * The conversation: the turns, the starters when it is empty, and a waiting row while the assistant works. Shared by the
  * full page and the side panel, so both look and behave the same.
  */
-export function Conversation({ turns, busy, progress = null, role, onAsk, onRetry, compact = false }: {
+export function Conversation({ turns, busy, loading = false, progress = null, role, onAsk, onRetry, compact = false }: {
   turns: Turn[];
   busy: boolean;
+  /** The conversation that should be open is still being fetched: a placeholder, never the empty greeting. */
+  loading?: boolean;
   /** What is really happening while `busy`; the indicator falls back to a general line without it. */
   progress?: AgentProgress | null;
   role: Role;
@@ -170,9 +161,18 @@ export function Conversation({ turns, busy, progress = null, role, onAsk, onRetr
 
   useEffect(() => {
     // An empty conversation starts at its greeting, whatever the scroll position of the one before it was.
+    if (loading) return;
     if (turns.length === 0 && !busy) startRef.current?.scrollIntoView({ block: 'start' });
     else endRef.current?.scrollIntoView({ block: 'end' });
-  }, [turns, busy]);
+  }, [turns, busy, loading]);
+
+  if (loading && turns.length === 0) {
+    return (
+      <div role="status" aria-label={t('assistantLoading')} className={cx('m-auto flex w-full flex-col gap-4', compact ? 'py-2' : 'max-w-xl py-8')}>
+        <Skeleton rows={4} />
+      </div>
+    );
+  }
 
   if (turns.length === 0 && !busy) {
     const starters = startersFor(role);
@@ -231,7 +231,7 @@ export function Conversation({ turns, busy, progress = null, role, onAsk, onRetr
           )}
           {turn.kind === 'error' && (
             <div className={cx(width, 'rounded-card border border-danger bg-danger-wash px-4 py-3')} role="alert">
-              <p className="m-0 text-base text-ink">{turn.text}</p>
+              <p className="m-0 text-base text-ink">{turn.text || t('assistantUnanswered')}</p>
               <Button className="mt-2" size="sm" onClick={() => onRetry(turn)} disabled={busy}>{t('assistantRetry')}</Button>
             </div>
           )}
@@ -267,8 +267,8 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
   const t = useT();
   const locale = useLocale();
   const [copied, setCopied] = useState(false);
-  // Never suggest the question that was just asked.
-  const chips = last && !(!reply.ok || reply.refused) ? followUps(reply).filter((key) => t(key) !== askAgain) : [];
+  // What the assistant itself offers next, for this answer only; never the question that was just asked.
+  const chips = last && !(!reply.ok || reply.refused) ? (reply.suggestions ?? []).filter((q) => q !== askAgain) : [];
   const text = reply.text ?? reply.message ?? '';
   const failed = !reply.ok || reply.refused;
   return (
@@ -294,6 +294,16 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
             <Icon name="arrow" className="size-4" />
           </a>
         ))}
+        {(reply.links?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {reply.links!.map((l) => (
+              <a key={l.href} href={l.href} className="flex w-fit max-w-full items-center gap-2 rounded-input border border-rule px-3 py-1.5 text-sm text-ink no-underline hover:bg-paper">
+                <span className="truncate">{t('openLinkLabel', { name: l.label })}</span>
+                <Icon name="arrow" className="size-4 shrink-0" />
+              </a>
+            ))}
+          </div>
+        )}
         {reply.sources.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-rule pt-2">
             <span className="text-sm text-muted">{t('assistantSources')}</span>
@@ -334,9 +344,9 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
           <div className="flex flex-col gap-1.5 border-t border-rule pt-2">
             <span className="text-xs text-muted">{t('assistantFollowUp')}</span>
             <div className="flex flex-wrap gap-2">
-              {chips.map((key) => (
-                <button key={key} type="button" disabled={disabled} onClick={() => onAsk(t(key))} className="min-h-8 rounded-full border border-rule bg-paper px-3 text-sm text-ink hover:border-accent/50 hover:bg-accent-wash disabled:opacity-50">
-                  {t(key)}
+              {chips.map((question) => (
+                <button key={question} type="button" disabled={disabled} onClick={() => onAsk(question)} className="min-h-8 rounded-full border border-rule bg-paper px-3 text-left text-sm text-ink hover:border-accent/50 hover:bg-accent-wash disabled:opacity-50">
+                  {question}
                 </button>
               ))}
             </div>
@@ -347,17 +357,29 @@ function AssistantTurn({ reply, at, isManager, width, last, disabled, onAsk, ask
   );
 }
 
-/** Where a question is typed. Enter sends, Shift+Enter adds a line; the send button sits inside the field's row. With `attachable` it also takes files (picked, dropped or pasted) and links, which the assistant reads (D-083). */
-export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { busy: boolean; onSend: (question: string, attachments?: Chip[]) => void; rows?: number; ref?: Ref<HTMLTextAreaElement>; attachable?: boolean }) {
+/** Where a question is typed. Enter sends, Shift+Enter adds a line; the send button sits inside the field's row. The box grows with the text. With `attachable` it also takes files (picked, dropped or pasted) and links: they are only uploaded here and the assistant reads them after the message is sent (D-083, D-090). The microphone dictates into the box (Muse Voice Transcribe). What is typed survives a page change (D-090). */
+export function Composer({ busy, onSend, rows = 2, maxHeight = 220, ref, attachable = false }: { busy: boolean; onSend: (question: string, attachments?: Chip[]) => void; rows?: number; maxHeight?: number; ref?: Ref<HTMLTextAreaElement>; attachable?: boolean }) {
   const t = useT();
-  const [draft, setDraft] = useState('');
+  const [draft, setDraftState] = useState('');
   const [chips, setChips] = useState<Chip[]>([]);
   const [linking, setLinking] = useState(false);
   const [link, setLink] = useState('');
   const [over, setOver] = useState(false);
-  const reading = chips.some((c) => c.status === 'reading');
+  const uploading = chips.some((c) => c.status === 'uploading');
   const ready = chips.filter((c) => c.status === 'ready');
-  const canSend = !busy && !reading && (draft.trim() !== '' || ready.length > 0);
+  const canSend = !busy && !uploading && (draft.trim() !== '' || ready.length > 0);
+
+  const setDraft = (text: string) => {
+    setDraftState(text);
+    writeDraft(text);
+  };
+  // Restored after hydration (the server renders it empty): what was typed on the page before this one is still here.
+  useEffect(() => setDraftState(readDraft()), []);
+
+  const voice = useDictation((words) => {
+    const current = readDraft();
+    setDraft(`${current}${current && !/\s$/.test(current) ? ' ' : ''}${words}`.slice(0, MAX_LENGTH));
+  });
 
   function send() {
     if (!canSend) return;
@@ -375,11 +397,11 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
   }
 
   async function addFiles(files: File[]) {
-    const fresh: Chip[] = files.map((f) => ({ key: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 7)}`, name: f.name, status: 'reading' }));
+    const fresh: Chip[] = files.map((f) => ({ key: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 7)}`, name: f.name, status: 'uploading' }));
     setChips((all) => [...all, ...fresh]);
     await Promise.all(
       files.map(async (file, i) => {
-        const out = await readFile(file);
+        const out = await uploadFile(file);
         const key = fresh[i]!.key;
         setChips((all) => all.map((c) => (c.key === key ? (out.ok ? { ...c, status: 'ready', id: out.attachment.id, kind: out.attachment.kind } : { ...c, status: 'error', error: out.reason }) : c)));
       }),
@@ -390,10 +412,10 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
     const url = link.trim();
     if (!url) return;
     const key = `link-${Math.random().toString(36).slice(2, 8)}`;
-    setChips((all) => [...all, { key, name: url, status: 'reading', kind: 'link' }]);
+    setChips((all) => [...all, { key, name: url, status: 'uploading', kind: 'link' }]);
     setLink('');
     setLinking(false);
-    const out = await readLink(url);
+    const out = await uploadLink(url);
     setChips((all) => all.map((c) => (c.key === key ? (out.ok ? { ...c, status: 'ready', id: out.attachment.id, name: out.attachment.name, kind: out.attachment.kind } : { ...c, status: 'error', error: out.reason }) : c)));
   }
 
@@ -401,6 +423,10 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
     setChips((all) => all.filter((c) => c.key !== chip.key));
     if (chip.id) void dropAttachment(chip.id);
   }
+
+  const recording = voice.state === 'recording';
+  const transcribing = voice.state === 'transcribing';
+  const problemKey = { denied: 'voiceDenied', unsupported: 'voiceUnsupported', empty: 'voiceEmpty', failed: 'voiceFailed' } as const;
 
   return (
     <form
@@ -427,9 +453,9 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
         onKeyDown={onKeyDown}
         onPaste={attachable ? (e) => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void addFiles(files); } } : undefined}
         rows={rows}
-        maxHeight={160}
+        maxHeight={maxHeight}
         maxLength={MAX_LENGTH}
-        placeholder={over ? t('attDrop') : t('assistantPlaceholder')}
+        placeholder={over ? t('attDrop') : recording ? t('voiceRecording') : transcribing ? t('voiceTranscribing') : t('assistantPlaceholder')}
         aria-label={t('assistantPlaceholder')}
         disabled={busy}
         footer={
@@ -445,12 +471,28 @@ export function Composer({ busy, onSend, rows = 2, ref, attachable = false }: { 
                 </button>
               </span>
             )}
-            <Button type="submit" variant="primary" size="sm" loading={busy} disabled={!canSend} aria-label={t('assistantSend')} className="ml-auto size-8 !px-0">
+            <button
+              type="button"
+              disabled={busy || transcribing}
+              onClick={voice.toggle}
+              aria-label={recording ? t('voiceStop') : t('voiceStart')}
+              title={recording ? t('voiceStop') : t('voiceStart')}
+              aria-pressed={recording}
+              className={cx('ml-auto grid size-8 place-items-center rounded-full transition-colors duration-(--duration-micro) disabled:opacity-50', recording ? 'animate-pulse bg-danger text-paper' : 'text-muted hover:bg-paper-2 hover:text-ink')}
+            >
+              <Icon name={recording ? 'stop' : 'mic'} className="size-4" />
+            </button>
+            <Button type="submit" variant="primary" size="sm" loading={busy} disabled={!canSend} aria-label={t('assistantSend')} className="size-8 !px-0">
               {!busy && <Icon name="arrow" className="size-4 -rotate-90" />}
             </Button>
           </>
         }
       />
+      {(voice.problem || recording || transcribing) && (
+        <p role="status" className={cx('m-0 text-xs', voice.problem ? 'text-danger' : 'text-muted')}>
+          {voice.problem ? t(problemKey[voice.problem]) : recording ? t('voiceRecording') : t('voiceTranscribing')}
+        </p>
+      )}
     </form>
   );
 }

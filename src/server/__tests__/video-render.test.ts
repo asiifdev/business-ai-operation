@@ -55,11 +55,12 @@ class FakeNarration implements Narration {
   readonly engine = 'voxcpm2';
   readonly spoken: string[] = [];
   readonly seeds: Array<number | undefined> = [];
-  constructor(private readonly problem?: NarrationError) {}
+  constructor(private readonly problem?: NarrationError, private readonly speakProblem?: NarrationError) {}
   async check() {
     if (this.problem) throw this.problem;
   }
   async speak(text: string, _narrator: unknown, opts?: { seed?: number }) {
+    if (this.speakProblem) throw this.speakProblem;
     this.spoken.push(text);
     this.seeds.push(opts?.seed);
     return silentWav(1.2);
@@ -126,6 +127,19 @@ describe('video.render (D-086)', () => {
       expect(provider.imageCalls).toHaveLength(0);
       expect(video.hasFile).toBe(false);
     }
+  }, 60_000);
+
+  it('takes the narrator Personal, and when that voice is not saved in VoiceStudio the video says so rather than blaming VoiceStudio', async () => {
+    const o = await makeOrg();
+    const id = await projectFor(o);
+    expect(await requestRender(o.ownerCtx, id, { narrator: 'personal', aspect: 'story' })).toMatchObject({ ok: true });
+    expect((await getVideo(o.ownerCtx, id)).narrator).toBe('personal');
+    const provider = new FakeProvider({ image: [await pictures(1), await pictures(1)] });
+    expect(await renderVideo({ projectId: id }, deps(new FakeNarration(undefined, new NarrationError('voice_missing', 'no profile')), provider))).toEqual({ failed: true });
+    const video = await getVideo(o.ownerCtx, id);
+    expect(video.status).toBe('failed');
+    expect(video.error).toMatch(/belum tersimpan di VoiceStudio/);
+    expect(video.error).not.toMatch(/tidak bisa dihubungi/);
   }, 60_000);
 
   it('refuses a video that needs more pictures than the day has left, and a person cannot touch another person\'s video', async () => {

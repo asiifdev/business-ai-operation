@@ -32,6 +32,33 @@ export const titleFrom = (question: string): string => {
   return (line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line) || '…';
 };
 
+/**
+ * Conversations whose answer is being made right now (D-090), with when it began. The question is stored the moment it is sent, so
+ * another view of the same conversation (the full page after the side panel) shows it and waits for the answer instead of losing it.
+ * Kept in this server's memory: after a restart nothing is pending and an unanswered question simply offers "try again".
+ */
+const answering = new Map<string, number>();
+/** A run that never reported back (a crash) stops counting as pending after this long. */
+const ANSWER_MAX_MS = 5 * 60_000;
+
+export function beginAnswer(sessionId: string): void {
+  answering.set(sessionId, Date.now());
+}
+
+export function endAnswer(sessionId: string): void {
+  answering.delete(sessionId);
+}
+
+export function isAnswering(sessionId: string): boolean {
+  const since = answering.get(sessionId);
+  if (since === undefined) return false;
+  if (Date.now() - since > ANSWER_MAX_MS) {
+    answering.delete(sessionId);
+    return false;
+  }
+  return true;
+}
+
 const mine = (ctx: Ctx, id: string) => and(eq(assistantSessions.orgId, ctx.orgId), eq(assistantSessions.userId, ctx.userId), eq(assistantSessions.id, id));
 
 async function loadMine(tx: Pick<typeof db, 'select'>, ctx: Ctx, id: string): Promise<SessionRow> {
@@ -56,7 +83,7 @@ export async function listSessions(ctx: Ctx, opts: { q?: string; limit?: number 
     .limit(Math.min(opts.limit ?? 100, 200));
 }
 
-export async function getSession(ctx: Ctx, id: string): Promise<SessionRow & { messages: StoredMessage[] }> {
+export async function getSession(ctx: Ctx, id: string): Promise<SessionRow & { messages: StoredMessage[]; pending: boolean }> {
   assertCan(ctx, 'assistant.use');
   const session = await loadMine(db, ctx, id);
   const messages = await db
@@ -65,7 +92,7 @@ export async function getSession(ctx: Ctx, id: string): Promise<SessionRow & { m
     .where(and(eq(assistantMessages.orgId, ctx.orgId), eq(assistantMessages.sessionId, id)))
     .orderBy(asc(assistantMessages.seq))
     .limit(MESSAGE_LIMIT);
-  return { ...session, messages: await markUndone(ctx, messages as StoredMessage[]) };
+  return { ...session, messages: await markUndone(ctx, messages as StoredMessage[]), pending: isAnswering(id) };
 }
 
 interface AutoRanBody { autoRan?: Array<{ id?: unknown; undone?: boolean }> }
