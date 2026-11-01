@@ -175,6 +175,20 @@ export const AUDIT_DETAIL_KEY: Record<string, MessageKey> = {
   domain: 'auditKeyDomain',
   headline: 'auditKeyHeadline',
   stage: 'auditKeyStage',
+  // Organization settings (`org.settings_updated`): the same words as the form that changes them.
+  timezone: 'orgTimezone',
+  graceDays: 'orgGraceDays',
+  draftOffsetDays: 'orgDraftOffset',
+  schedulerHour: 'orgSchedulerHour',
+  briefingHour: 'orgBriefingHour',
+  invoiceNumberFormat: 'orgNumberFormat',
+  taxRateBps: 'auditKeyTaxRateBps',
+  stagnantDays: 'orgStagnantDays',
+  approvalTtlHours: 'orgApprovalTtl',
+  marketingDailyImageQuota: 'orgImageQuota',
+  bankName: 'orgBankName',
+  bankAccountName: 'orgBankAccountName',
+  bankAccountNumber: 'orgBankAccountNumber',
 };
 
 /** Internal ids, hashes and counters that mean nothing to a person reading the log. The entry itself still stores them. */

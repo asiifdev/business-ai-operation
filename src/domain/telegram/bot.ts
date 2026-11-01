@@ -30,6 +30,7 @@ import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from '
 import { pendingAttachments, readCaption } from './attachments';
 import { pendingPictures, makePicture, pictureJpeg } from './picture';
 import type { AttachResult } from '../assistant/attachments';
+import { imageQuotaStatus } from '../marketing/service';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
 export interface AutoRan { id: string; summary: string; undoable: boolean }
@@ -305,6 +306,12 @@ async function onPhoto(message: TelegramMessage, ctx: Ctx, person: LinkedUser, d
 }
 
 /** Makes the picture for the words and the waiting photos, and sends it with its caption (D-080). */
+/** Why no picture can be made: today's limit is used up, or the Owner set it to 0 (D-088). The two need different words. */
+async function quotaMessageKey(ctx: Ctx): Promise<MessageKey> {
+  const status = await imageQuotaStatus(ctx).catch(() => null);
+  return status?.quota === 0 ? 'mkQuotaOff' : 'mkQuotaReached';
+}
+
 async function onPicture(words: string, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
   const chatId = person.chatId;
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
@@ -317,7 +324,7 @@ async function onPicture(words: string, ctx: Ctx, person: LinkedUser, deps: BotD
   try {
     const result = await makePicture(ctx, words, files, deps.aiProvider);
     if (!result.ok) {
-      const key: MessageKey = result.reason === 'quota' ? 'mkQuotaReached' : result.reason === 'unverified' ? 'mkFreeUnverified' : result.reason === 'url' ? 'mkFreeUrlBad' : 'tgPictureFailed';
+      const key: MessageKey = result.reason === 'quota' ? await quotaMessageKey(ctx) : result.reason === 'unverified' ? 'mkFreeUnverified' : result.reason === 'url' ? 'mkFreeUrlBad' : 'tgPictureFailed';
       return send(deps, chatId, escapeHtml(t(key)));
     }
     await deliverPicture(result, ctx, person, deps);
@@ -501,7 +508,7 @@ async function onPosterCallback(cb: Callback, poster: NonNullable<ReturnType<typ
   try {
     const result = await makePoster(ctx, poster.scope, poster.purpose, deps.aiProvider);
     if (!result.ok) {
-      const key: MessageKey = result.reason === 'quota' ? 'mkQuotaReached' : 'tgPosterFailed';
+      const key: MessageKey = result.reason === 'quota' ? await quotaMessageKey(ctx) : 'tgPosterFailed';
       return send(deps, chatId, result.reason === 'failed' ? `${posterText(locale, key)}\n${escapeHtml(result.message)}` : posterText(locale, key));
     }
     if (!deps.client.sendPhoto) return send(deps, chatId, posterText(locale, 'tgPosterFailed'));

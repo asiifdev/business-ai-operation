@@ -98,7 +98,7 @@ export function FreeCreatePanel({ products, hasLogo, remaining, quota, onDone }:
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" loading={busy} disabled={noQuota || prompt.trim().length < 3} onClick={() => void make()}>{busy ? t('mkFreeMaking') : t('mkFreeMake')}</Button>
-        <span className="text-sm text-muted">{noQuota ? t('mkQuotaReached') : busy ? t('mkFreeWait') : t('mkQuota', { remaining, quota })}</span>
+        <span className="text-sm text-muted">{noQuota ? t(quota === 0 ? 'mkQuotaOff' : 'mkQuotaReached') : busy ? t('mkFreeWait') : t('mkQuota', { remaining, quota })}</span>
       </div>
       {notice && <p role="alert" className="m-0 text-sm text-warm-ink">{notice}</p>}
     </Panel>

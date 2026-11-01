@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
-import { auditLog, invoices, telegramLinks } from '../../../db/schema';
+import { auditLog, invoices, organizations, telegramLinks } from '../../../db/schema';
 import type { TelegramUpdate } from '../../../integrations/telegram/webhook';
 import sharp from 'sharp';
 import { TelegramError } from '../../../integrations/telegram/errors';
@@ -323,7 +323,20 @@ describe('poster from Telegram (D-066)', () => {
     expect(tg.sent.at(-1)!.text).toContain('dibuang');
   });
 
-  it('tells the person when the image limit is reached, and makes nothing', async () => {
+  it('says the limit is used up, not turned off, once the day\'s images are made (D-088)', async () => {
+    const provider = new FakeProvider({ chat: [say(PROMPT), COPY, say('Aksara membantu agensi kecil bekerja lebih rapi.')], image: [await images()] });
+    const { o, tg, deps, link, photos } = await posterOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    await db.update(organizations).set({ marketingDailyImageQuota: 1 }).where(eq(organizations.id, o.orgId));
+    await handleUpdate(pressUpdate(chatId, encodePosterMake('o', 'brand')), deps);
+    expect(photos).toHaveLength(1);
+    await handleUpdate(pressUpdate(chatId, encodePosterMake('o', 'brand')), deps);
+    expect(photos).toHaveLength(1);
+    expect(tg.sent.at(-1)!.text).toContain('Batas gambar hari ini tercapai');
+    expect(tg.sent.at(-1)!.text).not.toContain('dimatikan');
+  });
+
+  it('tells the person image making is turned off when the Owner set the limit to 0, and makes nothing', async () => {
     const provider = new FakeProvider();
     const { o, tg, deps, link, photos } = await posterOrg(provider);
     const chatId = await link(o.ownerCtx);
@@ -335,7 +348,7 @@ describe('poster from Telegram (D-066)', () => {
     }
     expect(photos).toHaveLength(0);
     expect(provider.imageCalls).toHaveLength(0);
-    expect(tg.sent.at(-1)!.text).toContain('Batas gambar');
+    expect(tg.sent.at(-1)!.text).toContain('dimatikan');
   });
 
   it('refuses a chat that is not linked, and a product that belongs to another organization', async () => {

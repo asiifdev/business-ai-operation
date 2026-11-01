@@ -328,7 +328,7 @@ function MakePanel({ options, onDone }: { options: Options; onDone: () => void }
             {refused && <ErrorBox>{refused}</ErrorBox>}
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" variant="primary" loading={busy} disabled={noQuota || !productId}>{busy ? t('mkGenerating') : t('mkGenerate')}</Button>
-              <span className="text-sm text-muted">{noQuota ? t('mkQuotaReached') : t('mkQuota', { remaining: options.quota.remaining, quota: options.quota.quota })}</span>
+              <span className="text-sm text-muted">{noQuota ? t(options.quota.quota === 0 ? 'mkQuotaOff' : 'mkQuotaReached') : t('mkQuota', { remaining: options.quota.remaining, quota: options.quota.quota })}</span>
             </div>
           </>
         )}

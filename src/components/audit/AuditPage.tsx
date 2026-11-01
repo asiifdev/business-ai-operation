@@ -26,7 +26,7 @@ type Entry = Page['entries'][number];
 function detail(summary: unknown, t: (key: MessageKey) => string): string {
   if (!summary || typeof summary !== 'object') return '';
   const words = (key: string) => (AUDIT_DETAIL_KEY[key] ? t(AUDIT_DETAIL_KEY[key]) : key.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
-  const show = (key: string, v: unknown): string => (typeof v === 'number' && (key === 'total' || key === 'amount') ? formatRupiah(v) : typeof v === 'string' && v in STAGE_LABEL && (key === 'to' || key === 'from') ? t(STAGE_LABEL[v as keyof typeof STAGE_LABEL]) : key === 'tool' && typeof v === 'string' && ACT_TOOL_LABEL[v] ? t(ACT_TOOL_LABEL[v]) : typeof v === 'boolean' ? (v ? '✓' : '–') : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const show = (key: string, v: unknown): string => (typeof v === 'number' && (key === 'total' || key === 'amount') ? formatRupiah(v) : typeof v === 'string' && v in STAGE_LABEL && (key === 'to' || key === 'from') ? t(STAGE_LABEL[v as keyof typeof STAGE_LABEL]) : key === 'tool' && typeof v === 'string' && ACT_TOOL_LABEL[v] ? t(ACT_TOOL_LABEL[v]) : v === 'changed' && /^bank/.test(key) ? t('auditValueChanged') : typeof v === 'boolean' ? (v ? '✓' : '–') : typeof v === 'object' ? JSON.stringify(v) : String(v));
   return Object.entries(summary as Record<string, unknown>)
     .filter(([k, v]) => !AUDIT_DETAIL_HIDDEN.has(k) && !/Id$/.test(k) && v !== null && v !== '')
     .map(([k, v]) => {
