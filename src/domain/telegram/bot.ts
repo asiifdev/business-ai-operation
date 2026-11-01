@@ -29,7 +29,9 @@ import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
 import { pendingAttachments, readCaption } from './attachments';
 import { pendingPictures, makePicture, pictureJpeg } from './picture';
+import type { PhotoUse } from './photo-intent';
 import type { AttachResult } from '../assistant/attachments';
+import type { Attachment } from '../marketing/free';
 import { imageQuotaStatus } from '../marketing/service';
 import { makePoster, posterPurposeKeyboard, posterScopeKeyboard, posterText } from './poster';
 
@@ -51,6 +53,8 @@ export interface BotDeps {
   attach?: (ctx: Ctx, file: { name: string; bytes: Uint8Array }) => Promise<AttachResult>;
   /** Short speech to text for a chat voice note (M09 STT). Left out, a voice note is treated as a meeting recording. */
   transcribe?: (ctx: Ctx, audio: Uint8Array, person: LinkedUser) => Promise<{ ok: true; text: string } | { ok: false; message: string }>;
+  /** Whether photos with these words ask for a picture or are something to read (D-092, Muse Spark). Left out, they make a picture. */
+  photoUse?: (ctx: Ctx, words: string, files: readonly Attachment[], person: LinkedUser) => Promise<PhotoUse>;
 }
 
 /** A voice note up to this long is a message to the assistant; anything longer is a recording (PRD section 6). */
@@ -141,8 +145,8 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
   if (message.document || message.video || message.video_note || (message.photo && readPhoto !== null)) return onAttachment(message, readPhoto, ctx, person, deps);
   if (message.photo) return onPhoto(message, ctx, person, deps);
   if (!text) return;
-  // Photos were sent and the words come now: that is the request for a picture (D-080).
-  if (pendingPictures.has(chatId, deps.clock.now()) && can(person.role, 'marketing.use')) return onPicture(text.slice(0, 1500), ctx, person, deps);
+  // Photos were sent and the words come now: they say what the photos are for (D-092).
+  if (pendingPictures.has(chatId, deps.clock.now())) return onPhotoWords(text, ctx, person, deps);
   if (!deps.ask) return send(deps, chatId, helpText(person.locale));
   if (!limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
 
@@ -263,10 +267,16 @@ async function onAttachment(message: TelegramMessage, readPhoto: string | null, 
   const words = (readPhoto ?? message.caption ?? '').trim();
   // The other files of an album each carry no words; one confirmation per file is enough and the question comes next.
   if (!words) return send(deps, chatId, escapeHtml(t('tgAttachReceived', { name })));
+  return answerWithAttachments(words, ctx, person, deps);
+}
+
+/** Asks the assistant with the files of this chat, and sends the answer, actions it ran and pictures it made. */
+async function answerWithAttachments(words: string, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const chatId = person.chatId;
   await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
   const pictures: string[] = [];
   const autoRan: AutoRan[] = [];
-  const answer = await deps.ask(ctx, words.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item), attachmentIds: pendingAttachments.ids(chatId, deps.clock.now()) });
+  const answer = await deps.ask!(ctx, words.slice(0, 2000), person, { onPicture: (id) => pictures.push(id), onAutoRan: (item) => autoRan.push(item), attachmentIds: pendingAttachments.ids(chatId, deps.clock.now()) });
   for (const part of answerToTelegramParts(answer)) await send(deps, chatId, part);
   await sendAutoRan(autoRan, person, deps);
   await sendPictures(pictures, ctx, person, deps);
@@ -279,12 +289,13 @@ const PICTURES_PER_MINUTE = 3;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * A photo is material for a picture (D-080). With words in its caption the picture is made at once; without, the photo waits
- * for the next message of this chat. An album gives all its photos to one request. Photos are only looked at, never stored.
+ * A photo waits for its words: the caption, or else the next message of this chat. Then the words and the photo together
+ * decide whether a picture is wanted (D-080) or the photo is something to read (D-092). An album gives all its photos to one
+ * request. Photos are only looked at, never stored as they are.
  */
 async function onPhoto(message: TelegramMessage, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
   const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(person.locale, key, vars);
-  if (!can(person.role, 'marketing.use')) return send(deps, person.chatId, escapeHtml(t('errForbidden')));
+  if (!can(person.role, 'marketing.use') && !can(person.role, 'assistant.use')) return send(deps, person.chatId, escapeHtml(t('errForbidden')));
   const photo = pickPhoto(message.photo);
   if (!photo) return send(deps, person.chatId, escapeHtml(t('tgPictureTooLarge')));
   let bytes: Uint8Array;
@@ -302,7 +313,45 @@ async function onPhoto(message: TelegramMessage, ctx: Ctx, person: LinkedUser, d
     return send(deps, person.chatId, escapeHtml(t('tgPictureReceived', { n: waiting })));
   }
   if (message.media_group_id) await sleep(ALBUM_WAIT_MS);
-  return onPicture(words.slice(0, 1500), ctx, person, deps);
+  return onPhotoWords(words, ctx, person, deps);
+}
+
+/**
+ * The words for the waiting photos have come. Muse Spark looks at both and says whether a picture is wanted or the photos are
+ * context to read, such as a screenshot of an earlier conversation (D-092). Without the right to make pictures they are read.
+ */
+async function onPhotoWords(words: string, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const t = (key: MessageKey) => translate(person.locale, key);
+  const chatId = person.chatId;
+  const canPicture = can(person.role, 'marketing.use');
+  const canRead = can(person.role, 'assistant.use') && Boolean(deps.attach && deps.ask);
+  const decide = canPicture && canRead && Boolean(deps.photoUse);
+  // Deciding and reading are model calls, so they count like a question; a picture has its own limit.
+  if ((decide || !canPicture) && !limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
+  let use: PhotoUse = canPicture ? 'picture' : 'read';
+  if (decide) {
+    await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
+    use = await deps.photoUse!(ctx, words, pendingPictures.peek(chatId, deps.clock.now()), person);
+  }
+  if (use === 'picture') return onPicture(words.slice(0, 1500), ctx, person, deps);
+  if (!canRead) return send(deps, chatId, escapeHtml(t('errForbidden')));
+  return onReadPhotos(words, ctx, person, deps);
+}
+
+/** The waiting photos are read like any attachment (D-083) and the words are asked about them. */
+async function onReadPhotos(words: string, ctx: Ctx, person: LinkedUser, deps: BotDeps) {
+  const t = (key: MessageKey) => translate(person.locale, key);
+  const chatId = person.chatId;
+  await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
+  for (const file of pendingPictures.take(chatId, deps.clock.now())) {
+    const added = await deps.attach!(ctx, file);
+    if (!added.ok) {
+      await send(deps, chatId, escapeHtml(`${file.name}: ${t(ATTACH_REFUSALS[added.reason] ?? 'attErrGeneric')}`));
+      continue;
+    }
+    pendingAttachments.add(chatId, added.attachment.id, deps.clock.now());
+  }
+  return answerWithAttachments(words, ctx, person, deps);
 }
 
 /** Makes the picture for the words and the waiting photos, and sends it with its caption (D-080). */

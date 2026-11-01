@@ -1,0 +1,2 @@
+ALTER TABLE "assistant_sessions" ADD COLUMN "channel" text DEFAULT 'web' NOT NULL;--> statement-breakpoint
+ALTER TABLE "assistant_sessions" ADD CONSTRAINT "assistant_sessions_channel_ck" CHECK ("assistant_sessions"."channel" in ('web', 'telegram'));

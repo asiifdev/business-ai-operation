@@ -12,10 +12,12 @@ import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { Badge } from '../ui/Badge';
-import { Button, buttonClasses } from '../ui/Button';
+import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
+import { ConversionPackages } from './ConversionPackages';
+import { LeadDocuments } from './LeadDocuments';
 import { LeadForm, leadPayload, type LeadValues } from './LeadForm';
 import { STAGE_LABEL, STAGE_TONE } from './stages';
 
@@ -35,6 +37,8 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
   const [reopening, setReopening] = useState(false);
   const [reopenNote, setReopenNote] = useState('');
   const [nameTaken, setNameTaken] = useState(false);
+  /** Packages of the final proposal kept for subscriptions; null until the plan has loaded (D-093). */
+  const [packageIds, setPackageIds] = useState<string[] | null>(null);
 
   async function act(fn: () => Promise<unknown>, after?: () => void) {
     setBusy(true);
@@ -120,11 +124,7 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
         </Panel>
       )}
 
-      {!closed && !lead.archivedAt && !lead.isDraft && isManager && (
-        <Panel aria-label={t('docCreateProposal')} className="flex flex-wrap items-center gap-3">
-          <a href={`/app/dokumen/baru?leadId=${id}`} className={buttonClasses('secondary', 'sm')}>{t('docCreateProposal')}</a>
-        </Panel>
-      )}
+      {!lead.isDraft && <LeadDocuments leadId={id} canCreate={!closed && !lead.archivedAt && isManager} />}
 
       {lead.stage === 'won' && isManager && (
         <Panel aria-label={t('leadConvert')} className="flex flex-col items-start gap-3">
@@ -136,8 +136,9 @@ export function LeadDetail({ id, role, timezone }: { id: string; role: Role; tim
           ) : (
             <>
               <p className="m-0 max-w-prose text-ink">{t('leadConvertHelp')}</p>
-              <ConfirmButton message={t('cfmConvertLead')} variant="primary" busy={busy} onConfirm={() => act(() => api<{ clientId: string }>('POST', `/api/leads/${id}/convert`, { confirm: true, mode: 'create' }).then((r) => window.location.assign(`/app/klien/${r.clientId}`)), () => undefined)}>{t('leadConvert')}</ConfirmButton>
-              {nameTaken && <LinkExisting leadId={id} name={lead.name} />}
+              <ConversionPackages leadId={id} value={packageIds} onChange={setPackageIds} />
+              <ConfirmButton message={t(packageIds?.length ? 'cfmConvertLeadSubs' : 'cfmConvertLead', { n: packageIds?.length ?? 0 })} variant="primary" busy={busy} onConfirm={() => act(() => api<{ clientId: string }>('POST', `/api/leads/${id}/convert`, { confirm: true, mode: 'create', packageIds: packageIds ?? [] }).then((r) => window.location.assign(`/app/klien/${r.clientId}`)), () => undefined)}>{t('leadConvert')}</ConfirmButton>
+              {nameTaken && <LinkExisting leadId={id} name={lead.name} packageIds={packageIds ?? []} />}
             </>
           )}
         </Panel>
@@ -194,7 +195,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
 }
 
 /** The client name is taken: offer the clients with that name so the lead can be linked to one instead of duplicated (BR-M04-05). */
-function LinkExisting({ leadId, name }: { leadId: string; name: string }) {
+function LinkExisting({ leadId, name, packageIds }: { leadId: string; name: string; packageIds: string[] }) {
   const t = useT();
   const matches = useLoad(() => api<{ clients: Array<Jsonify<ClientRow>> }>('GET', `/api/clients?${new URLSearchParams({ q: name })}`), [name]);
   const [clientId, setClientId] = useState('');
@@ -205,7 +206,7 @@ function LinkExisting({ leadId, name }: { leadId: string; name: string }) {
     setBusy(true);
     setError(null);
     try {
-      await api('POST', `/api/leads/${leadId}/convert`, { confirm: true, mode: 'link', clientId });
+      await api('POST', `/api/leads/${leadId}/convert`, { confirm: true, mode: 'link', clientId, packageIds });
       window.location.assign(`/app/klien/${clientId}`);
     } catch (err) {
       setError(err);

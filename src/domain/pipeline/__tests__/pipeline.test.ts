@@ -1,11 +1,14 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
-import { auditLog, clients, tasks } from '../../../db/schema';
+import { auditLog, clients, invoices, subscriptions, tasks } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import type { Ctx } from '../../ctx';
+import { createSubscription, generateRenewalDrafts, getSubscription } from '../../billing/subscriptions';
+import { createDocument, finalizeDocument, listDocuments } from '../../documents/service';
 import { createClient } from '../../portfolio/clients';
-import { acceptLeadDraft, convertLeadToClient, createLead, getLead, getLeadFormOptions, getPipelineSummary, listLeads, listStagnantLeads, moveLead, reopenLead, setLeadArchived, updateLead } from '../leads';
+import { createPackage, createProduct } from '../../portfolio/products';
+import { acceptLeadDraft, convertLeadToClient, createLead, getConversionPlan, getLead, getLeadFormOptions, getPipelineSummary, listLeads, listStagnantLeads, moveLead, reopenLead, setLeadArchived, updateLead } from '../leads';
 
 afterAll(async () => {
   await pg.end();
@@ -207,5 +210,62 @@ describe('tenant isolation (CR-02)', () => {
     await expect(getLead(b.ownerCtx, id)).rejects.toMatchObject({ code: 'not_found' });
     await expect(moveLead(b.ownerCtx, id, 'exploring')).rejects.toMatchObject({ code: 'not_found' });
     await expect(updateLead(b.ownerCtx, id, { name: 'Diubah' })).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('from proposal to subscription and first invoice (D-093)', () => {
+  async function wonWithProposal(quantity = 2) {
+    const o = await makeOrg('2026-11-02T03:00:00Z');
+    const product = await createProduct(o.ownerCtx, { name: 'Kasir POS', currentVersion: '1.0.0' });
+    const pkg = await createPackage(o.ownerCtx, product.id, { name: 'Bisnis', monthlyPrice: 500_000 });
+    const other = await createPackage(o.ownerCtx, product.id, { name: 'Dasar', monthlyPrice: 150_000 });
+    const { id: leadId } = await createLead(o.ownerCtx, { name: 'Kafe Senja' });
+    const doc = await createDocument(o.ownerCtx, { kind: 'proposal', title: 'Proposal Kafe Senja', leadId, items: [{ packageId: pkg.id, quantity }] });
+    return { o, leadId, doc, pkg, other };
+  }
+
+  it('a final proposal moves a lead that is still being explored into the Proposal stage', async () => {
+    const { o, leadId, doc } = await wonWithProposal();
+    expect((await getLead(o.ownerCtx, leadId)).stage).toBe('new');
+    await finalizeDocument(o.ownerCtx, doc.id);
+    expect((await getLead(o.ownerCtx, leadId)).stage).toBe('proposal');
+    const audit = await db.select().from(auditLog).where(and(eq(auditLog.orgId, o.orgId), eq(auditLog.entityId, leadId), eq(auditLog.action, 'lead.stage_changed')));
+    expect(audit.at(-1)!.summary).toMatchObject({ from: 'new', to: 'proposal' });
+  });
+
+  it('turns the kept packages into subscriptions at the agreed price, drafts the first invoice at once, and shows the proposal on the client', async () => {
+    const { o, leadId, doc, pkg, other } = await wonWithProposal(2);
+    await finalizeDocument(o.ownerCtx, doc.id);
+    await moveLead(o.ownerCtx, leadId, 'negotiation');
+    await moveLead(o.ownerCtx, leadId, 'won');
+
+    const plan = await getConversionPlan(o.ownerCtx, leadId);
+    expect(plan.lines).toEqual([expect.objectContaining({ packageId: pkg.id, quantity: 2, unitPrice: 500_000, amount: 1_000_000 })]);
+    // A package that is not in the final proposal is refused, and nothing is left behind.
+    await expect(convertLeadToClient(o.ownerCtx, leadId, { mode: 'create', packageIds: [other.id] })).rejects.toMatchObject({ code: 'validation' });
+    expect(await db.select().from(clients).where(eq(clients.orgId, o.orgId))).toHaveLength(0);
+
+    const out = await convertLeadToClient(o.ownerCtx, leadId, { mode: 'create', packageIds: [pkg.id] });
+    const subs = await db.select().from(subscriptions).where(eq(subscriptions.orgId, o.orgId));
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toMatchObject({ clientId: out.clientId, packageId: pkg.id, amount: 1_000_000, status: 'active' });
+    expect(out.firstInvoiceIds).toHaveLength(1);
+    const drafts = await db.select().from(invoices).where(and(eq(invoices.orgId, o.orgId), eq(invoices.subscriptionId, subs[0].id)));
+    expect(drafts).toEqual([expect.objectContaining({ id: out.firstInvoiceIds[0], status: 'draft', total: 1_000_000 })]);
+    // The scheduler later finds the period already drafted.
+    expect((await generateRenewalDrafts(o.orgId, o.ownerCtx.clock.now())).created).toHaveLength(0);
+    const todo = await db.select().from(tasks).where(and(eq(tasks.orgId, o.orgId), eq(tasks.leadId, leadId)));
+    expect(todo.map((t) => t.title)).not.toContain('Buat langganan');
+    expect((await listDocuments(o.ownerCtx, { clientId: out.clientId })).map((d) => d.id)).toEqual([doc.id]);
+  });
+
+  it('a subscription typed by hand gets its first draft invoice at once when it is due soon, and later otherwise', async () => {
+    const { o, pkg } = await wonWithProposal();
+    const client = await createClient(o.ownerCtx, { name: 'Toko Berkah' });
+    const soon = await createSubscription(o.ownerCtx, { clientId: client.id, packageId: pkg.id });
+    expect(soon.firstInvoiceId).not.toBeNull();
+    const later = await createSubscription(o.ownerCtx, { clientId: client.id, packageId: pkg.id, nextDueDate: '2026-12-20' });
+    expect(later.firstInvoiceId).toBeNull();
+    expect((await getSubscription(o.ownerCtx, later.id)).nextDraftOn).toBe('2026-12-13');
   });
 });

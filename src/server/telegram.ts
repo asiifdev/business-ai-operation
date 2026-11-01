@@ -1,19 +1,20 @@
 import { askAssistant } from '../ai/assistant';
-import { addAndReadAttachment, attachmentsForChat } from '../domain/assistant/attachments';
+import { addAndReadAttachment, attachmentsForChat, bindAttachments } from '../domain/assistant/attachments';
 import { getAiProvider } from '../ai';
 import { transcribeOnce } from '../ai/run';
 import { toSpokenIndonesian } from '../ai/spoken';
 import { getSpeechProvider } from '../integrations/speech';
 import { AudioError, toWavSegments } from './audio';
 import { db } from '../db/client';
+import { appendTurns, telegramConversation } from '../domain/assistant/sessions';
 import type { BotDeps } from '../domain/telegram/bot';
-import { ChatHistory } from '../domain/telegram/history';
+import { decidePhotoUse } from '../domain/telegram/photo-intent';
 import { TelegramClient } from '../integrations/telegram/client';
 import { env } from '../lib/env';
 import { type Clock, systemClock } from '../lib/clock';
 import { translate } from '../lib/i18n';
 
-const globalForBot = globalThis as unknown as { __telegram?: TelegramClient; __botUsername?: Promise<string>; __chatHistory?: ChatHistory };
+const globalForBot = globalThis as unknown as { __telegram?: TelegramClient; __botUsername?: Promise<string> };
 
 /** Whether the bot is configured on this server. Without a token every Telegram feature stays off, quietly. */
 export const telegramEnabled = (): boolean => Boolean(env('TELEGRAM_BOT_TOKEN'));
@@ -68,19 +69,19 @@ export function botDeps(clock: Clock = systemClock): BotDeps {
       }
     },
     attach: (ctx, file) => addAndReadAttachment(ctx, { file }, { toWav: toWavSegments }),
+    photoUse: (ctx, words, files, person) => decidePhotoUse(ctx, words, files, person.locale),
     ask: async (ctx, question, person, opts) => {
-      globalForBot.__chatHistory ??= new ChatHistory(clock);
-      const history = globalForBot.__chatHistory;
-      const before = history.recent(person.userId);
-      const attachments = opts?.attachmentIds?.length ? await attachmentsForChat(ctx, null, opts.attachmentIds) : [];
-      const reply = await askAssistant(db, ctx, { attachments, request: { messages: [...before, { role: 'user', content: question }] }, organizationName: person.organizationName, locale: person.locale, channel: opts?.spoken ? 'voice' : 'text' });
+      // The conversation is stored like the web's (D-092), so a restart of the server does not lose it.
+      const { sessionId, history } = await telegramConversation(ctx);
+      const attachments = sessionId || opts?.attachmentIds?.length ? await attachmentsForChat(ctx, sessionId, opts?.attachmentIds ?? []) : [];
+      const reply = await askAssistant(db, ctx, { attachments, request: { messages: [...history, { role: 'user', content: question }] }, organizationName: person.organizationName, locale: person.locale, channel: opts?.spoken ? 'voice' : 'text' });
+      const added = attachments.filter((a) => a.isNew).map((a) => ({ id: a.id, name: a.name, kind: a.kind }));
+      const stored = await appendTurns(ctx, sessionId, [{ kind: 'user', body: { text: question, ...(added.length ? { attachments: added } : {}) } }, { kind: 'assistant', body: reply }], question, 'telegram');
+      await bindAttachments(ctx, added.map((a) => a.id), stored);
       // Pictures made while answering go out as photos after the text (D-080).
       for (const draft of reply.drafts) if (draft.tool === 'make_picture') opts?.onPicture?.(draft.id);
       for (const done of reply.autoRan) if (done.executed) opts?.onAutoRan?.({ id: done.id, summary: done.summary, undoable: done.undoable });
-      if (reply.ok && reply.text) {
-        history.remember(person.userId, question, reply.text);
-        return reply.text;
-      }
+      if (reply.ok && reply.text) return reply.text;
       return reply.message ?? translate(person.locale, 'tgAssistantFailed');
     },
   };

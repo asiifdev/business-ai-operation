@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import type { Tx } from '../../db/client';
@@ -34,42 +34,58 @@ export const subscriptionPatchSchema = z.object({
   graceDays: z.number().int().min(0).max(365).nullable().optional(),
 });
 
+/**
+ * A new subscription, then at once the draft invoice of its first period when that period is already within the draft
+ * offset (D-093). The same idempotent rule as the daily scheduler makes it, so the scheduler later skips it; a period
+ * further away still waits for the scheduler.
+ */
 export async function createSubscription(ctx: Ctx, raw: z.input<typeof subscriptionSchema>) {
   assertCan(ctx, 'billing.write');
   const input = subscriptionSchema.parse(raw);
-  return db.transaction(async (tx) => {
-    const org = await loadOrgBilling(tx, ctx.orgId);
-    const today = todayIn(org.timezone, ctx.clock.now());
-    const [client] = await tx.select().from(clients).where(and(eq(clients.orgId, ctx.orgId), eq(clients.id, input.clientId)));
-    if (!client) throw new DomainError('not_found', 'client');
-    if (client.archivedAt) throw new DomainError('invalid_state', 'archived client');
-    const [pkg] = await tx.select().from(packages).where(and(eq(packages.orgId, ctx.orgId), eq(packages.id, input.packageId)));
-    if (!pkg) throw new DomainError('not_found', 'package');
-    if (pkg.archivedAt) throw new DomainError('invalid_state', 'archived package');
-    if (input.deploymentId) {
-      const [dep] = await tx.select().from(deployments).where(and(eq(deployments.orgId, ctx.orgId), eq(deployments.id, input.deploymentId)));
-      if (!dep) throw new DomainError('not_found', 'deployment');
-      if (dep.clientId !== input.clientId || dep.productId !== pkg.productId) throw new DomainError('validation', 'deployment does not match client and product');
-    }
-    const startedOn = input.startedOn ?? today;
-    const [row] = await tx
-      .insert(subscriptions)
-      .values({
-        orgId: ctx.orgId,
-        clientId: input.clientId,
-        productId: pkg.productId,
-        packageId: pkg.id,
-        deploymentId: input.deploymentId ?? null,
-        amount: input.amount ?? pkg.monthlyPrice * input.intervalMonths,
-        intervalMonths: input.intervalMonths,
-        startedOn,
-        nextDueDate: input.nextDueDate ?? startedOn,
-        graceDays: input.graceDays ?? null,
-      })
-      .returning({ id: subscriptions.id });
-    await recordAudit(tx, who(ctx), { action: 'subscription.created', entityType: 'subscription', entityId: row.id, summary: { clientId: input.clientId, packageId: pkg.id } });
-    return { id: row.id };
-  });
+  const created = await db.transaction((tx) => insertSubscription(tx, ctx, input));
+  const firstInvoiceId = await draftFirstInvoices(ctx.orgId, ctx.clock.now(), [created.id]);
+  return { id: created.id, firstInvoiceId: firstInvoiceId[0] ?? null };
+}
+
+/** The draft invoices of the first period of these new subscriptions, when due within the offset (D-093). */
+export async function draftFirstInvoices(orgId: string, now: Date, subscriptionIds: string[]): Promise<string[]> {
+  if (subscriptionIds.length === 0) return [];
+  return (await generateRenewalDrafts(orgId, now, { subscriptionIds })).created;
+}
+
+/** Inserts one subscription inside the caller's transaction, after checking client, package and deployment. */
+export async function insertSubscription(tx: Tx, ctx: Ctx, input: z.output<typeof subscriptionSchema>) {
+  const org = await loadOrgBilling(tx, ctx.orgId);
+  const today = todayIn(org.timezone, ctx.clock.now());
+  const [client] = await tx.select().from(clients).where(and(eq(clients.orgId, ctx.orgId), eq(clients.id, input.clientId)));
+  if (!client) throw new DomainError('not_found', 'client');
+  if (client.archivedAt) throw new DomainError('invalid_state', 'archived client');
+  const [pkg] = await tx.select().from(packages).where(and(eq(packages.orgId, ctx.orgId), eq(packages.id, input.packageId)));
+  if (!pkg) throw new DomainError('not_found', 'package');
+  if (pkg.archivedAt) throw new DomainError('invalid_state', 'archived package');
+  if (input.deploymentId) {
+    const [dep] = await tx.select().from(deployments).where(and(eq(deployments.orgId, ctx.orgId), eq(deployments.id, input.deploymentId)));
+    if (!dep) throw new DomainError('not_found', 'deployment');
+    if (dep.clientId !== input.clientId || dep.productId !== pkg.productId) throw new DomainError('validation', 'deployment does not match client and product');
+  }
+  const startedOn = input.startedOn ?? today;
+  const [row] = await tx
+    .insert(subscriptions)
+    .values({
+      orgId: ctx.orgId,
+      clientId: input.clientId,
+      productId: pkg.productId,
+      packageId: pkg.id,
+      deploymentId: input.deploymentId ?? null,
+      amount: input.amount ?? pkg.monthlyPrice * input.intervalMonths,
+      intervalMonths: input.intervalMonths,
+      startedOn,
+      nextDueDate: input.nextDueDate ?? startedOn,
+      graceDays: input.graceDays ?? null,
+    })
+    .returning({ id: subscriptions.id });
+  await recordAudit(tx, who(ctx), { action: 'subscription.created', entityType: 'subscription', entityId: row.id, summary: { clientId: input.clientId, packageId: pkg.id } });
+  return { id: row.id };
 }
 
 export async function updateSubscription(ctx: Ctx, id: string, raw: z.input<typeof subscriptionPatchSchema>) {
@@ -158,8 +174,14 @@ export async function getSubscription(ctx: Ctx, id: string) {
   const [row] = (await listSubscriptions(ctx)).filter((s) => s.id === id);
   if (!row) throw new DomainError('not_found', 'subscription');
   const [full] = await db.select().from(subscriptions).where(and(eq(subscriptions.orgId, ctx.orgId), eq(subscriptions.id, id)));
-  const history = await db.select({ id: invoices.id, number: invoices.number, status: invoices.status, dueDate: invoices.dueDate, total: invoices.total }).from(invoices).where(and(eq(invoices.orgId, ctx.orgId), eq(invoices.subscriptionId, id))).orderBy(asc(invoices.dueDate));
-  return { subscription: row, graceDays: full.graceDays, startedOn: full.startedOn, stoppedOn: full.stoppedOn, invoices: history };
+  const history = await db.select({ id: invoices.id, number: invoices.number, status: invoices.status, dueDate: invoices.dueDate, total: invoices.total, periodKey: invoices.periodKey }).from(invoices).where(and(eq(invoices.orgId, ctx.orgId), eq(invoices.subscriptionId, id))).orderBy(asc(invoices.dueDate));
+  // When the draft of the coming period will appear, so an empty list is not a mystery (D-093).
+  const org = await loadOrgBilling(db, ctx.orgId);
+  const today = todayIn(org.timezone, ctx.clock.now());
+  const pending = full.status === 'active' && !history.some((i) => i.periodKey === periodKey(full.nextDueDate));
+  const draftOn = addDays(full.nextDueDate, -org.draftOffsetDays);
+  const nextDraftOn = pending ? (draftOn < today ? today : draftOn) : null;
+  return { subscription: row, graceDays: full.graceDays, startedOn: full.startedOn, stoppedOn: full.stoppedOn, invoices: history.map(({ periodKey: _, ...i }) => i), nextDraftOn, draftOffsetDays: org.draftOffsetDays };
 }
 
 /**
@@ -168,7 +190,7 @@ export async function getSubscription(ctx: Ctx, id: string) {
  * attempt into a skipped row, so it never makes a duplicate. Each subscription runs in its own transaction, so one failure
  * cannot undo the others. Runs as the system, not as a person.
  */
-export async function generateRenewalDrafts(orgId: string, now: Date): Promise<{ created: string[]; skipped: number }> {
+export async function generateRenewalDrafts(orgId: string, now: Date, opts: { subscriptionIds?: string[] } = {}): Promise<{ created: string[]; skipped: number }> {
   const org = await loadOrgBilling(db, orgId);
   const today = todayIn(org.timezone, now);
   const horizon = addDays(today, org.draftOffsetDays);
@@ -177,7 +199,7 @@ export async function generateRenewalDrafts(orgId: string, now: Date): Promise<{
     .from(subscriptions)
     .innerJoin(products, and(eq(products.orgId, subscriptions.orgId), eq(products.id, subscriptions.productId)))
     .innerJoin(packages, and(eq(packages.orgId, subscriptions.orgId), eq(packages.id, subscriptions.packageId)))
-    .where(and(eq(subscriptions.orgId, orgId), eq(subscriptions.status, 'active'), lte(subscriptions.nextDueDate, horizon)))
+    .where(and(eq(subscriptions.orgId, orgId), eq(subscriptions.status, 'active'), lte(subscriptions.nextDueDate, horizon), opts.subscriptionIds ? inArray(subscriptions.id, opts.subscriptionIds) : undefined))
     .orderBy(asc(subscriptions.nextDueDate));
 
   const audit: AuditWho = { orgId, actor: 'system:rule.renewal_draft' };

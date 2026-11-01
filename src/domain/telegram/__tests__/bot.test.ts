@@ -424,6 +424,39 @@ describe('pictures from Telegram (D-080)', () => {
     expect(provider.editCalls[0]!.images).toHaveLength(2);
   });
 
+  it('reads a screenshot as context instead of making a picture when Spark says so (D-092)', async () => {
+    const provider = new FakeProvider({});
+    const { o, tg, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    const decided: Array<{ words: string; files: number }> = [];
+    const read: string[] = [];
+    const asked: Array<{ q: string; ids?: string[] }> = [];
+    const d: BotDeps = {
+      ...deps,
+      photoUse: async (_c, words, files) => (decided.push({ words, files: files.length }), 'read'),
+      attach: async (_c, file) => (read.push(file.name), { ok: true as const, attachment: { id: 'att-shot', name: file.name, kind: 'image' as const, summary: 's', sizeBytes: 1 } }),
+      ask: async (_c, q, _p, opts) => (asked.push({ q, ids: opts?.attachmentIds }), 'Baik, saya lanjutkan proposalnya.'),
+    };
+    await handleUpdate(photoUpdate(chatId, { caption: 'untuk perintah yang ini' }), d);
+    expect(decided).toEqual([{ words: 'untuk perintah yang ini', files: 1 }]);
+    expect(read).toHaveLength(1);
+    expect(asked).toEqual([{ q: 'untuk perintah yang ini', ids: ['att-shot'] }]);
+    expect(photos).toHaveLength(0);
+    expect(provider.editCalls).toHaveLength(0);
+    expect(tg.sent.at(-1)!.text).toContain('saya lanjutkan proposalnya');
+  });
+
+  it('still makes the picture when Spark says a picture is wanted, also for words that come after the photo', async () => {
+    const provider = new FakeProvider({ chat: [read(), BRIEF, read('Kelola sewa lebih rapi')], image: [await made()] });
+    const { o, deps, link, photos } = await pictureOrg(provider);
+    const chatId = await link(o.ownerCtx);
+    const d: BotDeps = { ...deps, photoUse: async () => 'picture', attach: async () => { throw new Error('a picture request must not be read'); } };
+    await handleUpdate(photoUpdate(chatId), d);
+    await handleUpdate(textUpdate(chatId, 'Poster fitur baru, judul "Kelola sewa lebih rapi"'), d);
+    expect(photos).toHaveLength(1);
+    expect(provider.editCalls[0]!.images).toHaveLength(1);
+  });
+
   it('tells the person when the picture claimed an offer nobody gave, and sends nothing', async () => {
     const provider = new FakeProvider({ chat: [read(), BRIEF, read('Hingga 50% Desember'), read('Gratis ongkir')], image: [await made(), await made()] });
     const { o, tg, deps, link, photos } = await pictureOrg(provider);

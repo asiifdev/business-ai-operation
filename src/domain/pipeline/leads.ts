@@ -1,15 +1,16 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { isUniqueViolation } from '../../db/errors';
-import { clients, leads, organizations, tasks, users } from '../../db/schema';
+import { clients, documentItems, documents, leads, organizations, packages, products, tasks, users } from '../../db/schema';
 import { recordAudit } from '../audit/service';
 import { todayIn } from '../billing/dates';
+import { draftFirstInvoices, insertSubscription, subscriptionSchema } from '../billing/subscriptions';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
 import { nameField, nameKey, optionalText, tidyName, who, MAX_PRICE } from '../portfolio/shared';
-import { allowedMoves, canMove, daysInStage, isFinalStage, isStagnant, ONBOARDING_CHECKLIST, onboardingDueDate, OPEN_STAGES, pipelineValue, type Stage } from './stages';
+import { allowedMoves, canMove, daysInStage, isFinalStage, isStagnant, ONBOARDING_CHECKLIST, onboardingDueDate, OPEN_STAGES, pipelineValue, SUBSCRIPTION_STEP, type Stage } from './stages';
 
 const leadFields = z.object({
   name: nameField,
@@ -256,21 +257,76 @@ export async function getPipelineSummary(ctx: Ctx): Promise<PipelineSummary> {
   };
 }
 
-export type ConvertInput = { mode: 'create' } | { mode: 'link'; clientId: string };
+export type ConvertInput = ({ mode: 'create' } | { mode: 'link'; clientId: string }) & {
+  /** Packages of the lead's final proposal that become subscriptions (D-093). Left out, none are made. */
+  packageIds?: string[];
+};
+
+export interface ConversionLine {
+  packageId: string;
+  label: string;
+  quantity: number;
+  /** The monthly price agreed in the proposal, copied there from the package (BR-M06-01). */
+  unitPrice: number;
+  /** What the subscription bills each month: price times quantity, worked out here, never typed. */
+  amount: number;
+}
+
+export interface ConversionPlan {
+  document: { id: string; title: string; number: string | null } | null;
+  lines: ConversionLine[];
+}
+
+/**
+ * What a won lead's conversion can turn into subscriptions (D-093): the package lines of its latest final proposal or
+ * quotation, at the price that was agreed there. Lines whose package or product was archived since are left out.
+ */
+async function loadConversionPlan(q: Pick<typeof db, 'select'>, orgId: string, leadId: string): Promise<ConversionPlan> {
+  const [doc] = await q
+    .select({ id: documents.id, title: documents.title, number: documents.number })
+    .from(documents)
+    .where(and(eq(documents.orgId, orgId), eq(documents.leadId, leadId), eq(documents.status, 'final'), inArray(documents.kind, ['proposal', 'quotation'])))
+    .orderBy(desc(documents.finalizedAt))
+    .limit(1);
+  if (!doc) return { document: null, lines: [] };
+  const rows = await q
+    .select({ packageId: packages.id, packageName: packages.name, productName: products.name, quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, packageArchived: packages.archivedAt, productArchived: products.archivedAt })
+    .from(documentItems)
+    .innerJoin(packages, and(eq(packages.orgId, documentItems.orgId), eq(packages.id, documentItems.packageId)))
+    .innerJoin(products, and(eq(products.orgId, packages.orgId), eq(products.id, packages.productId)))
+    .where(and(eq(documentItems.orgId, orgId), eq(documentItems.documentId, doc.id)))
+    .orderBy(asc(documentItems.position));
+  const lines = rows
+    .filter((r) => !r.packageArchived && !r.productArchived)
+    .map((r) => ({ packageId: r.packageId, label: `${r.productName} — ${r.packageName}`, quantity: r.quantity, unitPrice: r.unitPrice, amount: r.unitPrice * r.quantity }));
+  return { document: doc, lines };
+}
+
+export async function getConversionPlan(ctx: Ctx, leadId: string): Promise<ConversionPlan> {
+  assertCan(ctx, 'lead.convert');
+  await loadLead(db, ctx.orgId, leadId);
+  return loadConversionPlan(db, ctx.orgId, leadId);
+}
 
 /**
  * Turns a WON lead into a client with the standard onboarding checklist (BR-M04-04, -05, -09). This is the executor: the web
  * asks for confirmation first, and an AI request reaches it only as an approved `act` (CR-06/07), so nothing is created
  * before a person says yes. A lead converts once. Creating a client whose name already exists is refused with `duplicate`;
  * the caller then offers `{ mode: 'link' }` to attach to the existing client instead.
- * The subscription is a checklist item rather than a record: its package and price are a billing decision for a person.
+ * The packages the person kept from the final proposal become subscriptions in the same step (D-093), at the agreed price
+ * worked out from the proposal on the server, and their first draft invoice follows at once when it is due soon.
  */
 export async function convertLeadToClient(ctx: Ctx, id: string, input: ConvertInput, opts: { locale?: 'id' | 'en' } = {}) {
   assertCan(ctx, 'lead.convert');
-  return db.transaction(async (tx) => {
+  const chosenIds = [...new Set(input.packageIds ?? [])];
+  if (chosenIds.length) assertCan(ctx, 'billing.write');
+  const result = await db.transaction(async (tx) => {
     const lead = await loadLead(tx, ctx.orgId, id);
     if (lead.convertedClientId) throw new DomainError('invalid_state', 'this lead already became a client');
     if (lead.stage !== 'won') throw new DomainError('invalid_state', 'only a won lead can become a client');
+    const plan: ConversionPlan = chosenIds.length ? await loadConversionPlan(tx, ctx.orgId, id) : { document: null, lines: [] };
+    const chosen = plan.lines.filter((l) => chosenIds.includes(l.packageId));
+    if (chosen.length !== chosenIds.length) throw new DomainError('validation', 'a package is not in the final proposal');
 
     let clientId: string;
     if (input.mode === 'link') {
@@ -294,16 +350,22 @@ export async function convertLeadToClient(ctx: Ctx, id: string, input: ConvertIn
       await recordAudit(tx, who(ctx), { action: 'client.created', entityType: 'client', entityId: clientId, summary: { name: lead.name, fromLead: id } });
     }
 
+    const subscriptionIds: string[] = [];
+    for (const line of chosen) subscriptionIds.push((await insertSubscription(tx, ctx, subscriptionSchema.parse({ clientId, packageId: line.packageId, amount: line.amount }))).id);
+
     const org = await orgSettings(tx, ctx.orgId);
     const today = todayIn(org.timezone, ctx.clock.now());
-    const titles = ONBOARDING_CHECKLIST[opts.locale ?? 'id'];
+    // With the subscriptions made here, "create the subscription" is no longer a step left to do.
+    const titles = ONBOARDING_CHECKLIST[opts.locale ?? 'id'].filter((_, i) => !(subscriptionIds.length && i === SUBSCRIPTION_STEP));
     await tx.insert(tasks).values(
       titles.map((title, i) => ({ orgId: ctx.orgId, title, clientId, leadId: id, dueDate: onboardingDueDate(today, i), createdBy: ctx.userId, source: 'lead_conversion' })),
     );
     await tx.update(leads).set({ convertedClientId: clientId }).where(and(eq(leads.orgId, ctx.orgId), eq(leads.id, id)));
-    await recordAudit(tx, who(ctx), { action: 'lead.converted', entityType: 'lead', entityId: id, summary: { clientId, linked: input.mode === 'link', tasks: titles.length } });
-    return { clientId, tasksCreated: titles.length };
+    await recordAudit(tx, who(ctx), { action: 'lead.converted', entityType: 'lead', entityId: id, summary: { clientId, linked: input.mode === 'link', tasks: titles.length, subscriptions: subscriptionIds.length, ...(plan.document ? { document: plan.document.number } : {}) } });
+    return { clientId, tasksCreated: titles.length, subscriptionIds };
   });
+  const firstInvoiceIds = await draftFirstInvoices(ctx.orgId, ctx.clock.now(), result.subscriptionIds);
+  return { ...result, firstInvoiceIds };
 }
 
 /** Whether an open lead is worth a stagnant finding right now, for the Action Center rule (BR-M08). */

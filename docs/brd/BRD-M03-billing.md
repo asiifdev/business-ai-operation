@@ -38,7 +38,7 @@ Modul yang berhubungan langsung dengan uang. Tujuannya: **tidak ada tagihan beru
 
 ### 4.1 Siklus subscription dan invoice otomatis
 1. Pemilik membuat **Subscription** dari paket produk (nominal disalin dari paket sebagai default, dapat dinegosiasikan per klien).
-2. Scheduler harian memeriksa subscription aktif: bila `jatuh_tempo − hari_ini ≤ offset` (default 7) dan **belum ada invoice untuk periode itu**, membuat **Invoice Draft** (idempoten, CR-10).
+2. Scheduler harian memeriksa subscription aktif: bila `jatuh_tempo − hari_ini ≤ offset` (default 7) dan **belum ada invoice untuk periode itu**, membuat **Invoice Draft** (idempoten, CR-10). Langganan baru yang periode pertamanya sudah dalam offset langsung mendapat draf saat disimpan, lewat aturan yang sama (D-093).
 3. Pemilik/Admin meninjau draft, lalu **menandai Terkirim** (setelah PDF diunduh/dibagikan di luar sistem).
 4. Pembayaran masuk → **mencatat pembayaran** (jumlah, tanggal, metode, bukti).
 5. Bila Σ pembayaran ≥ total → invoice menjadi `Lunas`; `jatuh_tempo` subscription maju sebesar interval.

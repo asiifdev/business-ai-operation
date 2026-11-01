@@ -4,7 +4,7 @@ import { makeOrg } from '../../domain/ai/__tests__/support';
 import type { Ctx } from '../../domain/ctx';
 import { createClient } from '../../domain/portfolio/clients';
 import { createDeployment } from '../../domain/portfolio/deployments';
-import { createPackage, createProduct, updateProduct } from '../../domain/portfolio/products';
+import { createPackage, createProduct, getProduct, updateProduct } from '../../domain/portfolio/products';
 import { askAssistant } from '../assistant';
 import { FakeProvider, callTools, say } from '../fake-provider';
 import { buildAssistantRegistry } from '../tools/catalog';
@@ -56,6 +56,9 @@ describe('portfolio tools read the real data of the organization', () => {
     const { o, crm } = await world();
     const out = await run(o.staffCtx, 'get_product_packages', { productId: crm });
     expect(out.paket.map((p: any) => [p.nama, p.hargaPerBulan, p.hargaPerBulanAngka])).toEqual([['Starter', 'Rp 150.000', 150000], ['Bisnis', 'Rp 450.000', 450000]]);
+    // draft_proposal and create_subscription take these ids, so they must be the real package ids.
+    const detail = await getProduct(o.staffCtx, crm);
+    expect(out.paket.map((p: any) => p.id)).toEqual(detail.packages.map((p) => p.id));
   });
 
   it('list_deployments can show only what is behind, and list_products counts it', async () => {

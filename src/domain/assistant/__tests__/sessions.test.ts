@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { pg } from '../../../db/client';
 import { makeOrg } from '../../ai/__tests__/support';
-import { appendTurns, beginAnswer, endAnswer, deleteSession, getSession, listSessions, renameSession, titleFrom } from '../sessions';
+import type { Ctx } from '../../ctx';
+import { appendTurns, beginAnswer, endAnswer, deleteSession, getSession, listSessions, renameSession, telegramConversation, titleFrom } from '../sessions';
 
 afterAll(async () => {
   await pg.end();
@@ -72,5 +73,34 @@ describe('a question that is still being answered (D-090)', () => {
     const after = await getSession(o.ownerCtx, id);
     expect(after.pending).toBe(false);
     expect(after.messages.map((m) => m.kind)).toEqual(['user', 'assistant']);
+  });
+});
+
+describe('the Telegram conversation (D-092)', () => {
+  const at = (ctx: Ctx, iso: string): Ctx => ({ ...ctx, clock: { now: () => new Date(iso) } });
+
+  it('survives a restart: the stored turns come back for the next question, only from Telegram sessions', async () => {
+    const o = await makeOrg();
+    const ctx = at(o.ownerCtx, '2026-11-01T15:14:00Z');
+    expect(await telegramConversation(ctx)).toEqual({ sessionId: null, history: [] });
+    await appendTurns(ctx, null, [user('Dari web'), reply('Ini web.')], 'Dari web');
+    const id = await appendTurns(ctx, null, [user('Buat proposal untuk Kafe Senja'), reply('Paket yang mana?')], 'Buat proposal untuk Kafe Senja', 'telegram');
+    const later = await telegramConversation(at(o.ownerCtx, '2026-11-01T15:40:00Z'));
+    expect(later.sessionId).toBe(id);
+    expect(later.history).toEqual([
+      { role: 'user', content: 'Buat proposal untuk Kafe Senja' },
+      { role: 'assistant', content: 'Paket yang mana?' },
+    ]);
+    // the staff member's conversation is their own
+    expect((await telegramConversation(at(o.staffCtx, '2026-11-01T15:40:00Z'))).sessionId).toBeNull();
+    // it shows in the person's web history too
+    expect((await listSessions(ctx)).map((s) => s.id)).toContain(id);
+  });
+
+  it('starts afresh after 30 quiet minutes', async () => {
+    const o = await makeOrg();
+    await appendTurns(at(o.ownerCtx, '2026-11-01T15:00:00Z'), null, [user('halo'), reply('Halo!')], 'halo', 'telegram');
+    expect((await telegramConversation(at(o.ownerCtx, '2026-11-01T15:29:00Z'))).history).toHaveLength(2);
+    expect(await telegramConversation(at(o.ownerCtx, '2026-11-01T15:31:00Z'))).toEqual({ sessionId: null, history: [] });
   });
 });

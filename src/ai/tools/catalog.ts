@@ -83,13 +83,13 @@ export function buildAssistantRegistry(): ToolRegistry {
       args: z.object({ activeOnly: z.boolean().default(true) }),
       run: async (ctx, args) => {
         const rows = await db
-          .select({ name: users.name, role: users.role, isActive: users.isActive })
+          .select({ id: users.id, name: users.name, role: users.role, isActive: users.isActive })
           .from(users)
           .where(and(eq(users.orgId, ctx.orgId), args.activeOnly ? eq(users.isActive, true) : undefined))
           .orderBy(users.createdAt);
         const perPeran: Record<string, number> = {};
         for (const r of rows) perPeran[r.role] = (perPeran[r.role] ?? 0) + 1;
-        return { jumlah: rows.length, perPeran, anggota: rows.map((r) => ({ nama: r.name, peran: r.role, aktif: r.isActive })) };
+        return { jumlah: rows.length, perPeran, anggota: rows.map((r) => ({ id: r.id, nama: r.name, peran: r.role, aktif: r.isActive })) };
       },
     }),
   );
@@ -208,7 +208,8 @@ export function buildAssistantRegistry(): ToolRegistry {
         return {
           produk: detail.product.name,
           versiSaatIni: detail.product.currentVersion,
-          paket: detail.packages.map((p) => ({ nama: p.name, hargaPerBulan: formatRupiah(p.monthlyPrice), hargaPerBulanAngka: p.monthlyPrice, fitur: p.features, diarsipkan: p.archivedAt !== null })),
+          // The id is what draft_proposal, create_subscription and archive_package take; without it the model guesses one.
+          paket: detail.packages.map((p) => ({ id: p.id, nama: p.name, hargaPerBulan: formatRupiah(p.monthlyPrice), hargaPerBulanAngka: p.monthlyPrice, fitur: p.features, diarsipkan: p.archivedAt !== null })),
         };
       },
     }),
@@ -226,7 +227,7 @@ export function buildAssistantRegistry(): ToolRegistry {
         return {
           jumlah: rows.length,
           dipotong: rows.length > LIMIT,
-          deployment: rows.slice(0, LIMIT).map((d) => ({ klien: d.clientName, produk: d.productName, lingkungan: d.environment, label: d.label, domain: d.domain, versiTerpasang: d.installedVersion, versiProdukSaatIni: d.productVersion, status: d.status, versi: stateLabel[d.versionState] })),
+          deployment: rows.slice(0, LIMIT).map((d) => ({ id: d.id, klien: d.clientName, produk: d.productName, lingkungan: d.environment, label: d.label, domain: d.domain, versiTerpasang: d.installedVersion, versiProdukSaatIni: d.productVersion, status: d.status, versi: stateLabel[d.versionState] })),
         };
       },
     }),

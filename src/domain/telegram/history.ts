@@ -1,42 +1,32 @@
-import type { Clock } from '../../lib/clock';
-
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-const MAX_MESSAGES = 6;
+export const MAX_MESSAGES = 6;
 const MAX_CONTENT = 1500;
-const TTL_MS = 30 * 60_000;
+
+/** A Telegram conversation carries on while its last message is younger than this; after that a new one begins (D-092). */
+export const TELEGRAM_QUIET_MS = 30 * 60_000;
+
+const textOf = (body: unknown): string => {
+  const text = (body as { text?: unknown } | null)?.text;
+  return typeof text === 'string' ? text.trim() : '';
+};
 
 /**
- * The last few turns of each person's Telegram conversation, so a follow-up question has its context. Kept in memory
- * only and forgotten after 30 minutes without a message: the words people type are not stored (BR-M15-06), so a restart
- * simply starts a fresh conversation.
+ * The last few turns of a stored conversation (D-092), oldest first, as the model takes them. The conversation itself is
+ * kept in `assistant_messages`, so a restart of the server no longer loses it. Errors and empty replies are left out, and
+ * the history always starts with the person.
  */
-export class ChatHistory {
-  private readonly byUser = new Map<string, { at: number; messages: HistoryMessage[] }>();
-
-  constructor(private readonly clock: Clock) {}
-
-  /** What came before, oldest first. Empty when the conversation went quiet. */
-  recent(userId: string): HistoryMessage[] {
-    const entry = this.byUser.get(userId);
-    if (!entry) return [];
-    if (this.clock.now().getTime() - entry.at > TTL_MS) {
-      this.byUser.delete(userId);
-      return [];
-    }
-    return [...entry.messages];
+export function toHistory(stored: ReadonlyArray<{ kind: string; body: unknown }>): HistoryMessage[] {
+  const messages: HistoryMessage[] = [];
+  for (const m of stored) {
+    if (m.kind !== 'user' && m.kind !== 'assistant') continue;
+    const content = textOf(m.body);
+    if (content) messages.push({ role: m.kind, content: content.slice(0, MAX_CONTENT) });
   }
-
-  /** Adds one finished exchange and keeps only the latest turns, always starting with the person's message. */
-  remember(userId: string, question: string, answer: string): void {
-    const messages = [...this.recent(userId), { role: 'user' as const, content: question.slice(0, MAX_CONTENT) }, { role: 'assistant' as const, content: answer.slice(0, MAX_CONTENT) }].slice(-MAX_MESSAGES);
-    this.byUser.set(userId, { at: this.clock.now().getTime(), messages });
-  }
-
-  forget(userId: string): void {
-    this.byUser.delete(userId);
-  }
+  const recent = messages.slice(-MAX_MESSAGES);
+  while (recent[0]?.role === 'assistant') recent.shift();
+  return recent;
 }

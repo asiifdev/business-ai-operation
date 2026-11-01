@@ -28,7 +28,7 @@ export function SubscriptionDetail({ id }: { id: string }) {
 
   if (load.value.state === 'loading') return <Panel aria-busy="true"><Skeleton rows={5} /></Panel>;
   if (load.value.state === 'error') return <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>;
-  const { subscription: s, stoppedOn, invoices } = load.value.data;
+  const { subscription: s, stoppedOn, invoices, nextDraftOn, draftOffsetDays } = load.value.data;
   const active = s.status === 'active';
 
   async function stop() {
@@ -81,6 +81,7 @@ export function SubscriptionDetail({ id }: { id: string }) {
 
       <Panel className="flex flex-col gap-4" aria-label={t('subInvoicesTitle')}>
         <h2 className="m-0 text-lg font-semibold text-ink">{t('subInvoicesTitle')}</h2>
+        {nextDraftOn && <p className="m-0 text-sm text-muted">{t('subNextDraftNote', { due: formatDate(s.nextDueDate), date: formatDate(nextDraftOn), days: draftOffsetDays })}</p>}
         {invoices.length === 0 ? (
           <p className="m-0 text-sm text-muted">{t('emptyInvoices')}</p>
         ) : (

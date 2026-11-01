@@ -6,7 +6,7 @@ import { createFromPrompt, type Attachment } from '../marketing/free';
 import { MAX_ATTACHMENTS } from '../marketing/free-rules';
 import { readAssetFile } from '../marketing/service';
 
-/** Photos a person sent that still wait for their words (D-080): kept this long, per chat, in memory like the chat history. */
+/** Photos a person sent that still wait for their words (D-080, D-092): kept this long, per chat, in memory only. */
 const PENDING_TTL_MS = 10 * 60_000;
 
 export class PendingPictures {
@@ -32,6 +32,11 @@ export class PendingPictures {
 
   has(chatId: number, now: Date): boolean {
     return this.live(chatId, now) !== null;
+  }
+
+  /** The waiting photos, which stay waiting. */
+  peek(chatId: number, now: Date): Attachment[] {
+    return [...(this.live(chatId, now)?.files ?? [])];
   }
 
   /** The waiting photos, which are then forgotten. */

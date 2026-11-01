@@ -1,42 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { ChatHistory } from '../history';
+import { toHistory } from '../history';
 
-const clockAt = (iso: string) => {
-  let now = new Date(iso);
-  return { now: () => now, set: (v: string) => void (now = new Date(v)) };
-};
+const user = (text: string) => ({ kind: 'user', body: { text } });
+const reply = (text: string) => ({ kind: 'assistant', body: { ok: true, text, sources: [] } });
 
-describe('ChatHistory', () => {
-  it('gives a follow-up its context, oldest first, per person', () => {
-    const clock = clockAt('2026-10-29T04:00:00Z');
-    const h = new ChatHistory(clock);
-    h.remember('u1', 'halo', 'Halo!');
-    h.remember('u1', 'ada project baru', 'Boleh, detailnya?');
-    expect(h.recent('u1')).toEqual([
+describe('toHistory', () => {
+  it('gives a follow-up its context from the stored conversation, oldest first', () => {
+    expect(toHistory([user('halo'), reply('Halo!'), user('ada project baru'), reply('Boleh, detailnya?')])).toEqual([
       { role: 'user', content: 'halo' },
       { role: 'assistant', content: 'Halo!' },
       { role: 'user', content: 'ada project baru' },
       { role: 'assistant', content: 'Boleh, detailnya?' },
     ]);
-    expect(h.recent('u2')).toEqual([]);
   });
 
   it('keeps only the latest turns and always starts with the person', () => {
-    const h = new ChatHistory(clockAt('2026-10-29T04:00:00Z'));
-    for (let i = 1; i <= 5; i++) h.remember('u1', `q${i}`, `a${i}`);
-    const recent = h.recent('u1');
+    const stored = [1, 2, 3, 4, 5].flatMap((i) => [user(`q${i}`), reply(`a${i}`)]);
+    const recent = toHistory(stored);
     expect(recent).toHaveLength(6);
     expect(recent[0]).toEqual({ role: 'user', content: 'q3' });
     expect(recent.at(-1)).toEqual({ role: 'assistant', content: 'a5' });
+    // cut so it would start with a reply: the reply goes
+    expect(toHistory([reply('a0'), ...stored.slice(-5)])[0]).toEqual({ role: 'user', content: 'q4' });
   });
 
-  it('forgets a conversation that went quiet for 30 minutes', () => {
-    const clock = clockAt('2026-10-29T04:00:00Z');
-    const h = new ChatHistory(clock);
-    h.remember('u1', 'halo', 'Halo!');
-    clock.set('2026-10-29T04:29:00Z');
-    expect(h.recent('u1')).toHaveLength(2);
-    clock.set('2026-10-29T05:00:00Z');
-    expect(h.recent('u1')).toEqual([]);
+  it('leaves out errors and replies without text', () => {
+    expect(toHistory([user('q1'), { kind: 'error', body: { text: 'gagal' } }, { kind: 'assistant', body: { ok: false, message: 'anggaran habis' } }, user('q2')])).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'user', content: 'q2' },
+    ]);
   });
 });

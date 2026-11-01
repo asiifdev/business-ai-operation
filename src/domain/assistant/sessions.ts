@@ -1,12 +1,15 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, max } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, max } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { approvals, assistantMessages, assistantSessions } from '../../db/schema';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan } from '../permissions';
+import { MAX_MESSAGES, TELEGRAM_QUIET_MS, toHistory, type HistoryMessage } from '../telegram/history';
 
 export const TITLE_MAX = 80;
+/** Where a conversation began (D-092). */
+export type Channel = 'web' | 'telegram';
 /** A session keeps this many turns; the oldest are dropped from the list, never from the model's context rules (those are the client's last ten). */
 const MESSAGE_LIMIT = 400;
 
@@ -122,14 +125,14 @@ async function markUndone(ctx: Ctx, messages: StoredMessage[]): Promise<StoredMe
  * Adds turns to a session in order, creating the session first when there is none (its title is the first question).
  * Returns the session id so a new conversation can carry on.
  */
-export async function appendTurns(ctx: Ctx, sessionId: string | null | undefined, turns: Array<{ kind: MessageKind; body: unknown }>, firstQuestion: string): Promise<string> {
+export async function appendTurns(ctx: Ctx, sessionId: string | null | undefined, turns: Array<{ kind: MessageKind; body: unknown }>, firstQuestion: string, channel: Channel = 'web'): Promise<string> {
   assertCan(ctx, 'assistant.use');
   if (turns.length === 0) throw new DomainError('validation', 'nothing to store');
   return db.transaction(async (tx) => {
     let id = sessionId ?? null;
     if (id) await loadMine(tx, ctx, id);
     else {
-      const [created] = await tx.insert(assistantSessions).values({ orgId: ctx.orgId, userId: ctx.userId, title: titleFrom(firstQuestion) }).returning({ id: assistantSessions.id });
+      const [created] = await tx.insert(assistantSessions).values({ orgId: ctx.orgId, userId: ctx.userId, title: titleFrom(firstQuestion), channel }).returning({ id: assistantSessions.id });
       id = created.id;
     }
     const [{ last }] = await tx.select({ last: max(assistantMessages.seq) }).from(assistantMessages).where(eq(assistantMessages.sessionId, id));
@@ -138,6 +141,29 @@ export async function appendTurns(ctx: Ctx, sessionId: string | null | undefined
     await tx.update(assistantSessions).set({ updatedAt: ctx.clock.now() }).where(mine(ctx, id));
     return id;
   });
+}
+
+/**
+ * The person's Telegram conversation that is still going (D-092): their latest `telegram` session whose last message is
+ * younger than 30 minutes, with its last turns for the model. Stored like the web's, so a server restart keeps it.
+ */
+export async function telegramConversation(ctx: Ctx): Promise<{ sessionId: string | null; history: HistoryMessage[] }> {
+  assertCan(ctx, 'assistant.use');
+  const since = new Date(ctx.clock.now().getTime() - TELEGRAM_QUIET_MS);
+  const [session] = await db
+    .select({ id: assistantSessions.id })
+    .from(assistantSessions)
+    .where(and(eq(assistantSessions.orgId, ctx.orgId), eq(assistantSessions.userId, ctx.userId), eq(assistantSessions.channel, 'telegram'), gt(assistantSessions.updatedAt, since)))
+    .orderBy(desc(assistantSessions.updatedAt))
+    .limit(1);
+  if (!session) return { sessionId: null, history: [] };
+  const rows = await db
+    .select({ kind: assistantMessages.kind, body: assistantMessages.body })
+    .from(assistantMessages)
+    .where(and(eq(assistantMessages.orgId, ctx.orgId), eq(assistantMessages.sessionId, session.id)))
+    .orderBy(desc(assistantMessages.seq))
+    .limit(MAX_MESSAGES * 2);
+  return { sessionId: session.id, history: toHistory(rows.reverse()) };
 }
 
 const titleSchema = z.string().trim().min(1).max(TITLE_MAX);

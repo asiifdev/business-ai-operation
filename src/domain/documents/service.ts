@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { db } from '../../db/client';
 import type { Tx } from '../../db/client';
@@ -158,6 +158,14 @@ export async function finalizeDocument(ctx: Ctx, id: string) {
     const number = before.version > 1 ? `${base}-v${before.version}` : base;
     await tx.update(documents).set({ status: 'final', number, finalizedAt: ctx.clock.now(), finalizedBy: ctx.userId, isAiDraft: false }).where(and(eq(documents.orgId, ctx.orgId), eq(documents.id, id)));
     await recordAudit(tx, who(ctx), { action: 'document.finalized', entityType: 'document', entityId: id, summary: { kind: before.kind, number, total: before.total, version: before.version } });
+    // A final proposal or quotation for a lead still being explored puts the lead in the Proposal stage (D-093).
+    if (before.leadId && before.kind !== 'minutes') {
+      const [lead] = await tx.select({ stage: leads.stage, isDraft: leads.isDraft, archivedAt: leads.archivedAt }).from(leads).where(and(eq(leads.orgId, ctx.orgId), eq(leads.id, before.leadId))).for('update');
+      if (lead && !lead.isDraft && !lead.archivedAt && (lead.stage === 'new' || lead.stage === 'exploring')) {
+        await tx.update(leads).set({ stage: 'proposal', stageChangedAt: ctx.clock.now() }).where(and(eq(leads.orgId, ctx.orgId), eq(leads.id, before.leadId)));
+        await recordAudit(tx, who(ctx), { action: 'lead.stage_changed', entityType: 'lead', entityId: before.leadId, summary: { from: lead.stage, to: 'proposal', document: number } });
+      }
+    }
     return { id, number };
   });
 }
@@ -257,11 +265,18 @@ const toRow = (r: { doc: Row; clientName: string | null; leadName: string | null
 });
 
 /** Latest version of each series by default, newest first. */
+/**
+ * A client's documents are its own and those of the lead it came from (D-093): the proposal that won the client stays where
+ * it was written, unchanged, and shows on the client as well.
+ */
+const forClient = (orgId: string, clientId: string) =>
+  or(eq(documents.clientId, clientId), inArray(documents.leadId, db.select({ id: leads.id }).from(leads).where(and(eq(leads.orgId, orgId), eq(leads.convertedClientId, clientId)))));
+
 export async function listDocuments(ctx: Ctx, raw: z.input<typeof documentFilterSchema> = {}): Promise<DocumentRow[]> {
   assertCan(ctx, 'document.read');
   const f = documentFilterSchema.parse(raw);
   const rows = await selectRow()
-    .where(and(eq(documents.orgId, ctx.orgId), f.kind ? eq(documents.kind, f.kind) : undefined, f.status ? eq(documents.status, f.status) : undefined, f.clientId ? eq(documents.clientId, f.clientId) : undefined, f.leadId ? eq(documents.leadId, f.leadId) : undefined))
+    .where(and(eq(documents.orgId, ctx.orgId), f.kind ? eq(documents.kind, f.kind) : undefined, f.status ? eq(documents.status, f.status) : undefined, f.clientId ? forClient(ctx.orgId, f.clientId) : undefined, f.leadId ? eq(documents.leadId, f.leadId) : undefined))
     .orderBy(desc(documents.createdAt))
     .limit(LIST_LIMIT);
   const out = rows.map(toRow);

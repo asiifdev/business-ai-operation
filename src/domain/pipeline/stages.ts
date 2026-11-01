@@ -65,5 +65,8 @@ export const ONBOARDING_CHECKLIST = {
   en: ['Set up the client deployment', 'Create the subscription', 'Issue the first invoice', 'Hand over to the client'],
 } as const;
 
+/** The checklist step that is already done when the conversion made the subscriptions itself (D-093). */
+export const SUBSCRIPTION_STEP = 1;
+
 /** A due date a few days out for the checklist items, so they do not all sit undated. */
 export const onboardingDueDate = (today: string, index: number): string => addDays(today, 3 * (index + 1));

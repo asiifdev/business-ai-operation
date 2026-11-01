@@ -55,11 +55,14 @@ export const assistantSessions = pgTable(
     orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
     userId: text('user_id').notNull(),
     title: text('title').notNull(),
+    /** Where the conversation began (D-092): Telegram picks up its latest `telegram` session after a restart. */
+    channel: text('channel').notNull().default('web'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (t) => [
     unique('uq_assistant_sessions_org_id').on(t.orgId, t.id),
+    check('assistant_sessions_channel_ck', sql`${t.channel} in ('web', 'telegram')`),
     foreignKey({ columns: [t.orgId, t.userId], foreignColumns: [users.orgId, users.id], name: 'fk_assistant_sessions_user' }),
     index('idx_assistant_sessions_user').on(t.orgId, t.userId, t.updatedAt),
   ],

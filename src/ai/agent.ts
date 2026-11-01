@@ -7,7 +7,7 @@ import type { Ctx } from '../domain/ctx';
 import { DomainError } from '../domain/errors';
 import { can } from '../domain/permissions';
 import { AiProviderError, type AiErrorKind } from './errors';
-import { ACTION_DONE_FALLBACK, AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, detectLocale, friendlyAiError, type Locale } from './messages';
+import { ACTION_DONE_FALLBACK, AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, STEP_LIMIT, detectLocale, friendlyAiError, type Locale } from './messages';
 import { findUnverifiedNumbers } from './numbers';
 import type { AiProvider } from './provider';
 import type { ToolRegistry } from './tools/registry';
@@ -18,8 +18,13 @@ import { entitiesFromOutput, type EntityRef } from '../lib/entity-links';
 
 /** BR-M07-06 default: five rounds of tool calls per run. */
 export const DEFAULT_MAX_ROUNDS = 5;
-/** Input plus output tokens one run may use across all rounds (BR-M07-06, CR-11). */
-export const DEFAULT_MAX_RUN_TOKENS = 60_000;
+/**
+ * Input plus output tokens one run may use across all rounds (BR-M07-06, CR-11). Every round sends the whole context again,
+ * and the assistant's instructions and tools alone are about 45,000 tokens, so 60,000 stopped every task of two rounds or
+ * more (a proposal takes four or five). Most of each round is cached input at an eighth of the price, and the daily budget
+ * per feature is still checked between rounds, so this cap only stops a run that keeps growing.
+ */
+export const DEFAULT_MAX_RUN_TOKENS = 300_000;
 /** Longest tool result handed to the model. A larger one is replaced by an error rather than cut in half. */
 const MAX_TOOL_RESULT_CHARS = 20_000;
 /** Two broken tool calls in one run end it: a model that cannot form arguments should not keep burning budget. */
@@ -283,7 +288,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       } catch {
         /* see above */
       }
-      if (run.tokens >= maxRunTokens) return await stop('run_tokens', friendlyAiError('timeout', locale), 'run token limit reached');
+      if (run.tokens >= maxRunTokens) return await stop('run_tokens', STEP_LIMIT[refusalLocale], 'run token limit reached');
 
       const result = await input.provider.chat({
         messages,
@@ -390,7 +395,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       }
     }
     rounds = maxRounds;
-    return await stop('rounds', friendlyAiError('timeout', locale), `tool round limit (${maxRounds}) reached`);
+    return await stop('rounds', STEP_LIMIT[refusalLocale], `tool round limit (${maxRounds}) reached`);
   } catch (error) {
     if (error instanceof AiProviderError) {
       // A call that used tokens but gave nothing usable still costs money.

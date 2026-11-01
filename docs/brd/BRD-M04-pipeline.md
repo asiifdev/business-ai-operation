@@ -33,9 +33,9 @@ Perjalanan calon klien dari lead sampai klien aktif tidak lagi manual dan tercec
 ## 4. Proses bisnis
 
 1. Lead dibuat manual atau dari **Meeting Intelligence (M09)** sebagai **draft** yang perlu diterima pengguna.
-2. Pengguna memindah tahap; tahap `Proposal` menautkan dokumen M06.
+2. Pengguna memindah tahap; tahap `Proposal` menautkan dokumen M06. Proposal yang difinalkan untuk lead di tahap `Baru`/`Penjajakan` memindahkannya ke `Proposal` (D-093).
 3. `Kalah` mewajibkan alasan.
-4. `Menang` → pengguna menyetujui **konversi**: dibuat Klien (cek duplikat), draf Subscription (dari paket), dan **checklist onboarding** (task, M05).
+4. `Menang` → pengguna menyetujui **konversi**: dibuat Klien (cek duplikat), Subscription dari paket proposal final yang dipertahankan pengguna di dialog konversi (D-093), dan **checklist onboarding** (task, M05).
 5. Lead stagnan (tanpa aktivitas > N hari) menjadi temuan di M08.
 
 ## 5. Aturan bisnis

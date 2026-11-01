@@ -324,7 +324,7 @@ Batasan: `UNIQUE (org_id, id)`, `UNIQUE (series_id, version)`, `UNIQUE (org_id, 
 
 **`assistant_sessions`** (riwayat percakapan asisten, D-078) · BR-M07
 
-`id`, `org_id`, `user_id` (→ `users`, pemilik percakapan; **hanya pemiliknya yang melihatnya**), `title text` (diisi dari pertanyaan pertama, dapat diganti pemiliknya), `created_at`, `updated_at` (waktu pesan terakhir). `FK (org_id, user_id) → users`, `UNIQUE (org_id, id)`, indeks `(org_id, user_id, updated_at desc)`.
+`id`, `org_id`, `user_id` (→ `users`, pemilik percakapan; **hanya pemiliknya yang melihatnya**), `title text` (diisi dari pertanyaan pertama, dapat diganti pemiliknya), `channel text` default `web` (`web`, `telegram`; tempat percakapan dimulai, D-092), `created_at`, `updated_at` (waktu pesan terakhir). `FK (org_id, user_id) → users`, `UNIQUE (org_id, id)`, `CHECK (channel in ('web','telegram'))`, indeks `(org_id, user_id, updated_at desc)`. Percakapan Telegram memakai sesi `telegram` terbaru milik pengguna itu selama pesan terakhirnya belum lewat 30 menit; setelah itu sesi baru dimulai. Sesi Telegram juga tampil di riwayat asisten web.
 
 **`assistant_messages`**: `id`, `org_id`, `session_id`, `seq integer` (urutan dalam sesi), `kind text` (`user`, `assistant`, `error`), `body jsonb` (user: `{text}`; assistant: jawaban lengkap beserta sumber, draf, dan persetujuan yang diajukan; error: `{text, retry}`), `created_at`. `FK (org_id, session_id) → assistant_sessions` `ON DELETE CASCADE`, `UNIQUE (session_id, seq)`. Isi percakapan adalah data pengguna: tidak masuk `audit_log` dan tidak dipakai melatih apa pun; menghapus sesi menghapus pesannya.
 

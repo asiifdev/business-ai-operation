@@ -23,6 +23,11 @@ const FRIENDLY: Record<AiErrorKind, Record<Locale, string>> = {
 };
 
 /** Fixed texts, never written by the model: what the assistant says when it has no data to answer from. */
+/** Said when a run reached its step or token limit (BR-M07-06): the request needed too much work at once, nothing was slow. */
+export const STEP_LIMIT: Record<Locale, string> = {
+  id: 'Permintaan ini butuh terlalu banyak langkah sekaligus, jadi saya berhenti sebelum selesai. Coba bagi menjadi langkah yang lebih kecil, misalnya satu proposal atau satu klien dulu.',
+  en: 'This request needed too many steps at once, so I stopped before finishing. Try smaller steps, for example one proposal or one client first.',
+};
 export const NO_DATA_REFUSAL: Record<Locale, string> = {
   id: 'Saya hanya menjawab dari data dan fungsi yang ada di Orbyte, dan tidak menemukan datanya untuk pertanyaan ini. Tanyakan hal yang ada di data Anda, atau tanyakan "apa yang bisa kamu lakukan?".',
   en: 'I only answer from the data and functions in Orbyte, and I found no data for this question. Ask about something in your data, or ask "what can you do?".',
