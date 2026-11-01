@@ -1,10 +1,13 @@
-import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps, type NodeTypes, type OnConnect, type OnEdgesChange, type OnNodesChange } from '@xyflow/react';
+import { Background, BackgroundVariant, BaseEdge, Controls, EdgeLabelRenderer, getBezierPath, Handle, Panel as CanvasPanel, Position, ReactFlow, type Edge, type EdgeProps, type EdgeTypes, type Node, type NodeProps, type NodeTypes, type OnConnect, type OnEdgesChange, type OnNodesChange, type ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Definition } from '../../domain/flows/definition';
+import { isLegacyGrid, layoutSteps, NODE_HEIGHT, NODE_WIDTH, runsLeft } from '../../domain/flows/layout';
 import type { MessageKey } from '../../lib/i18n';
 import { cx } from '../../lib/cx';
 import { useT } from '../../lib/use-t';
+import { Icon } from '../shell/Icon';
+import type { IconName } from '../../lib/nav';
 
 /** The editor and the run view draw the same diagram: a node is a tool of the catalogue, a line is an order and a data dependency. */
 export interface CatalogField {
@@ -45,6 +48,10 @@ export interface ToolNodeData extends Record<string, unknown> {
   available: boolean;
   status?: NodeStatus;
   problem?: boolean;
+  /** The step sits in a row that runs right to left: its line comes in on the right and goes out on the left. */
+  reverse?: boolean;
+  /** Set on the last step of a branch: the "+" at its right edge adds a step after it. */
+  onAdd?: () => void;
 }
 export type ToolNode = Node<ToolNodeData, 'tool'>;
 
@@ -59,25 +66,59 @@ const STATUS_STYLE: Record<NodeStatus, string> = {
 };
 const STATUS_DOT: Record<NodeStatus, string> = { pending: 'bg-rule-2', running: 'bg-accent animate-pulse', done: 'bg-success', failed: 'bg-danger', skipped: 'bg-rule-2' };
 
+/** What kind of tool a step is, for its colour and icon: the connection it uses, or Orbyte's own tools. */
+export type ToolGroup = 'ssh' | 'aapanel' | 'github' | 'orbyte';
+export const toolGroup = (tool: string): ToolGroup => (tool.startsWith('ssh.') ? 'ssh' : tool.startsWith('panel.') ? 'aapanel' : tool.startsWith('github.') ? 'github' : 'orbyte');
+export const GROUP_ICON: Record<ToolGroup, IconName> = { ssh: 'terminal', aapanel: 'panel', github: 'github', orbyte: 'pulse' };
+export const GROUP_TILE: Record<ToolGroup, string> = { ssh: 'bg-accent-wash text-accent', aapanel: 'bg-mint-wash text-mint-ink', github: 'bg-paper-3 text-ink', orbyte: 'bg-paper-3 text-warm-ink' };
+
 function ToolNodeView({ data, selected }: NodeProps<ToolNode>) {
   const t = useT();
   const status = data.status;
+  const group = toolGroup(data.tool);
   return (
-    <div className={cx('w-56 rounded-input border bg-paper px-3 py-2 text-left shadow-card', status ? STATUS_STYLE[status] : selected ? 'border-accent ring-2 ring-accent-wash' : data.problem ? 'border-danger' : 'border-rule-2')}>
-      <Handle type="target" position={Position.Left} className="!size-2.5 !border-rule-2 !bg-paper-3" />
-      <div className="flex items-center gap-2">
-        {status && <span aria-hidden="true" className={cx('size-2.5 shrink-0 rounded-full', STATUS_DOT[status])} />}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{data.label || t(toolLabelKey(data.tool))}</span>
-        {data.tier === 'change' && <span className="shrink-0 rounded-full border border-warm px-1.5 text-[10px] text-warm-ink">{t('flowTierChange')}</span>}
+    <div style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT }} className={cx('relative flex items-center gap-3 rounded-card border bg-paper p-3 text-left shadow-card transition-shadow hover:shadow-md', status ? STATUS_STYLE[status] : selected ? 'border-accent ring-2 ring-accent-wash' : data.problem ? 'border-danger' : 'border-rule-2')}>
+      <Handle type="target" position={data.reverse ? Position.Right : Position.Left} className="!size-3 !border-2 !border-rule-2 !bg-paper" />
+      <span aria-hidden="true" className={cx('grid size-10 shrink-0 place-items-center rounded-input', GROUP_TILE[group])}><Icon name={GROUP_ICON[group]} className="size-5" /></span>
+      <div className="min-w-0 flex-1">
+        <div className="line-clamp-2 text-sm font-medium leading-snug text-ink">{data.label || t(toolLabelKey(data.tool))}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+          {data.tier === 'change' && <span className="shrink-0 rounded-full border border-warm px-1.5 text-[10px] leading-4 text-warm-ink">{t('flowTierChange')}</span>}
+          <span className="truncate font-mono text-[11px]">{data.tool.split('.').pop()}{!data.available ? ` · ${t('flowToolSoon')}` : ''}</span>
+        </div>
       </div>
-      <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{data.tool}{!data.available ? ` · ${t('flowToolSoon')}` : ''}</div>
+      {status && <span aria-hidden="true" className={cx('absolute right-2 top-2 size-2.5 rounded-full', STATUS_DOT[status])} />}
       {status && <div className="sr-only">{t(`flowStatus_${status}` as MessageKey)}</div>}
-      <Handle type="source" position={Position.Right} className="!size-2.5 !border-rule-2 !bg-paper-3" />
+      <Handle type="source" position={data.reverse ? Position.Left : Position.Right} className="!size-3 !border-2 !border-rule-2 !bg-paper" />
+      {data.onAdd && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); data.onAdd?.(); }} aria-label={t('flowAddStep')} title={t('flowAddStep')} className={cx('nodrag nopan absolute top-1/2 grid size-7 -translate-y-1/2 cursor-pointer place-items-center rounded-full border border-rule-2 bg-paper p-0 text-muted shadow-card hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus', data.reverse ? '-left-11' : '-right-11')}>
+          <Icon name="plus" className="size-4" />
+        </button>
+      )}
     </div>
   );
 }
 
+/** A line between two steps; in the editor it carries a "+" that inserts a step right there. */
+function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style, data }: EdgeProps<Edge<{ onInsert?: (edgeId: string) => void }>>) {
+  const t = useT();
+  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
+      {data?.onInsert && (
+        <EdgeLabelRenderer>
+          <button type="button" onClick={() => data.onInsert?.(id)} aria-label={t('flowInsertStep')} title={t('flowInsertStep')} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: 'all' }} className="nodrag nopan absolute grid size-6 cursor-pointer place-items-center rounded-full border border-rule-2 bg-paper p-0 text-muted opacity-70 shadow-card hover:border-accent hover:text-accent hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+            <Icon name="plus" className="size-3.5" />
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
 const nodeTypes: NodeTypes = { tool: ToolNodeView };
+const edgeTypes: EdgeTypes = { insert: InsertEdge };
 
 /** `light` or `dark`, following the app's own switch (`html[data-theme]`) and, without one, the system. */
 export function useColorMode(): 'light' | 'dark' {
@@ -104,54 +145,110 @@ export interface CanvasProps {
   onConnect?: OnConnect;
   isValidConnection?: (c: { source: string; target: string }) => boolean;
   onNodeClick?: (id: string) => void;
+  onPaneClick?: () => void;
   label: string;
+  /** Size of the frame; the default suits a page, the editor passes its own to fill the screen. */
+  className?: string;
+  /** Buttons on the canvas itself, top right (add a step, tidy, full screen). */
+  toolbar?: ReactNode;
+  /** Drawn over the right edge of the canvas (the settings of the chosen step). */
+  overlay?: ReactNode;
+  /** A step to bring into view and keep in view as it changes (the run view follows the step that is running or failed). */
+  focusNode?: string | null;
 }
 
-export function FlowCanvas({ nodes, edges, readOnly, onNodesChange, onEdgesChange, onConnect, isValidConnection, onNodeClick, label }: CanvasProps) {
+/** The first look at a flow: its beginning at a size that can be read, never the whole of a long flow squeezed into the frame. */
+function showStart(rf: ReactFlowInstance<ToolNode>, frame: HTMLElement | null) {
+  const nodes = rf.getNodes();
+  if (!nodes.length || !frame) return;
+  const minX = Math.min(...nodes.map((n) => n.position.x));
+  const maxX = Math.max(...nodes.map((n) => n.position.x + NODE_WIDTH));
+  const minY = Math.min(...nodes.map((n) => n.position.y));
+  const maxY = Math.max(...nodes.map((n) => n.position.y + NODE_HEIGHT));
+  const width = frame.clientWidth;
+  const height = frame.clientHeight;
+  const fits = Math.min(width / (maxX - minX + 160), height / (maxY - minY + 160));
+  const zoom = Math.min(1, Math.max(0.85, fits));
+  const x = fits >= zoom ? (width - (maxX - minX) * zoom) / 2 - minX * zoom : 56 - minX * zoom;
+  const y = (height - (maxY - minY) * zoom) / 2 - minY * zoom;
+  void rf.setViewport({ x, y, zoom });
+}
+
+export function FlowCanvas({ nodes, edges, readOnly, onNodesChange, onEdgesChange, onConnect, isValidConnection, onNodeClick, onPaneClick, label, className, toolbar, overlay, focusNode }: CanvasProps) {
   const colorMode = useColorMode();
+  const frame = useRef<HTMLDivElement>(null);
+  const instance = useRef<ReactFlowInstance<ToolNode> | null>(null);
+  // Only when the step to follow changes, not on every refresh of its status, so the person can still look around.
+  useEffect(() => {
+    const rf = instance.current;
+    const node = focusNode ? rf?.getNode(focusNode) : null;
+    if (rf && node) void rf.setCenter(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2, { zoom: Math.max(0.85, Math.min(1, rf.getZoom())), duration: 400 });
+  }, [focusNode]);
   return (
-    <div role="group" aria-label={label} className="h-[62vh] min-h-[420px] w-full overflow-hidden rounded-card border border-rule bg-paper-2">
+    <div ref={frame} data-flow-frame="" role="group" aria-label={label} className={cx('relative w-full overflow-hidden rounded-card border border-rule bg-paper-2', className ?? 'h-[62vh] min-h-[420px]')}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         colorMode={colorMode}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValidConnection ? (c) => isValidConnection({ source: c.source, target: c.target }) : undefined}
         onNodeClick={onNodeClick ? (_e, n) => onNodeClick(n.id) : undefined}
+        onPaneClick={onPaneClick}
+        onInit={(rf) => {
+          instance.current = rf;
+          showStart(rf, frame.current);
+          const node = focusNode ? rf.getNode(focusNode) : null;
+          if (node) void rf.setCenter(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 0.9 });
+        }}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         edgesReconnectable={!readOnly}
         elementsSelectable
         deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
-        fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        panOnScroll
+        zoomOnScroll={false}
         minZoom={0.2}
+        maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{ type: 'smoothstep' }}
+        defaultEdgeOptions={{ type: 'default' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
-        <Controls showInteractive={false} />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        <Controls showInteractive={false} position="bottom-left" />
+        {toolbar && <CanvasPanel position="top-right" className="flex flex-wrap items-center justify-end gap-2">{toolbar}</CanvasPanel>}
       </ReactFlow>
+      {overlay}
     </div>
   );
 }
 
 // ------------------------------------------------------------------ definition <-> canvas
 
+/** Marks the steps that sit in a row running right to left, so their line comes in and goes out on the right sides. */
+export function markDirections(nodes: ToolNode[], edges: Array<{ source: string; target: string }>): ToolNode[] {
+  const at = new Map(nodes.map((n) => [n.id, n.position]));
+  const lines = edges.map((e) => ({ from: e.source, to: e.target }));
+  return nodes.map((n) => {
+    const reverse = runsLeft(n.id, at, lines);
+    return n.data.reverse === reverse ? n : { ...n, data: { ...n.data, reverse } };
+  });
+}
+
 export function toCanvas(def: Definition, catalog: Catalog, statuses?: Record<string, NodeStatus>): { nodes: ToolNode[]; edges: Edge[] } {
   const byId = new Map(catalog.tools.map((t) => [t.id, t]));
-  return {
-    nodes: def.nodes.map((n) => ({
+  // A flow drawn in the old four-column grid is redrawn left to right on opening; nothing is saved until the person saves.
+  const tidy = isLegacyGrid(def.nodes, def.edges) ? layoutSteps(def.nodes.map((n) => n.id), def.edges) : null;
+  const nodes = def.nodes.map((n) => ({
       id: n.id,
       type: 'tool' as const,
-      position: n.position,
+      position: tidy?.get(n.id) ?? n.position,
       data: { tool: n.tool, label: n.label ?? '', bind: n.bind as Record<string, string>, config: n.config as Record<string, string | number | boolean>, tier: byId.get(n.tool)?.tier ?? 'read', available: byId.get(n.tool)?.available ?? false, status: statuses?.[n.id] },
-    })),
-    edges: def.edges.map((e) => ({ id: `${e.from}->${e.to}`, source: e.from, target: e.to, animated: statuses?.[e.to] === 'running' })),
-  };
+    }));
+  const edges = def.edges.map((e) => ({ id: `${e.from}->${e.to}`, source: e.from, target: e.to, animated: statuses?.[e.to] === 'running' }));
+  return { nodes: markDirections(nodes, edges), edges };
 }
 
 export function fromCanvas(nodes: ToolNode[], edges: Edge[], slots: Definition['slots'], params: Definition['params']): Definition {

@@ -1,6 +1,8 @@
 import { addEdge, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow, type Connection, type Edge } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Definition, Problem } from '../../domain/flows/definition';
+import { columnsPerRow, layoutSteps } from '../../domain/flows/layout';
+import { cx } from '../../lib/cx';
 import { api, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import { useLoad } from '../../lib/use-load';
@@ -15,9 +17,10 @@ import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClasses } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
+import { Modal } from '../ui/Modal';
 import { Panel } from '../ui/Panel';
 import { ErrorBox, Skeleton } from '../ui/states';
-import { availableRefs, FlowCanvas, fromCanvas, newNodeId, toCanvas, toolLabelKey, wouldCycle, type Catalog, type CatalogField, type CatalogTool, type ToolNode } from './shared';
+import { availableRefs, FlowCanvas, fromCanvas, GROUP_ICON, GROUP_TILE, markDirections, newNodeId, toCanvas, toolGroup, toolLabelKey, wouldCycle, type Catalog, type CatalogField, type CatalogTool, type ToolNode } from './shared';
 
 interface FlowDto {
   flow: { id: string; name: string; kind: 'setup' | 'update'; description: string | null; currentVersion: number };
@@ -56,6 +59,9 @@ export function FlowEditor({ id, canWrite, canCommand }: { id: string; canWrite:
   );
 }
 
+/** Where a new step goes: after a chosen step, on a line between two steps, or after the selected (else the last) step. */
+type Where = { kind: 'after'; id: string } | { kind: 'edge'; id: string } | { kind: 'end' };
+
 function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { data: FlowDto; catalog: Catalog; canWrite: boolean; canCommand: boolean; onVersion: (v: number | null) => void; onSaved: () => void }) {
   const t = useT();
   const rf = useReactFlow();
@@ -67,8 +73,12 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
   const [name, setName] = useState(data.flow.name);
   const [description, setDescription] = useState(data.flow.description ?? '');
   const [problems, setProblems] = useState<Problem[]>([]);
-  const [tab, setTab] = useState<'node' | 'flow'>('node');
-  const [search, setSearch] = useState('');
+  /** The panel over the right edge of the canvas: the chosen step, the flow's own settings, or closed. */
+  const [drawer, setDrawer] = useState<'node' | 'flow' | null>(null);
+  const [picker, setPicker] = useState<Where | null>(null);
+  const pickerOpen = useRef(false);
+  pickerOpen.current = picker !== null;
+  const [full, setFull] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [dirty, setDirty] = useState(false);
@@ -93,6 +103,39 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
+  // Full screen: the browser's own full screen when it allows it, and in every case this page's frame fills the window.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !pickerOpen.current && !document.fullscreenElement) setFull(false);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [full]);
+  async function toggleFull() {
+    if (full) {
+      setFull(false);
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    setFull(true);
+    await document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }
+
   // The server is the judge: ask it after each pause in editing.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -104,21 +147,39 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
   }, [definition]);
 
   const problemNodes = useMemo(() => new Set(problems.flatMap((p) => (p.node ? [p.node] : []))), [problems]);
-  const shown = useMemo(() => nodes.map((n) => ({ ...n, data: { ...n.data, problem: problemNodes.has(n.id) } })), [nodes, problemNodes]);
   const selected = nodes.find((n) => n.selected) ?? null;
-  const selectNode = useCallback((nid: string) => setNodes((all) => all.map((n) => ({ ...n, selected: n.id === nid }))), [setNodes]);
+  const selectNode = useCallback((nid: string) => {
+    setNodes((all) => all.map((n) => ({ ...n, selected: n.id === nid })));
+    setDrawer('node');
+  }, [setNodes]);
 
-  const onConnect = useCallback((c: Connection) => setEdges((all) => addEdge({ ...c, type: 'smoothstep' }, all)), [setEdges]);
+  /** A step with nothing after it gets a "+" at its right edge; a line between two steps carries its own. */
+  const shown = useMemo(() => {
+    const hasNext = new Set(edges.map((e) => e.source));
+    return markDirections(nodes, edges).map((n) => ({ ...n, data: { ...n.data, problem: problemNodes.has(n.id), onAdd: locked || hasNext.has(n.id) ? undefined : () => setPicker({ kind: 'after', id: n.id }) } }));
+  }, [nodes, edges, problemNodes, locked]);
+  const shownEdges = useMemo(() => edges.map((e) => ({ ...e, type: 'insert', data: { onInsert: locked ? undefined : (id: string) => setPicker({ kind: 'edge', id }) } })), [edges, locked]);
+
+  const onConnect = useCallback((c: Connection) => setEdges((all) => addEdge({ ...c, type: 'insert' }, all)), [setEdges]);
   const isValidConnection = useCallback(({ source, target }: { source: string; target: string }) => !wouldCycle(edges, source, target) && !edges.some((e) => e.source === source && e.target === target), [edges]);
 
-  function addTool(tool: CatalogTool) {
+  /** Lays every step out again, left to right in the order they run. */
+  function tidy(nextNodes: ToolNode[] = nodes, nextEdges: Edge[] = edges) {
+    // The row is as wide as the canvas shows at a readable size, so the flow wraps instead of needing a long scroll.
+    const width = document.querySelector<HTMLElement>('[data-flow-frame]')?.clientWidth ?? 1200;
+    const at = layoutSteps(nextNodes.map((n) => n.id), nextEdges.map((e) => ({ from: e.source, to: e.target })), columnsPerRow(width));
+    setNodes(nextNodes.map((n) => ({ ...n, position: at.get(n.id) ?? n.position })));
+    window.setTimeout(() => void rf.fitView({ padding: 0.3, maxZoom: 1, minZoom: 0.85, duration: 300, nodes: [{ id: nextNodes[nextNodes.length - 1]?.id ?? '' }] }), 60);
+  }
+
+  function addTool(tool: CatalogTool, where: Where) {
     const nid = newNodeId(nodes.map((n) => n.id), tool.id);
     const config: Record<string, string | number | boolean> = {};
     for (const f of tool.fields) if (f.default !== undefined) config[f.key] = f.default;
     const nextSlots = [...slots];
     const bind: Record<string, string> = {};
     for (const need of tool.needs) {
-      let slot = nextSlots.find((s) => s.kind === need);
+      let slot = nextSlots.find((x) => x.kind === need);
       if (!slot) {
         slot = { name: SLOT_DEFAULT[need], kind: need };
         nextSlots.push(slot);
@@ -126,20 +187,40 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
       bind[need] = slot.name;
     }
     if (nextSlots.length !== slots.length) setSlots(nextSlots);
-    const from = selected ?? nodes[nodes.length - 1];
-    const position = from ? { x: from.position.x + 280, y: from.position.y } : { x: 0, y: 0 };
-    const free = nodes.some((n) => Math.abs(n.position.x - position.x) < 40 && Math.abs(n.position.y - position.y) < 40) ? { x: position.x, y: position.y + 130 } : position;
-    const node: ToolNode = { id: nid, type: 'tool', position: free, selected: true, data: { tool: tool.id, label: '', bind, config, tier: tool.tier, available: tool.available } };
-    setNodes((all) => [...all.map((n) => ({ ...n, selected: false })), node]);
-    if (from) setEdges((all) => [...all, { id: `${from.id}->${nid}`, source: from.id, target: nid, type: 'smoothstep' }]);
-    setTab('node');
-    setTimeout(() => rf.fitView({ padding: 0.2, maxZoom: 1, duration: 300 }), 50);
+
+    const line = (from: string, to: string): Edge => ({ id: `${from}->${to}`, source: from, target: to, type: 'insert' });
+    let nextEdges = edges;
+    if (where.kind === 'edge') {
+      // On a line A to B: A now leads to the new step and the new step leads to B.
+      const cut = edges.find((e) => e.id === where.id);
+      if (cut) nextEdges = [...edges.filter((e) => e.id !== cut.id), line(cut.source, nid), line(nid, cut.target)];
+    } else {
+      const from = where.kind === 'after' ? where.id : (selected ?? nodes[nodes.length - 1])?.id;
+      if (from) {
+        // After a step that already has steps behind it, the new one takes its place in the line: it goes in between.
+        const behind = edges.filter((e) => e.source === from);
+        nextEdges = [...edges.filter((e) => e.source !== from), line(from, nid), ...behind.map((e) => line(nid, e.target))];
+      }
+    }
+    const node: ToolNode = { id: nid, type: 'tool', position: { x: 0, y: 0 }, selected: true, data: { tool: tool.id, label: '', bind, config, tier: tool.tier, available: tool.available } };
+    const nextNodes = [...nodes.map((n) => ({ ...n, selected: false })), node];
+    setEdges(nextEdges);
+    tidy(nextNodes, nextEdges);
+    setDrawer('node');
+    setPicker(null);
   }
 
   const patchNode = (nid: string, patch: Partial<ToolNode['data']>) => setNodes((all) => all.map((n) => (n.id === nid ? { ...n, data: { ...n.data, ...patch } } : n)));
   const removeNode = (nid: string) => {
-    setNodes((all) => all.filter((n) => n.id !== nid));
-    setEdges((all) => all.filter((e) => e.source !== nid && e.target !== nid));
+    // Removing a step in a line joins the step before it to the step after it, so the flow is not cut in two.
+    const incoming = edges.filter((e) => e.target === nid);
+    const outgoing = edges.filter((e) => e.source === nid);
+    const bridge: Edge[] = incoming.flatMap((i) => outgoing.filter((o) => !edges.some((e) => e.source === i.source && e.target === o.target)).map((o) => ({ id: `${i.source}->${o.target}`, source: i.source, target: o.target, type: 'insert' })));
+    const nextEdges = [...edges.filter((e) => e.source !== nid && e.target !== nid), ...bridge];
+    const nextNodes = nodes.filter((n) => n.id !== nid);
+    setEdges(nextEdges);
+    tidy(nextNodes, nextEdges);
+    setDrawer(null);
   };
 
   async function save() {
@@ -156,11 +237,33 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
     }
   }
 
-  const tools = catalog.tools.filter((x) => !search || `${x.id} ${t(toolLabelKey(x.id))}`.toLowerCase().includes(search.toLowerCase()));
+  const toolbar = (
+    <>
+      {!locked && <Button size="sm" variant="primary" onClick={() => setPicker({ kind: 'end' })}><Icon name="plus" className="size-4" />{t('flowAddStep')}</Button>}
+      {!locked && nodes.length > 1 && <Button size="sm" onClick={() => tidy()} title={t('flowTidyHelp')}><Icon name="tidy" className="size-4" />{t('flowTidy')}</Button>}
+      <Button size="sm" onClick={() => setDrawer(drawer === 'flow' ? null : 'flow')} aria-pressed={drawer === 'flow'}><Icon name="edit" className="size-4" />{t('flowSettingsOpen')}</Button>
+      <Button size="sm" onClick={() => void toggleFull()} aria-pressed={full}><Icon name={full ? 'shrink' : 'expand'} className="size-4" />{full ? t('flowExitFullscreen') : t('flowFullscreen')}</Button>
+    </>
+  );
+
+  const detail = drawer === 'flow' || (drawer === 'node' && selected) ? (
+    <aside aria-label={drawer === 'flow' ? t('flowSettingsOpen') : t('flowInspector')} className="absolute inset-y-0 right-0 z-10 flex w-[min(26rem,100%)] flex-col gap-3 overflow-y-auto border-l border-rule bg-paper p-4 shadow-card">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="m-0 text-base font-semibold text-ink">{drawer === 'flow' ? t('flowSettingsOpen') : (selected?.data.label || t(toolLabelKey(selected?.data.tool ?? '')))}</h2>
+        <Button size="sm" onClick={() => setDrawer(null)} aria-label={t('flowCloseDetail')}><Icon name="close" className="size-4" /></Button>
+      </div>
+      {drawer === 'flow' ? (
+        <FlowSettings name={name} description={description} slots={slots} params={params} locked={locked} onName={setName} onDescription={setDescription} onSlots={setSlots} onParams={setParams} />
+      ) : selected ? (
+        <NodeInspector node={selected} tool={byId.get(selected.data.tool)} slots={slots} refs={availableRefs(definition, selected.id, catalog)} locked={locked} onPatch={(p) => patchNode(selected.id, p)} onRemove={() => removeNode(selected.id)} onAddSlot={(x) => setSlots((all) => (all.some((y) => y.name === x.name) ? all : [...all, x]))} />
+      ) : null}
+    </aside>
+  ) : null;
+
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-col gap-3">
-        <a href="/app/flow" className="w-fit text-sm text-accent no-underline hover:underline">{t('navFlows')}</a>
+    <div className={cx('flex flex-col gap-3', full && 'fixed inset-0 z-40 h-dvh bg-paper p-3 sm:p-4')}>
+      <header className="flex flex-col gap-2">
+        {!full && <a href="/app/flow" className="w-fit text-sm text-accent no-underline hover:underline">{t('navFlows')}</a>}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="m-0 flex flex-wrap items-center gap-3 text-2xl font-semibold text-ink">
@@ -179,7 +282,7 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
             )}
             <a href={`/app/setup/baru?flowId=${data.flow.id}`} className={buttonClasses('secondary', 'sm')}><Icon name="send" className="size-4" />{t('flowRun')}</a>
             {!locked && <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={!dirty && data.version === data.flow.currentVersion}>{t('flowSave')}</Button>}
-            {!locked && (
+            {!locked && !full && (
               <ConfirmButton message={t('cfmArchiveFlow')} variant="danger" onConfirm={async () => { await api('DELETE', `/api/flows/${data.flow.id}`); window.location.assign('/app/flow'); }}>{t('flowArchive')}</ConfirmButton>
             )}
           </div>
@@ -189,44 +292,67 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
         {error ? <p role="alert" className="m-0 text-danger">{t(errorKey(error))}</p> : null}
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[14rem_1fr_20rem]">
-        <Panel className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto !p-3" aria-label={t('flowPalette')}>
-          <TextInput value={search} onChange={(e) => setSearch(e.currentTarget.value)} placeholder={t('flowSearchTool')} aria-label={t('flowSearchTool')} autoComplete="off" />
+      <FlowCanvas
+        label={t('flowCanvas')}
+        className={full ? 'min-h-0 flex-1' : 'h-[calc(100dvh-15rem)] min-h-[480px]'}
+        nodes={shown}
+        edges={shownEdges}
+        readOnly={locked}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        isValidConnection={isValidConnection}
+        onNodeClick={selectNode}
+        onPaneClick={() => setDrawer(null)}
+        toolbar={toolbar}
+        overlay={nodes.length === 0 && !locked ? (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <Button variant="primary" className="pointer-events-auto" onClick={() => setPicker({ kind: 'end' })}><Icon name="plus" className="size-4" />{t('flowAddStep')}</Button>
+          </div>
+        ) : detail}
+      />
+      <Problems problems={problems} onPick={selectNode} />
+      <StepPicker open={picker !== null} onClose={() => setPicker(null)} tools={catalog.tools} onPick={(tool) => picker && addTool(tool, picker)} />
+    </div>
+  );
+}
+
+/** "Add a step": a search over every tool, grouped by what it works on, the way n8n's node picker does. */
+function StepPicker({ open, onClose, tools, onPick }: { open: boolean; onClose: () => void; tools: CatalogTool[]; onPick: (tool: CatalogTool) => void }) {
+  const t = useT();
+  const [search, setSearch] = useState('');
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open) setSearch('');
+  }, [open]);
+  const q = search.trim().toLowerCase();
+  const shown = tools.filter((x) => !q || `${x.id} ${t(toolLabelKey(x.id))}`.toLowerCase().includes(q));
+  return (
+    <Modal open={open} onClose={onClose} title={t('flowPickerTitle')} initialFocus={field}>
+      <div className="flex flex-col gap-3">
+        <p className="m-0 text-sm text-muted">{t('flowPickerHint')}</p>
+        <TextInput ref={field} type="search" value={search} onChange={(e) => setSearch(e.currentTarget.value)} placeholder={t('flowSearchTool')} aria-label={t('flowSearchTool')} autoComplete="off" />
+        <div className="flex max-h-[55dvh] flex-col gap-3 overflow-y-auto">
           {GROUPS.map((g) => {
-            const list = tools.filter((x) => (x.needs[0] ?? 'orbyte') === g);
+            const list = shown.filter((x) => toolGroup(x.id) === g);
             if (!list.length) return null;
             return (
-              <div key={g} className="flex flex-col gap-1">
-                <h2 className="m-0 text-sm font-medium text-muted">{t(GROUP_LABEL[g])}</h2>
+              <section key={g} className="flex flex-col gap-1" aria-label={t(GROUP_LABEL[g])}>
+                <h3 className="m-0 text-sm font-medium text-muted">{t(GROUP_LABEL[g])}</h3>
                 {list.map((x) => (
-                  <button key={x.id} type="button" disabled={locked || !x.allowed || !x.available} onClick={() => addTool(x)} className="flex w-full items-center justify-between gap-2 rounded-input border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-ink hover:border-rule hover:bg-paper-2 disabled:cursor-not-allowed disabled:opacity-50" title={x.id}>
-                    <span className="min-w-0 truncate">{t(toolLabelKey(x.id))}</span>
-                    {!x.available ? <span className="shrink-0 text-[10px] text-muted">{t('flowToolSoon')}</span> : !x.allowed ? <span className="shrink-0 text-[10px] text-warm-ink">{t('flowOwnerOnly')}</span> : x.tier === 'change' ? <span className="shrink-0 rounded-full border border-warm px-1.5 text-[10px] text-warm-ink">{t('flowTierChange')}</span> : null}
+                  <button key={x.id} type="button" disabled={!x.allowed || !x.available} onClick={() => onPick(x)} className="flex w-full cursor-pointer items-center gap-3 rounded-input border border-transparent bg-transparent p-2 text-left text-sm text-ink hover:border-rule hover:bg-paper-2 focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50">
+                    <span aria-hidden="true" className={cx('grid size-9 shrink-0 place-items-center rounded-input', GROUP_TILE[g])}><Icon name={GROUP_ICON[g]} className="size-5" /></span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{t(toolLabelKey(x.id))}</span>
+                    {!x.available ? <span className="shrink-0 text-xs text-muted">{t('flowToolSoon')}</span> : !x.allowed ? <span className="shrink-0 text-xs text-warm-ink">{t('flowOwnerOnly')}</span> : x.tier === 'change' ? <span className="shrink-0 rounded-full border border-warm px-2 text-xs text-warm-ink">{t('flowTierChange')}</span> : null}
                   </button>
                 ))}
-              </div>
+              </section>
             );
           })}
-        </Panel>
-
-        <div className="flex min-w-0 flex-col gap-3">
-          <FlowCanvas label={t('flowCanvas')} nodes={shown} edges={edges} readOnly={locked} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} isValidConnection={isValidConnection} />
-          <Problems problems={problems} onPick={selectNode} />
+          {shown.length === 0 && <p className="m-0 text-sm text-muted">{t('flowPickerEmpty')}</p>}
         </div>
-
-        <Panel className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto !p-3" aria-label={t('flowInspector')}>
-          <div className="flex gap-2">
-            <Button size="sm" variant={tab === 'node' ? 'primary' : 'secondary'} onClick={() => setTab('node')}>{t('flowTabNode')}</Button>
-            <Button size="sm" variant={tab === 'flow' ? 'primary' : 'secondary'} onClick={() => setTab('flow')}>{t('flowTabFlow')}</Button>
-          </div>
-          {tab === 'node' ? (
-            selected ? <NodeInspector node={selected} tool={byId.get(selected.data.tool)} slots={slots} refs={availableRefs(definition, selected.id, catalog)} locked={locked} onPatch={(p) => patchNode(selected.id, p)} onRemove={() => removeNode(selected.id)} onAddSlot={(s) => setSlots((all) => (all.some((x) => x.name === s.name) ? all : [...all, s]))} /> : <p className="m-0 text-sm text-muted">{t('flowPickNode')}</p>
-          ) : (
-            <FlowSettings name={name} description={description} slots={slots} params={params} locked={locked} onName={setName} onDescription={setDescription} onSlots={setSlots} onParams={setParams} />
-          )}
-        </Panel>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -340,7 +466,7 @@ function FlowSettings({ name, description, slots, params, locked, onName, onDesc
         <h2 className="m-0 text-sm font-semibold text-ink">{t('flowSlots')}</h2>
         <p className="m-0 text-xs text-muted">{t('flowSlotsHelp')}</p>
         {slots.map((s, i) => (
-          <div key={i} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2">
+          <div key={i} className="grid grid-cols-[minmax(0,1fr)_9rem_auto] items-end gap-2">
             <FormField label={t('flowSlotName')}><TextInput value={s.name} onChange={(e) => setSlot(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
             <FormField label={t('flowParamType')}><SelectMenu value={s.kind} onChange={(v) => setSlot(i, { kind: v as (typeof KINDS)[number] })} disabled={locked} searchable={false} options={KINDS.map((k) => ({ value: k, label: t(`flowSlot_${k}` as MessageKey) }))} /></FormField>
             <Button size="sm" onClick={() => onSlots(slots.filter((_, j) => j !== i))} disabled={locked} aria-label={t('flowRemove')}><Icon name="close" className="size-4" /></Button>
@@ -355,9 +481,10 @@ function FlowSettings({ name, description, slots, params, locked, onName, onDesc
         {params.map((p, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-input border border-rule p-2">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-              <FormField label={t('flowParamName')} help={t('flowParamNameHelp')}><TextInput value={p.name} onChange={(e) => setParam(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
+              <FormField label={t('flowParamName')}><TextInput value={p.name} onChange={(e) => setParam(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
               <Button size="sm" onClick={() => onParams(params.filter((_, j) => j !== i))} disabled={locked} aria-label={t('flowRemove')}><Icon name="close" className="size-4" /></Button>
             </div>
+            <p className="m-0 -mt-1 text-xs text-muted">{t('flowParamNameHelp')}</p>
             <FormField label={t('flowParamLabel')}><TextInput value={p.label ?? ''} onChange={(e) => setParam(i, { label: e.currentTarget.value })} disabled={locked} autoComplete="off" /></FormField>
             <div className="grid grid-cols-2 gap-2">
               <FormField label={t('flowParamType')}><SelectMenu value={p.type} onChange={(v) => setParam(i, { type: v as typeof p.type })} disabled={locked} searchable={false} options={[{ value: 'string', label: t('flowTypeText') }, { value: 'number', label: t('flowTypeNumber') }, { value: 'boolean', label: t('flowTypeBool') }]} /></FormField>

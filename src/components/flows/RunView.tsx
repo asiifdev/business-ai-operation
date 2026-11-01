@@ -66,6 +66,8 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
   /** The name the person gave the step in the diagram ("Kunci Reverb"), else the tool's own name; three secret steps must not all read "Make a random secret". */
   const nameOf = (s: Step) => data.definition?.nodes.find((n) => n.id === s.node)?.label || t(toolLabelKey(s.tool));
   const failed = data.steps.find((s) => s.status === 'failed') ?? null;
+  /** What the canvas follows: the step running now, else the one that failed, else where the run got to. */
+  const following = data.steps.find((s) => s.status === 'running')?.node ?? failed?.node ?? [...data.steps].filter((s) => s.status === 'done').sort((a, b) => b.position - a.position)[0]?.node ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -91,7 +93,7 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         <ReactFlowProvider>
-          <FlowCanvas label={t('flowCanvas')} nodes={canvas.nodes} edges={canvas.edges} readOnly onNodeClick={setPicked} />
+          <FlowCanvas label={t('flowCanvas')} className="h-[62vh] min-h-[420px]" nodes={canvas.nodes} edges={canvas.edges} readOnly onNodeClick={setPicked} focusNode={following} />
         </ReactFlowProvider>
         <Panel className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto !p-3" aria-live="polite">
           <Steps

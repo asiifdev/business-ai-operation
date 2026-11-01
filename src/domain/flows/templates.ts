@@ -1,3 +1,4 @@
+import { layoutSteps } from './layout';
 import { definitionSchema, type Definition } from './definition';
 
 /**
@@ -15,9 +16,11 @@ export interface FlowTemplate {
 type N = { id: string; tool: string; bind?: Record<string, string>; config?: Record<string, string | number | boolean>; label?: string };
 
 function chain(nodes: N[], extraEdges: Array<[string, string]> = []): Pick<Definition, 'nodes' | 'edges'> {
+  const edges = [...nodes.slice(1).map((n, i) => ({ from: nodes[i].id, to: n.id })), ...extraEdges.map(([from, to]) => ({ from, to }))];
+  const at = layoutSteps(nodes.map((n) => n.id), edges);
   return {
-    nodes: nodes.map((n, i) => ({ id: n.id, tool: n.tool, label: n.label, position: { x: (i % 4) * 280, y: Math.floor(i / 4) * 150 }, bind: (n.bind ?? {}) as Definition['nodes'][number]['bind'], config: n.config ?? {} })),
-    edges: [...nodes.slice(1).map((n, i) => ({ from: nodes[i].id, to: n.id })), ...extraEdges.map(([from, to]) => ({ from, to }))],
+    nodes: nodes.map((n) => ({ id: n.id, tool: n.tool, label: n.label, position: at.get(n.id)!, bind: (n.bind ?? {}) as Definition['nodes'][number]['bind'], config: n.config ?? {} })),
+    edges,
   };
 }
 
