@@ -1,4 +1,4 @@
-import { Background, BackgroundVariant, Controls, Handle, MiniMap, Position, ReactFlow, type Edge, type Node, type NodeProps, type NodeTypes, type OnConnect, type OnEdgesChange, type OnNodesChange } from '@xyflow/react';
+import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps, type NodeTypes, type OnConnect, type OnEdgesChange, type OnNodesChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useEffect, useState } from 'react';
 import type { Definition } from '../../domain/flows/definition';
@@ -134,7 +134,6 @@ export function FlowCanvas({ nodes, edges, readOnly, onNodesChange, onEdgesChang
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="!hidden sm:!block" />
       </ReactFlow>
     </div>
   );

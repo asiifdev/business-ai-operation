@@ -4,7 +4,8 @@ import type { Definition, Problem } from '../../domain/flows/definition';
 import { api, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import { useLoad } from '../../lib/use-load';
-import { useT } from '../../lib/use-t';
+import { fieldText, optionLabel } from '../../lib/flow-labels';
+import { useLocale, useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
@@ -22,6 +23,7 @@ interface FlowDto {
   flow: { id: string; name: string; kind: 'setup' | 'update'; description: string | null; currentVersion: number };
   definition: Definition;
   hasCommandNode: boolean;
+  aiAssisted: boolean;
   version: number;
   versions: Array<{ version: number; createdAt: string; hasCommandNode: boolean }>;
 }
@@ -36,6 +38,7 @@ const GROUPS = ['ssh', 'aapanel', 'github', 'orbyte'] as const;
 const GROUP_LABEL = { ssh: 'flowGroupSsh', aapanel: 'flowGroupAapanel', github: 'flowGroupGithub', orbyte: 'flowGroupOrbyte' } as const satisfies Record<(typeof GROUPS)[number], MessageKey>;
 const SLOT_DEFAULT = { ssh: 'server', aapanel: 'panel', github: 'github' } as const;
 const PATTERNS = ['free', 'slug', 'domain', 'branch', 'repo', 'path', 'identifier'] as const;
+const PATTERN_LABEL = { free: 'flowPatternFree', slug: 'flowPatternSlug', domain: 'flowPatternDomain', branch: 'flowPatternBranch', repo: 'flowPatternRepo', path: 'flowPatternPath', identifier: 'flowPatternIdentifier' } as const satisfies Record<(typeof PATTERNS)[number], MessageKey>;
 
 /** Draws and edits a deploy flow (BRD-M17 section 13). The server checks every save again: this screen only helps write a definition. */
 export function FlowEditor({ id, canWrite, canCommand }: { id: string; canWrite: boolean; canCommand: boolean }) {
@@ -165,6 +168,7 @@ function Editor({ data, catalog, canWrite, canCommand, onVersion, onSaved }: { d
               <Badge tone="neutral">{t(data.flow.kind === 'setup' ? 'flowKindSetup' : 'flowKindUpdate')}</Badge>
               <Badge tone="accent">{t('flowVersionN', { n: data.version })}</Badge>
               {data.hasCommandNode && <Badge tone="warn">{t('flowOwnerOnly')}</Badge>}
+              {data.aiAssisted && <Badge tone="accent">{t('aiAssistedLabel')}</Badge>}
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -255,20 +259,28 @@ function VarPicker({ refs, disabled, onPick }: { refs: Array<{ ref: string; grou
   );
 }
 
-function Field({ spec, value, refs, disabled, onChange }: { spec: CatalogField; value: string | number | boolean | undefined; refs: Array<{ ref: string; group: string }>; disabled: boolean; onChange: (v: string | number | boolean | undefined) => void }) {
+function Field({ toolId, spec, value, refs, disabled, onChange }: { toolId: string; spec: CatalogField; value: string | number | boolean | undefined; refs: Array<{ ref: string; group: string }>; disabled: boolean; onChange: (v: string | number | boolean | undefined) => void }) {
   const t = useT();
+  const locale = useLocale();
   const text = value === undefined ? '' : String(value);
   const usable = refs.filter((r) => spec.secret || r.group !== 'secrets');
   const set = (s: string) => onChange(s === '' ? undefined : spec.type === 'number' && /^-?\d+$/.test(s) ? Number(s) : s);
-  const help = spec.secret ? t('flowFieldSecretOk') : undefined;
-  if (spec.type === 'boolean') return <Toggle label={<span className="font-mono text-sm">{spec.key}</span>} checked={value === true || value === 'true'} onChange={onChange} disabled={disabled} />;
+  const words = fieldText(locale, toolId, spec.key);
+  const label = words?.label ?? spec.key;
+  const help = [words?.help, spec.secret ? t('flowFieldSecretOk') : null].filter(Boolean).join(' ') || undefined;
+  if (spec.type === 'boolean') return (
+    <div className="flex flex-col gap-1">
+      <Toggle label={label} checked={value === true || value === 'true'} onChange={onChange} disabled={disabled} />
+      {help && <p className="m-0 text-sm text-muted">{help}</p>}
+    </div>
+  );
   if (spec.type === 'select') return (
-    <FormField label={spec.key} required={!spec.optional}>
-      <SelectMenu value={text} onChange={(v) => onChange(v || undefined)} disabled={disabled} searchable={false} options={(spec.options ?? []).map((o) => ({ value: o, label: o }))} />
+    <FormField label={label} required={!spec.optional} help={help}>
+      <SelectMenu value={text} onChange={(v) => onChange(v || undefined)} disabled={disabled} searchable={false} options={(spec.options ?? []).map((o) => ({ value: o, label: optionLabel(locale, spec.key, o) }))} />
     </FormField>
   );
   return (
-    <FormField label={spec.key} required={!spec.optional} help={help}>
+    <FormField label={label} required={!spec.optional} help={help}>
       {spec.multiline ? <Textarea value={text} onChange={(e) => set(e.currentTarget.value)} rows={6} spellCheck={false} disabled={disabled} /> : <TextInput value={text} onChange={(e) => set(e.currentTarget.value)} disabled={disabled} autoComplete="off" spellCheck={false} />}
       <VarPicker refs={usable} disabled={disabled} onPick={(r) => set(`${text}{{${r}}}`)} />
     </FormField>
@@ -300,7 +312,7 @@ function NodeInspector({ node, tool, slots, refs, locked, onPatch, onRemove, onA
         );
       })}
       {tool.fields.map((f) => (
-        <Field key={f.key} spec={f} value={node.data.config[f.key]} refs={refs} disabled={locked} onChange={(v) => onPatch({ config: Object.fromEntries(Object.entries({ ...node.data.config, [f.key]: v }).filter(([, x]) => x !== undefined)) as ToolNode['data']['config'] })} />
+        <Field key={f.key} toolId={tool.id} spec={f} value={node.data.config[f.key]} refs={refs} disabled={locked} onChange={(v) => onPatch({ config: Object.fromEntries(Object.entries({ ...node.data.config, [f.key]: v }).filter(([, x]) => x !== undefined)) as ToolNode['data']['config'] })} />
       ))}
       {tool.outputs.length > 0 && (
         <p className="m-0 text-xs text-muted">{t('flowOutputs')}: {tool.outputs.map((o) => <code key={o} className="mr-1 font-mono">{`{{nodes.${node.id}.${o}}}`}</code>)}</p>
@@ -328,9 +340,9 @@ function FlowSettings({ name, description, slots, params, locked, onName, onDesc
         <h2 className="m-0 text-sm font-semibold text-ink">{t('flowSlots')}</h2>
         <p className="m-0 text-xs text-muted">{t('flowSlotsHelp')}</p>
         {slots.map((s, i) => (
-          <div key={i} className="grid grid-cols-[1fr_7rem_auto] items-end gap-2">
-            <FormField label={t('fConnName')}><TextInput value={s.name} onChange={(e) => setSlot(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
-            <FormField label={t('connKindGithub').replace('GitHub', '') || ' '}><SelectMenu value={s.kind} onChange={(v) => setSlot(i, { kind: v as (typeof KINDS)[number] })} disabled={locked} searchable={false} options={KINDS.map((k) => ({ value: k, label: t(`flowSlot_${k}` as MessageKey) }))} /></FormField>
+          <div key={i} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2">
+            <FormField label={t('flowSlotName')}><TextInput value={s.name} onChange={(e) => setSlot(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
+            <FormField label={t('flowParamType')}><SelectMenu value={s.kind} onChange={(v) => setSlot(i, { kind: v as (typeof KINDS)[number] })} disabled={locked} searchable={false} options={KINDS.map((k) => ({ value: k, label: t(`flowSlot_${k}` as MessageKey) }))} /></FormField>
             <Button size="sm" onClick={() => onSlots(slots.filter((_, j) => j !== i))} disabled={locked} aria-label={t('flowRemove')}><Icon name="close" className="size-4" /></Button>
           </div>
         ))}
@@ -342,14 +354,14 @@ function FlowSettings({ name, description, slots, params, locked, onName, onDesc
         <p className="m-0 text-xs text-muted">{t('flowParamsHelp')}</p>
         {params.map((p, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-input border border-rule p-2">
-            <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-              <FormField label={t('fConnName')}><TextInput value={p.name} onChange={(e) => setParam(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+              <FormField label={t('flowParamName')} help={t('flowParamNameHelp')}><TextInput value={p.name} onChange={(e) => setParam(i, { name: e.currentTarget.value.toLowerCase() })} disabled={locked} autoComplete="off" /></FormField>
               <Button size="sm" onClick={() => onParams(params.filter((_, j) => j !== i))} disabled={locked} aria-label={t('flowRemove')}><Icon name="close" className="size-4" /></Button>
             </div>
             <FormField label={t('flowParamLabel')}><TextInput value={p.label ?? ''} onChange={(e) => setParam(i, { label: e.currentTarget.value })} disabled={locked} autoComplete="off" /></FormField>
             <div className="grid grid-cols-2 gap-2">
               <FormField label={t('flowParamType')}><SelectMenu value={p.type} onChange={(v) => setParam(i, { type: v as typeof p.type })} disabled={locked} searchable={false} options={[{ value: 'string', label: t('flowTypeText') }, { value: 'number', label: t('flowTypeNumber') }, { value: 'boolean', label: t('flowTypeBool') }]} /></FormField>
-              <FormField label={t('flowParamPattern')}><SelectMenu value={p.pattern} onChange={(v) => setParam(i, { pattern: v as typeof p.pattern })} disabled={locked || p.type !== 'string'} searchable={false} options={PATTERNS.map((x) => ({ value: x, label: x }))} /></FormField>
+              <FormField label={t('flowParamPattern')}><SelectMenu value={p.pattern} onChange={(v) => setParam(i, { pattern: v as typeof p.pattern })} disabled={locked || p.type !== 'string'} searchable={false} options={PATTERNS.map((x) => ({ value: x, label: t(PATTERN_LABEL[x]) }))} /></FormField>
             </div>
             <FormField label={t('flowParamDefault')}><TextInput value={p.default === undefined ? '' : String(p.default)} onChange={(e) => setParam(i, { default: e.currentTarget.value === '' ? undefined : p.type === 'number' && /^\d+$/.test(e.currentTarget.value) ? Number(e.currentTarget.value) : e.currentTarget.value })} disabled={locked} autoComplete="off" /></FormField>
             <Toggle label={t('flowParamRequired')} checked={p.required} onChange={(v) => setParam(i, { required: v })} disabled={locked} />

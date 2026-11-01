@@ -2,9 +2,9 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { newId } from '../../db/ids';
-import { clients, connections, flows, flowVersions, playbookRuns, playbookSteps, productSetups, products } from '../../db/schema';
+import { approvals, clients, connections, flows, flowVersions, playbookRuns, playbookSteps, productSetups, products } from '../../db/schema';
 import { requestApproval } from '../approvals/service';
-import { recordAudit } from '../audit/service';
+import { recordAudit, type AuditWho } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
@@ -27,6 +27,8 @@ export interface FlowSummary {
   productId: string | null;
   currentVersion: number;
   hasCommandNode: boolean;
+  /** The shown version was written by the assistant and no person has saved over it yet (PRD M17 `draft_flow`). */
+  aiAssisted: boolean;
   nodeCount: number;
   updatedAt: Date;
 }
@@ -41,9 +43,15 @@ export function checkDefinition(raw: unknown, canUseCommand: boolean): { ok: boo
 
 const isUnique = (e: unknown) => /uq_flows_name|duplicate key/i.test(String((e as Error)?.message) + String((e as { cause?: Error })?.cause?.message));
 
+/** The assistant never writes or edits a flow with a free command node, whoever asked it to (PRD M17): code decides, not the prompt. */
+function assertNotAssistant(ctx: Ctx) {
+  if (ctx.actor.startsWith('ai:')) throw new DomainError('forbidden', 'the assistant may not write a flow with a command node');
+}
+
 /** The Owner alone may save a flow that has a free command node, and alone may change one that has (BR-M17-18). */
 function assertMayWrite(ctx: Ctx, def: Definition, existingHadCommand = false) {
   assertCan(ctx, 'flow.write');
+  if (hasCommandNode(def) || existingHadCommand) assertNotAssistant(ctx);
   if (hasCommandNode(def) || existingHadCommand) assertCan(ctx, 'flow.command');
 }
 
@@ -80,7 +88,10 @@ export async function updateFlow(ctx: Ctx, id: string, raw: { name?: string; des
     const [flow] = await tx.select().from(flows).where(and(eq(flows.orgId, ctx.orgId), eq(flows.id, id))).for('update');
     if (!flow || flow.archivedAt) throw new DomainError('not_found', 'flow');
     const [current] = await tx.select().from(flowVersions).where(and(eq(flowVersions.orgId, ctx.orgId), eq(flowVersions.flowId, id), eq(flowVersions.version, flow.currentVersion)));
-    if (current.hasCommandNode) assertCan(ctx, 'flow.command');
+    if (current.hasCommandNode) {
+      assertCan(ctx, 'flow.command');
+      assertNotAssistant(ctx);
+    }
     let version = flow.currentVersion;
     if (raw.definition !== undefined) {
       const checked = checkDefinition(raw.definition, true);
@@ -120,7 +131,7 @@ export async function listFlows(ctx: Ctx): Promise<FlowSummary[]> {
     .innerJoin(flowVersions, and(eq(flowVersions.orgId, flows.orgId), eq(flowVersions.flowId, flows.id), eq(flowVersions.version, flows.currentVersion)))
     .where(and(eq(flows.orgId, ctx.orgId), isNull(flows.archivedAt)))
     .orderBy(asc(flows.name));
-  return rows.map(({ f, v }) => ({ id: f.id, name: f.name, kind: f.kind, description: f.description, productId: f.productId, currentVersion: f.currentVersion, hasCommandNode: v.hasCommandNode, nodeCount: ((v.definition as { nodes?: unknown[] }).nodes ?? []).length, updatedAt: f.updatedAt }));
+  return rows.map(({ f, v }) => ({ id: f.id, name: f.name, kind: f.kind, description: f.description, productId: f.productId, currentVersion: f.currentVersion, hasCommandNode: v.hasCommandNode, aiAssisted: v.createdBy.startsWith('ai:'), nodeCount: ((v.definition as { nodes?: unknown[] }).nodes ?? []).length, updatedAt: f.updatedAt }));
 }
 
 export async function getFlow(ctx: Ctx, id: string, version?: number) {
@@ -131,7 +142,7 @@ export async function getFlow(ctx: Ctx, id: string, version?: number) {
   const wanted = version ?? flow.currentVersion;
   const [v] = await db.select().from(flowVersions).where(and(eq(flowVersions.orgId, ctx.orgId), eq(flowVersions.flowId, id), eq(flowVersions.version, wanted)));
   if (!v) throw new DomainError('not_found', 'flow version');
-  return { flow: { id: flow.id, name: flow.name, kind: flow.kind, description: flow.description, productId: flow.productId, currentVersion: flow.currentVersion, archivedAt: flow.archivedAt }, definition: v.definition as unknown as Definition, hasCommandNode: v.hasCommandNode, version: wanted, versions };
+  return { flow: { id: flow.id, name: flow.name, kind: flow.kind, description: flow.description, productId: flow.productId, currentVersion: flow.currentVersion, archivedAt: flow.archivedAt }, definition: v.definition as unknown as Definition, hasCommandNode: v.hasCommandNode, aiAssisted: v.createdBy.startsWith('ai:'), version: wanted, versions };
 }
 
 export function listTemplates() {
@@ -306,8 +317,34 @@ export async function cancelRun(ctx: Ctx, runId: string): Promise<void> {
     if (!['awaiting_approval', 'paused', 'running', 'planned'].includes(run.status)) throw new DomainError('invalid_state', 'this run already ended');
     await tx.update(playbookRuns).set({ status: 'cancelled', finishedAt: ctx.clock.now(), secretsCiphertext: null, secretsKeyVersion: null }).where(eq(playbookRuns.id, runId));
     await recordAudit(tx, who(ctx), { action: 'flow.run_cancelled', entityType: 'playbook_run', entityId: runId });
+    // A plan thrown away must not leave its request waiting in the Action Center with a button that can no longer do anything.
+    if (run.approvalId) {
+      const closed = await tx
+        .update(approvals)
+        .set({ status: 'rejected', decidedBy: ctx.userId ?? null, decidedAt: ctx.clock.now() })
+        .where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, run.approvalId), eq(approvals.status, 'pending')))
+        .returning({ id: approvals.id });
+      if (closed.length) await recordAudit(tx, who(ctx), { action: 'approval.rejected', entityType: 'approval', entityId: run.approvalId, summary: { tool: 'start_flow_run', reason: 'run_cancelled' } });
+    }
   });
   await purgeRunSecrets(runId);
+}
+
+/**
+ * The request to start a planned run was turned down, lapsed, or was refused because the plan went stale: that run can
+ * never start, so it is closed instead of waiting for ever under "Waiting for approval". A run already past that stage is left alone.
+ */
+export async function closeRunOfApproval(orgId: string, approvalId: string, reason: 'rejected' | 'expired' | 'refused', at: Date, audit: AuditWho): Promise<void> {
+  const closed = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(playbookRuns)
+      .set({ status: 'cancelled', finishedAt: at, secretsCiphertext: null, secretsKeyVersion: null })
+      .where(and(eq(playbookRuns.orgId, orgId), eq(playbookRuns.approvalId, approvalId), eq(playbookRuns.status, 'awaiting_approval')))
+      .returning({ id: playbookRuns.id });
+    for (const r of rows) await recordAudit(tx, audit, { action: 'flow.run_cancelled', entityType: 'playbook_run', entityId: r.id, summary: { reason: `approval_${reason}` } });
+    return rows;
+  });
+  for (const r of closed) await purgeRunSecrets(r.id);
 }
 
 export async function getRun(ctx: Ctx, runId: string) {

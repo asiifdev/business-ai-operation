@@ -9,7 +9,7 @@ import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
 import { EmptyState, ErrorBox, Skeleton } from '../ui/states';
 
-interface FlowRow { id: string; name: string; kind: 'setup' | 'update'; description: string | null; currentVersion: number; hasCommandNode: boolean; nodeCount: number }
+interface FlowRow { id: string; name: string; kind: 'setup' | 'update'; description: string | null; currentVersion: number; hasCommandNode: boolean; aiAssisted: boolean; nodeCount: number }
 interface TemplateRow { key: string; name: string; description: string; kind: 'setup' | 'update'; nodeCount: number }
 
 /** The deploy flows of the organization, and the ready-made ones to start from (BRD-M17 section 13). */
@@ -59,6 +59,7 @@ export function FlowsPage({ canWrite }: { canWrite: boolean }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-base font-semibold text-ink">{f.name}</span>
                       <Badge tone="neutral">{t(f.kind === 'setup' ? 'flowKindSetup' : 'flowKindUpdate')}</Badge>
+                      {f.aiAssisted && <Badge tone="accent">{t('aiAssistedLabel')}</Badge>}
                     </div>
                     {f.description && <p className="mt-1 mb-0 text-sm text-muted">{f.description}</p>}
                     <p className="mt-3 mb-0 flex flex-wrap gap-x-3 text-xs text-muted">

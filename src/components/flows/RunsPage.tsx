@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../lib/format';
 import { api, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import { useLoad } from '../../lib/use-load';
@@ -11,7 +12,7 @@ import { RUN_TONE } from './RunView';
 
 interface RunRow { id: string; status: keyof typeof RUN_TONE; kind: 'setup' | 'update'; error: string | null; createdAt: string; finishedAt: string | null; domain: string }
 
-export function RunsPage({ canRun }: { canRun: boolean }) {
+export function RunsPage({ canRun, timezone }: { canRun: boolean; timezone: string }) {
   const t = useT();
   const runs = useLoad(() => api<{ runs: RunRow[] }>('GET', '/api/runs'), []);
   return (
@@ -28,7 +29,7 @@ export function RunsPage({ canRun }: { canRun: boolean }) {
                   <span className="min-w-0 flex-1 truncate font-medium text-ink">{r.domain || r.id}</span>
                   <Badge tone="neutral">{t(r.kind === 'setup' ? 'flowKindSetup' : 'flowKindUpdate')}</Badge>
                   <Badge tone={RUN_TONE[r.status]}>{t(`runStatus_${r.status}` as MessageKey)}</Badge>
-                  <time className="text-xs text-muted" dateTime={r.createdAt}>{new Date(r.createdAt).toLocaleString()}</time>
+                  <time className="text-xs text-muted" dateTime={r.createdAt}>{formatDateTime(r.createdAt, timezone)}</time>
                 </a>
               </li>
             ))}

@@ -63,6 +63,9 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
   if (!data || !canvas) return null;
   const step = data.steps.find((s) => s.node === picked) ?? data.steps.find((s) => s.status === 'failed') ?? null;
   const done = data.steps.filter((s) => s.status === 'done').length;
+  /** The name the person gave the step in the diagram ("Kunci Reverb"), else the tool's own name; three secret steps must not all read "Make a random secret". */
+  const nameOf = (s: Step) => data.definition?.nodes.find((n) => n.id === s.node)?.label || t(toolLabelKey(s.tool));
+  const failed = data.steps.find((s) => s.status === 'failed') ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,7 +84,7 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
           )}
         </div>
         <p className="m-0 text-sm text-muted">{t('runProgress', { done, total: data.steps.length })}</p>
-        {data.error && <p role="alert" className="m-0 text-danger [overflow-wrap:anywhere]">{data.error}</p>}
+        {data.error && <p role="alert" className="m-0 text-danger [overflow-wrap:anywhere]">{failed ? t('runFailedAtStep', { step: nameOf(failed) }) : data.error}</p>}
         {data.status === 'paused' && <p className="m-0 text-sm text-muted">{t('runPausedHelp')}</p>}
         {error ? <p role="alert" className="m-0 text-danger">{t(errorKey(error))}</p> : null}
       </header>
@@ -93,7 +96,7 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
         <Panel className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto !p-3" aria-live="polite">
           <Steps
             label={t('runStepsTitle')}
-            steps={[...data.steps].sort((a, b) => a.position - b.position).map((s) => ({ id: s.node, label: t(toolLabelKey(s.tool)), status: STEP_STATUS[s.status], note: s.status === 'failed' || s.status === 'running' ? t(`flowStatus_${s.status}` as MessageKey) : undefined }))}
+            steps={[...data.steps].sort((a, b) => a.position - b.position).map((s) => ({ id: s.node, label: nameOf(s), status: STEP_STATUS[s.status], note: s.status === 'failed' || s.status === 'running' ? t(`flowStatus_${s.status}` as MessageKey) : undefined }))}
             selected={step?.node ?? null}
             onSelect={setPicked}
           />
@@ -101,11 +104,12 @@ export function RunView({ id, canRun }: { id: string; canRun: boolean }) {
           {step ? (
             <>
               <div>
-                <h2 className="m-0 text-base font-semibold text-ink">{t(toolLabelKey(step.tool))}</h2>
+                <h2 className="m-0 text-base font-semibold text-ink">{nameOf(step)}</h2>
                 <p className="m-0 font-mono text-xs text-muted">{step.node}</p>
               </div>
               <Badge tone={step.status === 'done' ? 'success' : step.status === 'failed' ? 'danger' : step.status === 'running' ? 'accent' : 'neutral'}>{t(`flowStatus_${step.status}` as MessageKey)}</Badge>
               {step.attempts > 1 && <p className="m-0 text-xs text-muted">{t('runAttempts', { n: step.attempts })}</p>}
+              {step.error && <p className="m-0 text-xs text-muted">{t('runTechnicalDetail')}</p>}
               {step.error && <pre className="m-0 whitespace-pre-wrap rounded-input border border-danger p-2 font-mono text-xs text-danger [overflow-wrap:anywhere]">{step.error}</pre>}
               {step.output != null && <pre className="m-0 max-h-72 overflow-auto whitespace-pre-wrap rounded-input border border-rule bg-paper-2 p-2 font-mono text-xs text-ink [overflow-wrap:anywhere]">{typeof step.output === 'string' ? step.output : JSON.stringify(step.output, null, 2)}</pre>}
             </>

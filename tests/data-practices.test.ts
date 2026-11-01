@@ -26,6 +26,9 @@ describe('data-practices registry', () => {
     expect([...listed].filter((k) => !used.has(k)), 'registry lists keys the code no longer uses').toEqual([]);
   });
 
+  // Hosts reserved for examples (RFC 2606) can never be a third party; help texts use them as sample addresses.
+  const RESERVED_EXAMPLE = /(^|\.)example\.(com|org|net)$/i;
+
   it('lists every external host the code can reach', () => {
     const allowed = new Set<string>([
       ...processors.flatMap((p) => p.hosts),
@@ -34,7 +37,7 @@ describe('data-practices registry', () => {
       'schema.org', 'www.w3.org', 'www.sitemaps.org', 'localhost', '127.0.0.1', 'asiifdev.com', 'github.com', 'llmstxt.org',
     ]);
     const found = new Map<string, string>();
-    for (const { f, text } of code) for (const m of text.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,}|localhost|127\.0\.0\.1)/gi)) if (!allowed.has(m[1].toLowerCase())) found.set(m[1], f);
+    for (const { f, text } of code) for (const m of text.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,}|localhost|127\.0\.0\.1)/gi)) if (!allowed.has(m[1].toLowerCase()) && !RESERVED_EXAMPLE.test(m[1])) found.set(m[1], f);
     expect([...found.entries()], 'hosts missing from the registry (add them, with purpose and data, or remove them)').toEqual([]);
   });
 

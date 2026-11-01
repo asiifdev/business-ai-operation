@@ -44,5 +44,8 @@ describe('mutationToastKey', () => {
     expect(mutationToastKey('POST', '/api/assistant/chat')).toBeNull();
     expect(mutationToastKey('POST', '/api/auth/sign-in/email')).toBeNull();
     expect(mutationToastKey('POST', '/api/runs/01ABC/retry')).toBeNull();
+    // the flow editor checks its diagram with a POST on its own, every time it opens: that is not a creation
+    expect(mutationToastKey('POST', '/api/flows/validate')).toBeNull();
+    expect(mutationToastKey('POST', '/api/flows')).toBe('toastCreated');
   });
 });

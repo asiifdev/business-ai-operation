@@ -4,11 +4,12 @@ import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
-import { auditLog, connections, deployments, playbookRuns, playbookSteps } from '../../../db/schema';
+import { approvals, auditLog, connections, deployments, playbookRuns, playbookSteps } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import { sealVerificationForTest } from '../../connections/github-verify';
 import { createConnection } from '../../connections/service';
 import { DomainError } from '../../errors';
+import { decideApproval, expireApprovals } from '../../action-center/approvals';
 import { createClient } from '../../portfolio/clients';
 import { createProduct } from '../../portfolio/products';
 import { definitionSchema, type Definition } from '../definition';
@@ -198,6 +199,46 @@ describe('flow engine against a real SSH server, real git, and a panel look-alik
     expect(await code(retryRun(s.o.ownerCtx, plan.runId))).toBe('invalid_state');
     expect(await code(startRun(s.o.ownerCtx, plan.runId))).toBe('invalid_state');
     expect(await executeRun(plan.runId, world.services)).toBe('skipped');
+  });
+
+  it('throwing a plan away closes its request in the Action Center, and a request already approved is left alone', async () => {
+    const s = await setup();
+    const waiting = (await planned(s)).plan;
+    expect((await db.select().from(approvals).where(eq(approvals.id, waiting.approvalId)))[0].status).toBe('pending');
+    await cancelRun(s.o.ownerCtx, waiting.runId);
+    const closed = (await db.select().from(approvals).where(eq(approvals.id, waiting.approvalId)))[0];
+    expect(closed.status).toBe('rejected');
+    expect(closed.decidedAt).not.toBeNull();
+    const trail = await db.select().from(auditLog).where(and(eq(auditLog.entityId, waiting.approvalId), eq(auditLog.action, 'approval.rejected')));
+    expect(trail).toHaveLength(1);
+    expect(trail[0].summary).toMatchObject({ reason: 'run_cancelled' });
+
+    // An approval someone already gave stays what it was: the run is cancelled later, the decision was real.
+    const given = (await planned(s)).plan;
+    await db.update(approvals).set({ status: 'approved' }).where(eq(approvals.id, given.approvalId));
+    await cancelRun(s.o.ownerCtx, given.runId);
+    expect((await db.select().from(approvals).where(eq(approvals.id, given.approvalId)))[0].status).toBe('approved');
+  });
+
+  it('a request turned down or left to lapse closes its run, so nothing waits for ever; a run that already started is not touched', async () => {
+    const s = await setup();
+    const turnedDown = (await planned(s)).plan;
+    expect(await decideApproval(s.o.ownerCtx, turnedDown.approvalId, { decision: 'reject' })).toMatchObject({ status: 'rejected', executed: false });
+    expect(await runRow(turnedDown.runId)).toMatchObject({ status: 'cancelled', secretsCiphertext: null });
+    const trail = await db.select().from(auditLog).where(and(eq(auditLog.entityId, turnedDown.runId), eq(auditLog.action, 'flow.run_cancelled')));
+    expect(trail[0].summary).toMatchObject({ reason: 'approval_rejected' });
+
+    const lapsing = (await planned(s)).plan;
+    const later = new Date(Date.now() + 48 * 3_600_000);
+    expect(await expireApprovals(s.o.orgId, later)).toBeGreaterThanOrEqual(1);
+    expect(await runRow(lapsing.runId)).toMatchObject({ status: 'cancelled' });
+
+    // Approved and started: a late "expire" sweep or reject click can no longer reach it.
+    const going = (await planned(s)).plan;
+    await decideApproval(s.o.ownerCtx, going.approvalId, { decision: 'approve' });
+    expect(['running', 'done', 'failed', 'paused']).toContain((await runRow(going.runId)).status);
+    await expireApprovals(s.o.orgId, later);
+    expect((await runRow(going.runId)).status).not.toBe('cancelled');
   });
 
   it('two workers cannot run the same run at once, and one run per server at a time', async () => {

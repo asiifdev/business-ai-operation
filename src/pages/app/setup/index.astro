@@ -7,5 +7,5 @@ export const prerender = false;
 ---
 
 <AppShell title="Eksekusi setup" current="runs">
-  <RunsPage client:only="react" canRun={can(Astro.locals.user!.role, 'setup.run')} />
+  <RunsPage client:only="react" canRun={can(Astro.locals.user!.role, 'setup.run')} timezone={Astro.locals.timezone} />
 </AppShell>

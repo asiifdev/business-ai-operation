@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Definition } from '../../domain/flows/definition';
 import { api, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import { useLoad } from '../../lib/use-load';
-import { useT } from '../../lib/use-t';
+import { fieldText, optionLabel } from '../../lib/flow-labels';
+import { previewValue } from '../../lib/flow-preview';
+import { useLocale, useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
 import { Toggle } from '../forms/Toggle';
 import { Badge } from '../ui/Badge';
+import { toast } from '../ui/Toast';
 import { Button } from '../ui/Button';
 import { PageHeader } from '../ui/PageHeader';
 import { Panel } from '../ui/Panel';
@@ -25,6 +28,9 @@ interface SetupDto { profile: { serverConnectionId?: string | null; githubConnec
 /** Asks what the flow needs, turns the answers into a plan, and starts it only after a person approves (BR-M17-21). */
 export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId: string | null; initialProductId: string | null }) {
   const t = useT();
+  const locale = useLocale();
+  const previewWords = { secret: t('runPreviewSecret'), stepResult: t('runPreviewStepResult'), fromProduct: t('runPreviewFromProduct') };
+  const planRef = useRef<HTMLDivElement>(null);
   const flows = useLoad(() => api<{ flows: FlowRow[] }>('GET', '/api/flows'), []);
   const products = useLoad(() => api<{ products: ProductRow[] }>('GET', '/api/products'), []);
   const clientList = useLoad(() => api<{ clients: Array<{ id: string; name: string }> }>('GET', '/api/clients'), []);
@@ -36,6 +42,8 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
   const [params, setParams] = useState<Record<string, string | boolean>>({});
   const [bindings, setBindings] = useState<Record<string, string>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
+  // The plan opens below the form; without this the person sees nothing happen after pressing the button.
+  useEffect(() => { if (plan) planRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [plan]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -94,10 +102,12 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
     setBusy(true);
     try {
       await api('POST', `/api/runs/${plan.runId}/cancel`, {});
-    } catch {
-      /* the plan expires by itself */
+      setPlan(null);
+      toast(t('runDiscarded'));
+    } catch (err) {
+      // Still waiting for approval on the server: say so rather than pretend it is gone.
+      setError(err);
     }
-    setPlan(null);
     setBusy(false);
   }
 
@@ -149,32 +159,37 @@ export function RunPlanner({ initialFlowId, initialProductId }: { initialFlowId:
       )}
 
       {plan && (
-        <Panel className="flex flex-col gap-3" aria-label={t('runPlanTitle')}>
-          <h2 className="m-0 text-lg font-semibold text-ink">{t('runPlanTitle')}</h2>
-          <p className="m-0 text-sm text-muted">{t('runPlanHelp')}</p>
-          {plan.changes.length === 0 ? <p className="m-0 text-sm text-muted">{t('runPlanNoChange')}</p> : (
-            <ol className="m-0 flex list-none flex-col gap-2 p-0">
-              {plan.changes.map((c, i) => (
-                <li key={c.node} className="rounded-input border border-rule p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted">{i + 1}.</span>
-                    <span className="font-medium text-ink">{c.label || t(toolLabelKey(c.tool))}</span>
-                    <Badge tone="warn">{t('flowTierChange')}</Badge>
-                  </div>
-                  <dl className="m-0 mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                    {Object.entries(c.config).map(([k, v]) => (
-                      <div key={k} className="contents"><dt className="font-mono text-muted">{k}</dt><dd className="m-0 font-mono text-ink [overflow-wrap:anywhere]">{String(v)}</dd></div>
-                    ))}
-                  </dl>
-                </li>
-              ))}
-            </ol>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={approve} loading={busy}>{t('runApprove')}</Button>
-            <Button onClick={discard} disabled={busy}>{t('runDiscard')}</Button>
-          </div>
-        </Panel>
+        <div ref={planRef} className="scroll-mt-20">
+          <Panel className="flex flex-col gap-3" aria-label={t('runPlanTitle')}>
+            <h2 className="m-0 text-lg font-semibold text-ink">{t('runPlanTitle')}</h2>
+            <p className="m-0 text-sm text-muted">{t('runPlanHelp')}</p>
+            {plan.changes.length === 0 ? <p className="m-0 text-sm text-muted">{t('runPlanNoChange')}</p> : (
+              <ol className="m-0 flex list-none flex-col gap-2 p-0">
+                {plan.changes.map((c, i) => (
+                  <li key={c.node} className="rounded-input border border-rule p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-muted">{i + 1}.</span>
+                      <span className="font-medium text-ink">{c.label || t(toolLabelKey(c.tool))}</span>
+                      <Badge tone="warn">{t('flowTierChange')}</Badge>
+                    </div>
+                    <dl className="m-0 mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                      {Object.entries(c.config).map(([k, v]) => {
+                        const shown = typeof v === 'string' ? previewValue(v, plan.params, previewWords) : String(v);
+                        return (
+                          <div key={k} className="contents"><dt className="text-muted">{fieldText(locale, c.tool, k)?.label ?? k}</dt><dd className="m-0 font-mono text-ink [overflow-wrap:anywhere]">{optionLabel(locale, k, shown)}</dd></div>
+                        );
+                      })}
+                    </dl>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" onClick={approve} loading={busy}>{t('runApprove')}</Button>
+              <Button onClick={discard} disabled={busy}>{t('runDiscard')}</Button>
+            </div>
+          </Panel>
+        </div>
       )}
     </div>
   );

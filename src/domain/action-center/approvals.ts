@@ -8,6 +8,7 @@ import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan, can } from '../permissions';
 import { who } from '../portfolio/shared';
+import { closeRunOfApproval } from '../flows/service';
 import { snapshotBefore, undoFor } from './autonomy';
 import { sweepFindings } from './findings';
 
@@ -158,7 +159,10 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
     const [fresh] = await db.select({ status: approvals.status }).from(approvals).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id)));
     throw new DomainError(fresh?.status === 'expired' ? 'expired' : 'already_decided', 'approval already decided');
   }
-  if (decision === 'reject') return { status, executed: false };
+  if (decision === 'reject') {
+    if (row.tool === 'start_flow_run') await closeRunOfApproval(ctx.orgId, id, 'rejected', now, who(ctx));
+    return { status, executed: false };
+  }
 
   const tool = buildActionRegistry().get(row.tool)!;
   const args = tool.args.safeParse(row.args);
@@ -189,6 +193,7 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
       await tx.update(approvals).set({ status: 'rejected', executionResult: { ok: false, reason: error.code } }).where(and(eq(approvals.orgId, ctx.orgId), eq(approvals.id, id)));
       await recordAudit(tx, who(execCtx), { action: 'approval.execution_refused', entityType: 'approval', entityId: id, summary: { tool: row.tool, reason: error.code } });
     });
+    if (row.tool === 'start_flow_run') await closeRunOfApproval(ctx.orgId, id, 'refused', ctx.clock.now(), who(execCtx));
     await sweepFindings(ctx.orgId, ctx.clock.now());
     return { status: 'rejected', executed: false, reason: error.code };
   }
@@ -196,7 +201,7 @@ export async function decideApproval(ctx: Ctx, id: string, raw: z.input<typeof d
 
 /** Pending approvals past their time become `expired` (BR-M08-05). A conditional UPDATE: safe to run from anywhere. */
 export async function expireApprovals(orgId: string, now: Date): Promise<number> {
-  return db.transaction(async (tx) => {
+  const lapsed = await db.transaction(async (tx) => {
     const rows = await tx
       .update(approvals)
       .set({ status: 'expired' })
@@ -204,6 +209,8 @@ export async function expireApprovals(orgId: string, now: Date): Promise<number>
       .returning({ id: approvals.id, tool: approvals.tool });
     const audit: AuditWho = { orgId, actor: 'system:rule.approval_expiry' };
     for (const r of rows) await recordAudit(tx, audit, { action: 'approval.expired', entityType: 'approval', entityId: r.id, summary: { tool: r.tool } });
-    return rows.length;
+    return rows;
   });
+  for (const r of lapsed) if (r.tool === 'start_flow_run') await closeRunOfApproval(orgId, r.id, 'expired', now, { orgId, actor: 'system:rule.approval_expiry' });
+  return lapsed.length;
 }
