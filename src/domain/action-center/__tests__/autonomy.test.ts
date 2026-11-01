@@ -26,6 +26,13 @@ describe('autonomy rules (D-082)', () => {
     for (const level of ['careful', 'balanced', 'autonomous'] as const) {
       for (const tool of ['create_subscription', 'mark_invoice_sent', 'finalize_document', 'start_flow_run']) expect(mayAutoRun(level, tool)).toBe(false);
     }
+    // D-091: deleting, cancelling and stopping money never skip the click, whatever the level.
+    for (const level of ['careful', 'balanced', 'autonomous'] as const) {
+      for (const tool of ['delete_client', 'delete_product', 'delete_deployment', 'delete_invoice_draft', 'cancel_invoice', 'stop_subscription']) expect(mayAutoRun(level, tool)).toBe(false);
+    }
+    expect(mayAutoRun('balanced', 'accept_task_draft')).toBe(true);
+    expect(mayAutoRun('balanced', 'archive_client')).toBe(false);
+    expect(mayAutoRun('autonomous', 'archive_client')).toBe(true);
     expect(mayAutoRun('careful', 'update_client')).toBe(false);
     expect(mayAutoRun('balanced', 'update_client')).toBe(true);
     expect(mayAutoRun('balanced', 'convert_lead_to_client')).toBe(false);

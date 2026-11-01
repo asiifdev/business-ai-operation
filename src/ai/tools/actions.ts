@@ -13,6 +13,7 @@ import { setTaskStatus, updateTask } from '../../domain/tasks/service';
 import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
 import { STAGES } from '../../domain/pipeline/stages';
 import { formatRupiah } from '../../lib/format';
+import { MANAGE_ACT_TOOLS, MANAGE_FINANCIAL_TOOLS } from './actions-manage';
 import { ToolRegistry, defineTool } from './registry';
 
 const money = (n: number) => ({ teks: formatRupiah(n), angka: n });
@@ -167,7 +168,7 @@ export const moveLeadTool = defineTool({
 
 export const updateTaskTool = defineTool({
   name: 'update_task',
-  description: 'Proposes to CHANGE an accepted task: status (open, in_progress, done), priority, due date (YYYY-MM-DD), assignee (user id from list_team_members), title or description. taskId from list_tasks. The system decides whether it runs at once or waits for a person\'s approval.',
+  description: 'Proposes to CHANGE an accepted task: status (open, in_progress, done), priority, due date (YYYY-MM-DD), assignee (user id from list_team_members), the client, product, deployment or lead it is about (ids from the list tools; null removes the link), title or description. taskId from list_tasks. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'task.update_own',
   args: z.object({
@@ -179,6 +180,11 @@ export const updateTaskTool = defineTool({
     priority: z.enum(TASK_PRIORITIES).optional(),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     assigneeId: id.nullable().optional(),
+    /** Who and what the task is about: null takes the link off. A deployment fixes its own client and product. */
+    clientId: id.nullable().optional(),
+    productId: id.nullable().optional(),
+    deploymentId: id.nullable().optional(),
+    leadId: id.nullable().optional(),
   }),
   execute: async (ctx, { taskId, status, ...patch }) => {
     if (Object.keys(patch).length) await updateTask(ctx, taskId, patch);
@@ -198,7 +204,7 @@ export const createSubscriptionTool = defineTool({
 });
 
 /** The `act` tools on records. Registered in the assistant catalogue and in the registry the approval decision looks tools up in. */
-export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool] as const;
+export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool, ...MANAGE_ACT_TOOLS] as const;
 
 export interface ActionFinding {
   id: string;
@@ -316,4 +322,4 @@ export function buildActionRegistry(finding?: ActionFinding): ToolRegistry {
 }
 
 /** Tools whose effect is on money: only people who may decide finance approvals can approve them (BR-M08-07). */
-export const FINANCIAL_ACT_TOOLS: ReadonlySet<string> = new Set(['mark_invoice_sent', 'create_subscription']);
+export const FINANCIAL_ACT_TOOLS: ReadonlySet<string> = new Set(['mark_invoice_sent', 'create_subscription', ...MANAGE_FINANCIAL_TOOLS]);

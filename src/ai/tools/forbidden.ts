@@ -1,6 +1,6 @@
 /**
  * Tools the model must never have (BR-M07-04, BRD-M07 Appendix A): payments, invoice status/amount/due date, package
- * prices, deleting anything, roles and settings, sending messages out, and the AI budget itself. The registry refuses to
+ * prices, deleting money or the audit trail, roles and settings, sending messages out, and the AI budget itself. The registry refuses to
  * register them, the model is never told they exist, and a call to one is rejected and logged.
  */
 export const FORBIDDEN_TOOL_NAMES: readonly string[] = [
@@ -25,7 +25,9 @@ export const FORBIDDEN_TOOL_NAMES: readonly string[] = [
 ];
 
 const FORBIDDEN_PATTERNS: readonly RegExp[] = [
-  /^(delete|remove|drop|purge|truncate|erase)_/,
+  // D-091: records the person may delete in the app (a client or product with no history, a draft) have a delete tool that always
+  // waits for a click. What is never deletable stays forbidden here: money, the audit trail, people, settings, the AI's own runs.
+  /^(delete|remove|drop|purge|truncate|erase)_(payment|audit|user|member|org|organization|setting|approval|ai_?run|invoice(?!_draft)|task(?!_draft)|lead|meeting|subscription|package|file|everything|all|data|table|database)/,
   /^send_/,
   /^(record|create|add)_payment/,
   /^(set|update|change|edit)_.*(payment|price|amount|due_date|role|permission|setting|budget)/,

@@ -14,10 +14,16 @@ const readTool = (over: Record<string, unknown> = {}) =>
     ...over,
   } as never);
 
+describe('management tools are allowed (D-091)', () => {
+  it.each(['delete_client', 'delete_product', 'delete_deployment', 'delete_invoice_draft', 'delete_document_draft', 'discard_task_draft', 'archive_client', 'cancel_invoice', 'stop_subscription'])('%s is not forbidden', (name) => {
+    expect(isForbiddenToolName(name)).toBe(false);
+  });
+});
+
 describe('forbidden tools (BR-M07-04)', () => {
   it.each([
     'record_payment', 'update_payment', 'set_invoice_status', 'update_invoice_amount', 'set_invoice_due_date',
-    'update_package_price', 'delete_client', 'remove_task', 'purge_everything', 'change_role', 'update_org_settings',
+    'update_package_price', 'delete_user', 'delete_payment_record', 'delete_audit_log', 'remove_task', 'purge_everything', 'change_role', 'update_org_settings',
     'send_message', 'send_followup_email', 'set_ai_budget', 'create_payment_record', 'update_anything_price',
   ])('%s is forbidden', (name) => {
     expect(isForbiddenToolName(name)).toBe(true);
