@@ -2,9 +2,10 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { FakeProvider, say } from '../../../ai/fake-provider';
 import { db, pg } from '../../../db/client';
-import { auditLog, documents } from '../../../db/schema';
+import { auditLog, documents, meetings } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import { DomainError } from '../../errors';
+import { createLead } from '../../pipeline/leads';
 import { createClient } from '../../portfolio/clients';
 import { createPackage, createProduct, updatePackage } from '../../portfolio/products';
 import { userCtx } from '../../ctx';
@@ -45,6 +46,17 @@ describe('M06 documents', () => {
     expect(d.subtotal + d.taxAmount).toBe(total);
     expect(d.status).toBe('draft');
     expect(d.number).toBeNull();
+  });
+
+  it('a proposal made for a lead drafted from a meeting keeps that meeting as its origin', async () => {
+    const s = await seed();
+    const [meeting] = await db.insert(meetings).values({ orgId: s.o.orgId, title: 'Diskusi awal', createdBy: s.o.ownerCtx.actor }).returning({ id: meetings.id });
+    const fromMeeting = await createLead(s.o.ownerCtx, { name: 'Calon dari rapat' }, { meetingId: meeting.id });
+    const plain = await createLead(s.o.ownerCtx, { name: 'Calon biasa' });
+    const a = await createDocument(s.o.ownerCtx, proposal(s, { clientId: undefined, leadId: fromMeeting.id }));
+    const b = await createDocument(s.o.ownerCtx, proposal(s, { clientId: undefined, leadId: plain.id }));
+    expect((await getDocument(s.o.ownerCtx, a.id)).meetingId).toBe(meeting.id);
+    expect((await getDocument(s.o.ownerCtx, b.id)).meetingId).toBeNull();
   });
 
   it('a later price change does not touch an existing draft, and editing the narrative does not change the total', async () => {

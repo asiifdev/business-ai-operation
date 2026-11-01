@@ -9,7 +9,7 @@ import { db } from '../../db/client';
 import { newId } from '../../db/ids';
 import { aiRuns, brandKits, files, marketingAssets, organizationProfiles, organizations, packages, products, videoProjects } from '../../db/schema';
 import { storage } from '../../integrations/storage';
-import { env } from '../../lib/env';
+import { effectiveDailyImageQuota } from './quota';
 import { formatRupiah } from '../../lib/format';
 import { zonedDayStart } from '../ai/budget';
 import { companyFacts } from '../org/profile';
@@ -23,7 +23,6 @@ import { assertCan, can } from '../permissions';
 import { who } from '../portfolio/shared';
 import {
   ASPECTS,
-  DEFAULT_DAILY_IMAGE_QUOTA,
   assetFilterSchema,
   brandKitSchema,
   captionInstructions,
@@ -60,11 +59,6 @@ import {
 export type AssetRow = typeof marketingAssets.$inferSelect;
 
 export type StudioResult<T> = ({ ok: true } & T) | { ok: false; message: string; kind: string };
-
-export function dailyImageQuota(): number {
-  const n = Number(env('MARKETING_DAILY_IMAGE_QUOTA'));
-  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_DAILY_IMAGE_QUOTA;
-}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Brand kit
@@ -165,13 +159,13 @@ export async function resolveLogo(ctx: Ctx, productId: string | null): Promise<{
 /** Images made today in the organization's time zone, counted from `ai_runs` so failed or blocked calls do not use quota. */
 export async function imageQuotaStatus(ctx: Ctx, now: Date = ctx.clock.now()) {
   assertCan(ctx, 'marketing.use');
-  const [org] = await db.select({ timezone: organizations.timezone }).from(organizations).where(eq(organizations.id, ctx.orgId));
+  const [org] = await db.select({ timezone: organizations.timezone, quota: organizations.marketingDailyImageQuota }).from(organizations).where(eq(organizations.id, ctx.orgId));
   const dayStart = zonedDayStart(now, org?.timezone ?? 'Asia/Jakarta');
   const [row] = await db
     .select({ used: sql<string>`coalesce(sum(${aiRuns.images}), 0)::text` })
     .from(aiRuns)
     .where(and(eq(aiRuns.orgId, ctx.orgId), eq(aiRuns.feature, 'image'), eq(aiRuns.status, 'ok'), gte(aiRuns.startedAt, dayStart)));
-  const quota = dailyImageQuota();
+  const quota = effectiveDailyImageQuota(org?.quota);
   const used = Number(row?.used ?? 0);
   return { quota, used, remaining: remainingQuota(quota, used) };
 }

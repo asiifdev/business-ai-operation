@@ -6,6 +6,7 @@ import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { assertCan } from '../permissions';
+import { effectiveDailyImageQuota } from '../marketing/quota';
 import { optionalText, who } from '../portfolio/shared';
 
 const validZone = (zone: string) => {
@@ -33,6 +34,8 @@ export const orgSettingsSchema = z.object({
   taxRateBps: z.number().int().min(0).max(10_000),
   stagnantDays: z.number().int().min(1).max(365),
   approvalTtlHours: z.number().int().min(1).max(720),
+  /** D-088: images Marketing Studio may make per day. 0 turns image making off. */
+  marketingDailyImageQuota: z.number().int().min(0).max(500),
   bankName: optionalText(80),
   bankAccountName: optionalText(120),
   bankAccountNumber: optionalText(40),
@@ -46,7 +49,7 @@ const PRIVATE = new Set(['bankName', 'bankAccountName', 'bankAccountNumber']);
 export async function getOrgSettings(ctx: Ctx) {
   const [row] = await db.select().from(organizations).where(eq(organizations.id, ctx.orgId));
   if (!row) throw new DomainError('not_found', 'organization');
-  return { ...Object.fromEntries(KEYS.map((k) => [k, row[k]])), currency: row.currency } as z.infer<typeof orgSettingsSchema> & { currency: string };
+  return { ...Object.fromEntries(KEYS.map((k) => [k, row[k]])), marketingDailyImageQuota: effectiveDailyImageQuota(row.marketingDailyImageQuota), currency: row.currency } as z.infer<typeof orgSettingsSchema> & { currency: string };
 }
 
 /** Owner only (BR-M01-07, D-025). The audit row lists what changed, with values except payment details. */
@@ -57,10 +60,12 @@ export async function updateOrgSettings(ctx: Ctx, raw: z.input<typeof orgSetting
     const [before] = await tx.select().from(organizations).where(eq(organizations.id, ctx.orgId)).for('update');
     if (!before) throw new DomainError('not_found', 'organization');
     const next = { ...input, bankName: input.bankName ?? null, bankAccountName: input.bankAccountName ?? null, bankAccountNumber: input.bankAccountNumber ?? null };
-    const changed = KEYS.filter((k) => before[k] !== next[k]);
+    // A never-set quota shows (and compares) as the server default, so saving the form unchanged is not a change.
+    const was: Record<string, unknown> = { ...before, marketingDailyImageQuota: effectiveDailyImageQuota(before.marketingDailyImageQuota) };
+    const changed = KEYS.filter((k) => was[k] !== next[k]);
     if (changed.length === 0) return { changed: [] as string[] };
     await tx.update(organizations).set(next).where(eq(organizations.id, ctx.orgId));
-    const summary = Object.fromEntries(changed.map((k) => [k, PRIVATE.has(k) ? 'changed' : { from: before[k], to: next[k] }]));
+    const summary = Object.fromEntries(changed.map((k) => [k, PRIVATE.has(k) ? 'changed' : { from: was[k], to: next[k] }]));
     await recordAudit(tx, who(ctx), { action: 'org.settings_updated', entityType: 'organization', entityId: ctx.orgId, summary });
     return { changed: changed as string[] };
   });

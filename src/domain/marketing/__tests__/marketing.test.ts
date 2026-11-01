@@ -12,6 +12,7 @@ import { makeOrg } from '../../ai/__tests__/support';
 import { DomainError } from '../../errors';
 import { createPackage, createProduct, updatePackage } from '../../portfolio/products';
 import { saveCompanyProfile } from '../../org/profile';
+import { getOrgSettings, updateOrgSettings } from '../../org/settings';
 import { sceneCount, withTimings } from '../rules';
 import { deleteAsset, draftCaption, draftVideoScript, generateAssets, getBrandKit, imageQuotaStatus, listAssets, readAssetFile, readAssetLogo, reviseAsset, saveBrandKit, updateCaption, updatePosterCopy } from '../service';
 
@@ -99,6 +100,25 @@ describe('M10 marketing studio', () => {
     expect(await listAssets(s.o.ownerCtx)).toHaveLength(0);
     expect(store.keys()).toHaveLength(0);
     expect((await imageQuotaStatus(s.o.ownerCtx)).used).toBe(0);
+  });
+
+  it('an organization\'s own daily quota beats the server default, and 0 closes image making (D-088)', async () => {
+    const s = await seed();
+    process.env.MARKETING_DAILY_IMAGE_QUOTA = '9';
+    try {
+      expect(await imageQuotaStatus(s.o.ownerCtx)).toMatchObject({ quota: 9 });
+      const { currency: _c, ...base } = await getOrgSettings(s.o.ownerCtx);
+      expect(base.marketingDailyImageQuota).toBe(9);
+      expect((await updateOrgSettings(s.o.ownerCtx, base)).changed).toEqual([]);
+      expect((await updateOrgSettings(s.o.ownerCtx, { ...base, marketingDailyImageQuota: 0 })).changed).toEqual(['marketingDailyImageQuota']);
+      expect(await imageQuotaStatus(s.o.ownerCtx)).toMatchObject({ quota: 0, remaining: 0 });
+      const blocked = new FakeProvider();
+      expect(await generateAssets(s.o.ownerCtx, { withText: false, productId: s.productId, purpose: 'launch' }, blocked)).toMatchObject({ ok: false, kind: 'quota' });
+      expect(blocked.imageCalls).toHaveLength(0);
+      await expect(updateOrgSettings(s.o.adminCtx, { ...base, marketingDailyImageQuota: 5 })).rejects.toMatchObject({ code: 'forbidden' });
+    } finally {
+      delete process.env.MARKETING_DAILY_IMAGE_QUOTA;
+    }
   });
 
   it('blocks before any call when the daily quota would be passed (BR-M10-06)', async () => {

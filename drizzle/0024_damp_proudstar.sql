@@ -1,0 +1,2 @@
+ALTER TABLE "organizations" ADD COLUMN "marketing_daily_image_quota" smallint;--> statement-breakpoint
+ALTER TABLE "organizations" ADD CONSTRAINT "organizations_image_quota_ck" CHECK ("organizations"."marketing_daily_image_quota" is null or "organizations"."marketing_daily_image_quota" between 0 and 500);

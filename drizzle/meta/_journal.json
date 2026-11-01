@@ -169,6 +169,13 @@
       "when": 1793439391610,
       "tag": "0023_demonic_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793515365334,
+      "tag": "0024_damp_proudstar",
+      "breakpoints": true
     }
   ]
 }

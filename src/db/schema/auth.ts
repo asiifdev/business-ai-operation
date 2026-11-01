@@ -29,6 +29,8 @@ export const organizations = pgTable(
     approvalTtlHours: smallint('approval_ttl_hours').notNull().default(24),
     /** D-082: how much the assistant may do on its own for the person who asked. Risky actions always wait for a click. */
     aiAutonomy: text('ai_autonomy', { enum: ['careful', 'balanced', 'autonomous'] }).notNull().default('balanced'),
+    /** D-088: images per day for Marketing Studio; null follows the server default. */
+    marketingDailyImageQuota: smallint('marketing_daily_image_quota'),
     bankName: text('bank_name'),
     bankAccountName: text('bank_account_name'),
     bankAccountNumber: text('bank_account_number'),
@@ -36,6 +38,7 @@ export const organizations = pgTable(
     updatedAt: updatedAtColumn(),
   },
   (t) => [
+    check('organizations_image_quota_ck', sql`${t.marketingDailyImageQuota} is null or ${t.marketingDailyImageQuota} between 0 and 500`),
     check('organizations_hours_ck', sql`${t.schedulerHour} between 0 and 23 and ${t.briefingHour} between 0 and 23`),
     check('organizations_days_ck', sql`${t.graceDays} >= 0 and ${t.draftOffsetDays} >= 0 and ${t.stagnantDays} >= 0 and ${t.approvalTtlHours} > 0`),
     check('organizations_tax_ck', sql`${t.taxRateBps} between 0 and 10000`),

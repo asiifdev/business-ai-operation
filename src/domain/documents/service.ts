@@ -55,15 +55,18 @@ async function writeItems(tx: Tx, orgId: string, documentId: string, lines: Reso
   return { subtotal: totals.subtotal, taxAmount: totals.taxAmount, total: totals.total, taxRateBps };
 }
 
-async function assertParties(tx: Tx, orgId: string, clientId: string | null | undefined, leadId: string | null | undefined) {
+/** Checks the client and lead belong to this organization; returns the meeting the lead was drafted from, so the document keeps its origin. */
+async function assertParties(tx: Tx, orgId: string, clientId: string | null | undefined, leadId: string | null | undefined): Promise<string | null> {
   if (clientId) {
     const [c] = await tx.select({ archivedAt: clients.archivedAt }).from(clients).where(and(eq(clients.orgId, orgId), eq(clients.id, clientId)));
     if (!c) throw new DomainError('not_found', 'client');
   }
   if (leadId) {
-    const [l] = await tx.select({ id: leads.id }).from(leads).where(and(eq(leads.orgId, orgId), eq(leads.id, leadId)));
+    const [l] = await tx.select({ meetingId: leads.meetingId }).from(leads).where(and(eq(leads.orgId, orgId), eq(leads.id, leadId)));
     if (!l) throw new DomainError('not_found', 'lead');
+    return l.meetingId;
   }
+  return null;
 }
 
 /** A draft proposal or quotation. A draft made by the assistant is flagged until a person has saved it (BR-M06-05). */
@@ -71,7 +74,7 @@ export async function createDocument(ctx: Ctx, raw: z.input<typeof documentSchem
   assertCan(ctx, 'document.write');
   const input = documentSchema.parse(raw);
   return db.transaction(async (tx) => {
-    await assertParties(tx, ctx.orgId, input.clientId, input.leadId);
+    const meetingId = await assertParties(tx, ctx.orgId, input.clientId, input.leadId);
     const org = await loadOrgBilling(tx, ctx.orgId);
     const lines = await resolveLines(tx, ctx.orgId, input.items);
     const id = newId();
@@ -83,6 +86,7 @@ export async function createDocument(ctx: Ctx, raw: z.input<typeof documentSchem
       title: input.title,
       clientId: input.clientId ?? null,
       leadId: input.leadId ?? null,
+      meetingId,
       narrative: input.narrative ?? null,
       validUntil: input.validUntil ?? null,
       isAiDraft: ctx.actor.startsWith('ai:'),

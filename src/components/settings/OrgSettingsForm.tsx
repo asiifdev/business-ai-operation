@@ -44,7 +44,7 @@ function Form({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
   const [done, setDone] = useState<'saved' | 'nothing' | null>(null);
   const bad = badFields(error);
   const set = <K extends keyof typeof v>(key: K, value: (typeof v)[K]) => setV((p) => ({ ...p, [key]: value }));
-  const num = (key: 'graceDays' | 'draftOffsetDays' | 'schedulerHour' | 'briefingHour' | 'stagnantDays' | 'approvalTtlHours', min: number, max: number, label: Parameters<typeof t>[0], help: Parameters<typeof t>[0]) => (
+  const num = (key: 'graceDays' | 'draftOffsetDays' | 'schedulerHour' | 'briefingHour' | 'stagnantDays' | 'approvalTtlHours' | 'marketingDailyImageQuota', min: number, max: number, label: Parameters<typeof t>[0], help: Parameters<typeof t>[0]) => (
     <FormField label={t(label)} help={t(help)} error={bad[key] ? t('errValidation') : null}>
       <NumberInput value={v[key]} onChange={(n) => set(key, n ?? 0)} min={min} max={max} disabled={!canEdit} />
     </FormField>
@@ -107,6 +107,7 @@ function Form({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
           {num('briefingHour', 0, 23, 'orgBriefingHour', 'orgBriefingHourHelp')}
           {num('stagnantDays', 1, 365, 'orgStagnantDays', 'orgStagnantDaysHelp')}
           {num('approvalTtlHours', 1, 720, 'orgApprovalTtl', 'orgApprovalTtlHelp')}
+          {num('marketingDailyImageQuota', 0, 500, 'orgImageQuota', 'orgImageQuotaHelp')}
         </Section>
         {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
         {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
