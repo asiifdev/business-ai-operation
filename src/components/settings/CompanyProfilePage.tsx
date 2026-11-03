@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import type { CompanyProfile } from '../../domain/org/profile';
-import { SOCIAL_KEYS } from '../../domain/org/profile-rules';
+import { SOCIAL_KEYS, type SocialKey } from '../../domain/org/profile-rules';
 import { ApiError, api, badFields, errorKey, upload } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import type { Jsonify } from '../../lib/json-types';
@@ -21,9 +21,12 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { ErrorBox, Skeleton } from '../ui/states';
 
 type Service = { id: string; name: string; description: string | null };
-type Data = { profile: Jsonify<CompanyProfile>; services: Service[] };
+/** What `GET /api/settings/company` answers: the profile and its services. */
+export type CompanyData = { profile: Jsonify<CompanyProfile>; services: Service[] };
+/** The onboarding step (D-095): what to do once the profile is saved. */
+export type EditorStep = { onSaved: () => Promise<void> };
 
-const SOCIAL_LABEL: Record<(typeof SOCIAL_KEYS)[number], string> = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube', x: 'X' };
+const SOCIAL_LABEL: Record<SocialKey, string> = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube', x: 'X' };
 
 /** The company profile (D-079): identity, contact, customers and strengths, and services. The AI reads all of it as facts. */
 export function CompanyProfilePage({ canEdit }: { canEdit: boolean }) {
@@ -36,55 +39,72 @@ export function CompanyProfilePage({ canEdit }: { canEdit: boolean }) {
 
 function CompanyProfile({ canEdit }: { canEdit: boolean }) {
   const t = useT();
-  const load = useLoad(() => api<Data>('GET', '/api/settings/company'), []);
+  const load = useLoad(() => api<CompanyData>('GET', '/api/settings/company'), []);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('companyTitle')} intro={canEdit ? t('companyIntro') : t('companyReadOnly')} />
       {load.value.state === 'loading' && <Panel aria-busy="true"><Skeleton rows={6} /></Panel>}
       {load.value.state === 'error' && <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>}
-      {load.value.state === 'ready' && (
-        <>
-          <ProfileForm initial={load.value.data.profile} canEdit={canEdit} onLogoChanged={() => void load.reload()} onServicesAdded={() => void load.reload()} />
-          <Services services={load.value.data.services} canEdit={canEdit} onChanged={() => void load.reload()} />
-          <p className="m-0 max-w-prose text-sm text-muted">{t('companyAiNote')}</p>
-        </>
-      )}
+      {load.value.state === 'ready' && <CompanyProfileEditor data={load.value.data} canEdit={canEdit} onChanged={() => void load.reload()} />}
     </div>
   );
 }
 
-const Section = ({ title, children }: { title: string; children: ReactNode }) => (
+type SectionProps = { title: string; children: ReactNode };
+
+const PanelSection = ({ title, children }: SectionProps) => (
   <Panel className="flex flex-col gap-4">
     <h2 className="m-0 text-lg font-semibold text-ink">{title}</h2>
     {children}
   </Panel>
 );
 
-function ProfileForm({ initial, canEdit, onLogoChanged, onServicesAdded }: { initial: Data['profile']; canEdit: boolean; onLogoChanged: () => void; onServicesAdded: () => void }) {
+/** Inside an onboarding step, which is already a panel: a rule and a smaller heading, never a panel in a panel. */
+const StepSection = ({ title, children }: SectionProps) => (
+  <section className="flex flex-col gap-4 border-t border-rule pt-5">
+    <h3 className="m-0 text-base font-semibold text-ink">{title}</h3>
+    {children}
+  </section>
+);
+
+const valuesOf = (p: CompanyData['profile']) => ({
+  tagline: p.tagline ?? '',
+  namePronunciation: p.namePronunciation ?? '',
+  description: p.description ?? '',
+  industry: p.industry ?? '',
+  website: p.website ?? '',
+  contactEmail: p.contactEmail ?? '',
+  contactPhone: p.contactPhone ?? '',
+  address: p.address ?? '',
+  targetAudience: p.targetAudience ?? '',
+  valueProps: p.valueProps ?? '',
+  socials: Object.fromEntries(SOCIAL_KEYS.map((k) => [k, p.socials[k] ?? ''])) as Record<SocialKey, string>,
+});
+type TextKey = Exclude<keyof ReturnType<typeof valuesOf>, 'socials'>;
+
+/**
+ * The whole company profile editor: fill in from the website with AI, identity with the logo, contact and social media,
+ * customers and strengths, and services. The settings page and the onboarding profile step (D-095) both show this one
+ * component, so the autofill fills the same fields and services in both. As a `step` it sits inside the step's panel:
+ * sections are divided by a rule, the field of business and the description are marked as needed (they make the step
+ * done), and one "Save and continue" comes after the services, so nothing is left unseen before moving on.
+ */
+export function CompanyProfileEditor({ data, canEdit, onChanged, step }: { data: CompanyData; canEdit: boolean; onChanged: () => void; step?: EditorStep }) {
   const t = useT();
-  const [v, setV] = useState({
-    tagline: initial.tagline ?? '',
-    namePronunciation: initial.namePronunciation ?? '',
-    description: initial.description ?? '',
-    industry: initial.industry ?? '',
-    website: initial.website ?? '',
-    contactEmail: initial.contactEmail ?? '',
-    contactPhone: initial.contactPhone ?? '',
-    address: initial.address ?? '',
-    targetAudience: initial.targetAudience ?? '',
-    valueProps: initial.valueProps ?? '',
-    socials: Object.fromEntries(SOCIAL_KEYS.map((k) => [k, initial.socials[k] ?? ''])) as Record<(typeof SOCIAL_KEYS)[number], string>,
-  });
+  const formId = useId();
+  const Section = step ? StepSection : PanelSection;
+  const [v, setV] = useState(() => valuesOf(data.profile));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<'saved' | 'nothing' | null>(null);
   const bad = badFields(error);
+  const needed = (key: TextKey) => Boolean(step) && (key === 'industry' || key === 'description');
   // The value is read now: React empties `currentTarget` once the handler returns, and a state updater may run later.
-  const set = (key: Exclude<keyof typeof v, 'socials'>) => (e: { currentTarget: { value: string } }) => {
+  const set = (key: TextKey) => (e: { currentTarget: { value: string } }) => {
     const value = e.currentTarget.value;
     setV((p) => ({ ...p, [key]: value }));
   };
-  const setSocial = (key: (typeof SOCIAL_KEYS)[number]) => (e: { currentTarget: { value: string } }) => {
+  const setSocial = (key: SocialKey) => (e: { currentTarget: { value: string } }) => {
     const value = e.currentTarget.value;
     setV((p) => ({ ...p, socials: { ...p.socials, [key]: value } }));
   };
@@ -97,7 +117,8 @@ function ProfileForm({ initial, canEdit, onLogoChanged, onServicesAdded }: { ini
     setDone(null);
     try {
       const r = await api<{ changed: string[] }>('POST', '/api/settings/company', v);
-      setDone(r.changed.length ? 'saved' : 'nothing');
+      if (step) await step.onSaved();
+      else setDone(r.changed.length ? 'saved' : 'nothing');
     } catch (err) {
       setError(err);
     } finally {
@@ -105,67 +126,79 @@ function ProfileForm({ initial, canEdit, onLogoChanged, onServicesAdded }: { ini
     }
   }
 
-  const field = (key: Exclude<keyof typeof v, 'socials'>, label: MessageKey, max: number, help?: MessageKey, extra?: { type?: 'email' | 'tel' | 'url'; inputMode?: 'email' | 'url' }) => (
-    <FormField label={t(label)} help={help ? t(help) : undefined} error={bad[key] ? t('errValidation') : null}>
+  const field = (key: TextKey, label: MessageKey, max: number, help?: MessageKey, extra?: { type?: 'email' | 'tel' | 'url'; inputMode?: 'email' | 'url' }) => (
+    <FormField label={t(label)} help={help ? t(help) : undefined} required={needed(key)} error={bad[key] ? t('errValidation') : null}>
       <TextInput value={v[key]} onChange={set(key)} maxLength={max} disabled={!canEdit} autoComplete="off" {...extra} />
     </FormField>
   );
-  const area = (key: Exclude<keyof typeof v, 'socials'>, label: MessageKey, max: number, help: MessageKey, rows = 3) => (
-    <FormField label={t(label)} help={t(help)} error={bad[key] ? t('errValidation') : null}>
+  const area = (key: TextKey, label: MessageKey, max: number, help: MessageKey, rows = 3) => (
+    <FormField label={t(label)} help={t(help)} required={needed(key)} error={bad[key] ? t('errValidation') : null}>
       <Textarea value={v[key]} onChange={set(key)} maxLength={max} rows={rows} disabled={!canEdit} />
     </FormField>
   );
 
-  return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-6">
-      {canEdit && (
-        <ProfileAutofill
-          initialUrl={v.website}
-          current={{ tagline: v.tagline, industry: v.industry, description: v.description, targetAudience: v.targetAudience, valueProps: v.valueProps, website: v.website, contactEmail: v.contactEmail, contactPhone: v.contactPhone, address: v.address, socials: v.socials }}
-          onServicesAdded={onServicesAdded}
-          onApply={(patch) => { setDone(null); setV((p) => ({ ...p, ...patch.fields, socials: { ...p.socials, ...patch.socials } })); }}
-        />
-      )}
-      <Section title={t('companySectionIdentity')}>
-        <LogoEditor hasLogo={initial.hasLogo} canEdit={canEdit} onChanged={onLogoChanged} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          {field('tagline', 'companyTagline', 160, 'companyTaglineHelp')}
-          {field('industry', 'companyIndustry', 120)}
-        </div>
-        {field('namePronunciation', 'companyPronunciation', 120, 'companyPronunciationHelp')}
-        {area('description', 'companyDescription', 2000, 'companyDescriptionHelp', 4)}
-        {field('website', 'companyWebsite', 300, 'companyWebsiteHelp', { type: 'url', inputMode: 'url' })}
-      </Section>
-
-      <Section title={t('companySectionContact')}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {field('contactEmail', 'companyEmail', 254, undefined, { type: 'email', inputMode: 'email' })}
-          {field('contactPhone', 'companyPhone', 40, undefined, { type: 'tel' })}
-        </div>
-        {field('address', 'companyAddress', 500)}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {SOCIAL_KEYS.map((k) => (
-            <FormField key={k} label={SOCIAL_LABEL[k]} help={t('companyWebsiteHelp')} error={badSocial(k) ? t('errValidation') : null}>
-              <TextInput value={v.socials[k]} onChange={setSocial(k)} maxLength={300} disabled={!canEdit} autoComplete="off" type="url" inputMode="url" />
-            </FormField>
-          ))}
-        </div>
-      </Section>
-
-      <Section title={t('companySectionPositioning')}>
-        {area('targetAudience', 'companyAudience', 1000, 'companyAudienceHelp')}
-        {area('valueProps', 'companyValueProps', 1000, 'companyValuePropsHelp')}
-      </Section>
-
+  // The button names the form, so in a step it can stand after the services (a form cannot hold their forms).
+  const actions = canEdit && (
+    <div className="flex flex-col gap-3">
       {error !== null && !Object.keys(bad).length && <ErrorBox>{t(errorKey(error))}</ErrorBox>}
       {Object.keys(bad).length > 0 && <ErrorBox>{t('errValidation')}</ErrorBox>}
-      {canEdit && (
-        <div className="flex items-center gap-3">
-          <Button type="submit" variant="primary" loading={busy}>{t('companySave')}</Button>
-          {done && <span role="status" className="text-sm text-success">{done === 'saved' ? t('companySaved') : t('companyNothing')}</span>}
-        </div>
-      )}
-    </form>
+      <div className="flex items-center gap-3">
+        <Button type="submit" form={formId} variant="primary" loading={busy} disabled={Boolean(step) && !(v.industry.trim() && v.description.trim())}>
+          {step ? t('obSaveNext') : t('companySave')}
+        </Button>
+        {done && <span role="status" className="text-sm text-success">{done === 'saved' ? t('companySaved') : t('companyNothing')}</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-6">
+        {canEdit && (
+          <ProfileAutofill
+            initialUrl={v.website}
+            current={{ tagline: v.tagline, industry: v.industry, description: v.description, targetAudience: v.targetAudience, valueProps: v.valueProps, website: v.website, contactEmail: v.contactEmail, contactPhone: v.contactPhone, address: v.address, socials: v.socials }}
+            onServicesAdded={onChanged}
+            onApply={(patch) => { setDone(null); setV((p) => ({ ...p, ...patch.fields, socials: { ...p.socials, ...patch.socials } })); }}
+          />
+        )}
+        <Section title={t('companySectionIdentity')}>
+          <LogoEditor hasLogo={data.profile.hasLogo} canEdit={canEdit} onChanged={onChanged} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {field('tagline', 'companyTagline', 160, 'companyTaglineHelp')}
+            {field('industry', 'companyIndustry', 120)}
+          </div>
+          {field('namePronunciation', 'companyPronunciation', 120, 'companyPronunciationHelp')}
+          {area('description', 'companyDescription', 2000, 'companyDescriptionHelp', 4)}
+          {field('website', 'companyWebsite', 300, 'companyWebsiteHelp', { type: 'url', inputMode: 'url' })}
+        </Section>
+
+        <Section title={t('companySectionContact')}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {field('contactEmail', 'companyEmail', 254, undefined, { type: 'email', inputMode: 'email' })}
+            {field('contactPhone', 'companyPhone', 40, undefined, { type: 'tel' })}
+          </div>
+          {field('address', 'companyAddress', 500)}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SOCIAL_KEYS.map((k) => (
+              <FormField key={k} label={SOCIAL_LABEL[k]} help={t('companyWebsiteHelp')} error={badSocial(k) ? t('errValidation') : null}>
+                <TextInput value={v.socials[k]} onChange={setSocial(k)} maxLength={300} disabled={!canEdit} autoComplete="off" type="url" inputMode="url" />
+              </FormField>
+            ))}
+          </div>
+        </Section>
+
+        <Section title={t('companySectionPositioning')}>
+          {area('targetAudience', 'companyAudience', 1000, 'companyAudienceHelp')}
+          {area('valueProps', 'companyValueProps', 1000, 'companyValuePropsHelp')}
+        </Section>
+
+        {!step && actions}
+      </form>
+      <Services Section={Section} services={data.services} canEdit={canEdit} onChanged={onChanged} />
+      <p className="m-0 max-w-prose text-sm text-muted">{t('companyAiNote')}</p>
+      {step && actions}
+    </>
   );
 }
 
@@ -219,7 +252,7 @@ function LogoEditor({ hasLogo, canEdit, onChanged }: { hasLogo: boolean; canEdit
 }
 
 /** Services beyond the products in Portfolio. Products are shared with the AI on their own and not repeated here. */
-function Services({ services, canEdit, onChanged }: { services: Service[]; canEdit: boolean; onChanged: () => void }) {
+function Services({ Section, services, canEdit, onChanged }: { Section: (p: SectionProps) => ReactNode; services: Service[]; canEdit: boolean; onChanged: () => void }) {
   const t = useT();
   return (
     <Section title={t('companySectionServices')}>

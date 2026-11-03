@@ -1,68 +1,74 @@
 # business-ai-operation
 
-Sistem operasi bisnis berbasis AI untuk agensi dan startup software: portofolio produk/klien, subscription dan invoice, pipeline lead, tiket maintenance, dan **AI Action Center** dengan approval manusia. Dibuat untuk Meta Global AI Developer Hackathon (track Startup).
+An AI-powered business operating system for software agencies and startups: product and client portfolio, subscriptions and invoices, lead pipeline, maintenance tickets, and an **AI Action Center** with human approval. Built for the Meta Global AI Developer Hackathon (Startup track).
 
-**Status dan jadwal terkini: [`docs/PLAN.md`](docs/PLAN.md)** (satu-satunya sumber status; README tidak menyalinnya). Baca [`CLAUDE.md`](CLAUDE.md) dulu sebelum bekerja.
+**Current status and schedule: [`docs/PLAN.md`](docs/PLAN.md)** (the single source of status; this README does not copy it). Read [`CLAUDE.md`](CLAUDE.md) before working on the code.
 
-## Dokumen
+## Documents
 
-| Dokumen | Isi |
+The project documents are written in Indonesian.
+
+| Document | Contents |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Panduan kerja wajib (alur dokumen, kerja dua jalur, DoD, aturan teknis, skill) |
-| [`docs/PLAN.md`](docs/PLAN.md) | Status tahap dan implementasi, jadwal, pemilik modul, pertanyaan terbuka |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Log keputusan |
-| [`docs/00-visi-produk.md`](docs/00-visi-produk.md) | Visi, masalah, prinsip AI, cerita demo |
-| [`docs/01-aturan-hackathon.md`](docs/01-aturan-hackathon.md) | Aturan, jadwal, penilaian hackathon |
-| [`docs/02-meta-model-api.md`](docs/02-meta-model-api.md) | Model Meta, harga, limit, hasil uji nyata |
-| [`docs/03-arsitektur.md`](docs/03-arsitektur.md) | Stack, struktur, lapisan, AI, Telegram, keamanan |
-| [`docs/04-workflow-pengembangan.md`](docs/04-workflow-pengembangan.md) | Kerja dua jalur, git, testing |
-| [`docs/05-uiux-dan-komponen.md`](docs/05-uiux-dan-komponen.md) | Design system dan kontrak komponen form |
-| [`docs/09-breakdown-fitur.md`](docs/09-breakdown-fitur.md) | Modul dan keterkaitannya |
-| [`docs/BRD.md`](docs/BRD.md) | BRD induk: tujuan, aktor, aturan lintas modul (CR), glosarium, template |
-| [`docs/brd/README.md`](docs/brd/README.md) | Indeks BRD per modul (satu file per modul) |
-| [`docs/PRD.md`](docs/PRD.md) | Kebutuhan produk: halaman, layanan, kontrak AI dan Telegram, pengujian |
-| [`docs/ERD.md`](docs/ERD.md) | Skema data, batasan, penjaga di database, rencana migrasi |
+| [`CLAUDE.md`](CLAUDE.md) | Mandatory working guide (document flow, two-track work, Definition of Done, technical rules, skills) |
+| [`docs/PLAN.md`](docs/PLAN.md) | Stage and implementation status, schedule, module owners, open questions |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Decision log |
+| [`docs/00-visi-produk.md`](docs/00-visi-produk.md) | Vision, problem, AI principles, demo story |
+| [`docs/01-aturan-hackathon.md`](docs/01-aturan-hackathon.md) | Hackathon rules, schedule, judging |
+| [`docs/02-meta-model-api.md`](docs/02-meta-model-api.md) | Meta models, pricing, limits, real test results |
+| [`docs/03-arsitektur.md`](docs/03-arsitektur.md) | Stack, structure, layers, AI, Telegram, security |
+| [`docs/04-workflow-pengembangan.md`](docs/04-workflow-pengembangan.md) | Two-track work, git, testing |
+| [`docs/05-uiux-dan-komponen.md`](docs/05-uiux-dan-komponen.md) | Design system and form component contracts |
+| [`docs/09-breakdown-fitur.md`](docs/09-breakdown-fitur.md) | Modules and how they connect |
+| [`docs/BRD.md`](docs/BRD.md) | Parent BRD: goals, actors, cross-module rules (CR), glossary, template |
+| [`docs/brd/README.md`](docs/brd/README.md) | Index of the per-module BRDs (one file per module) |
+| [`docs/PRD.md`](docs/PRD.md) | Product requirements: pages, services, AI and Telegram contracts, testing |
+| [`docs/ERD.md`](docs/ERD.md) | Data schema, constraints, database guards, migration plan |
 
-## Menjalankan
+## Running locally
 
-Prasyarat: Node >= 22.23.4, pnpm, PostgreSQL, `ffmpeg`.
+Prerequisites: Node >= 22.23.4, pnpm, PostgreSQL, `ffmpeg`.
 
 ```bash
-cp .env.example .env     # isi nilai; jangan pernah di-commit
+cp .env.example .env     # fill in the values; never commit this file
 pnpm install
-pnpm db:migrate          # buat tabel di database lokal
-pnpm db:seed             # data demo palsu: Orbit Studio dan Kopi Senja Digital
-pnpm dev                 # galeri komponen: /dev/komponen
-pnpm test                # unit, komponen, dan pemeriksaan sinkronisasi dokumen
+pnpm db:migrate          # create the tables in the local database
+pnpm db:seed             # fake demo data: Orbit Studio and Kopi Senja Digital
+pnpm dev                 # component gallery: /dev/komponen
+pnpm test                # unit, component, and documentation sync checks
 pnpm typecheck
 pnpm build
 ```
 
-Skema database dan migrasi hanya berasal dari `docs/ERD.md` (lihat `CLAUDE.md`).
+The database schema and migrations come only from `docs/ERD.md` (see `CLAUDE.md`).
 
-Masuk dengan data demo (palsu) setelah `pnpm db:seed`: `owner@orbit-studio.test`, `admin@orbit-studio.test`, atau `staf@orbit-studio.test`, kata sandi `demo-password-123`. Uji asisten dengan `pnpm ai:smoke` (butuh `MODEL_API_KEY`).
+Sign in with the (fake) demo data after `pnpm db:seed`: `owner@orbit-studio.test`, `admin@orbit-studio.test`, or `staf@orbit-studio.test`, password `demo-password-123`. Test the assistant with `pnpm ai:smoke` (requires `MODEL_API_KEY`).
 
-Rapat (`/app/rapat`): rekaman disimpan di `STORAGE_DIR` (driver `disk`) dan diproses worker di proses server; konversi audio memakai `ffmpeg` dari PATH atau `FFMPEG_PATH` (tanpa ffmpeg hanya WAV mono 16/24 kHz ≤ 9 menit yang bisa diproses).
+Meetings (`/app/rapat`): recordings are stored in `STORAGE_DIR` (`disk` driver) and processed by a worker inside the server process. Audio conversion uses `ffmpeg` from PATH or `FFMPEG_PATH`; without ffmpeg, only mono 16/24 kHz WAV files of 9 minutes or less can be processed.
 
-Bot Telegram (butuh `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_WEBHOOK_SECRET`): tautkan akun di `/app/settings/telegram`. Tanpa alamat HTTPS publik, jalankan `pnpm bot:dev` (long polling). **Perhatian:** perintah itu menghapus webhook, jadi server live berhenti menerima update sampai `pnpm bot:webhook` dijalankan lagi di sana.
+Telegram bot (requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`): link your account at `/app/settings/telegram`. Without a public HTTPS address, run `pnpm bot:dev` (long polling). **Caution:** that command deletes the webhook, so the live server stops receiving updates until `pnpm bot:webhook` is run there again.
 
-## Deploy ke server
+## Deploying to a server
 
-Server publik **harus menjalankan build produksi**, bukan `pnpm dev` (mode dev membuka galeri dan alat pengembangan, lebih lambat, dan menolak host selain localhost).
+A public server **must run the production build**, not `pnpm dev` (dev mode exposes the component gallery and development tools, is slower, and rejects any host other than localhost).
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm db:migrate          # tinjau migrasi baru di drizzle/ sebelum menerapkan
+pnpm db:migrate          # review new migrations in drizzle/ before applying them
 pnpm build
-pnpm start               # mendengarkan di HOST:PORT dari .env
-pnpm bot:webhook         # sekali per deploy: daftarkan webhook Telegram dan menu perintah
+pnpm start               # listens on HOST:PORT from .env
+pnpm bot:webhook         # once per deploy: registers the Telegram webhook and command menu
 ```
 
-Variabel wajib di server (nilainya jangan di repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (acak, ≥ 32 karakter, **berbeda** dari lokal), `BETTER_AUTH_URL` dan `APP_URL` (alamat publik berskema `https://`), `HOST`, `PORT`. Penjadwal tagihan berjalan di proses yang sama (setiap 60 detik, sekali sehari per organisasi pada jam penjadwalnya; kartu Telegram dikirim tiap menit bila `TELEGRAM_BOT_TOKEN` diisi); atur `SCHEDULER=off` pada proses yang tidak boleh menjalankan job. Jalankan `pnpm start` di bawah pengelola proses (pm2 atau systemd) di belakang proxy HTTPS yang meneruskan header `Host`, `X-Forwarded-Host`, dan `X-Forwarded-Proto`; `APP_URL` dibaca saat `pnpm build`, jadi atur sebelum build.
+Required variables on the server (never put their values in the repo): `DATABASE_URL`, `BETTER_AUTH_SECRET` (random, at least 32 characters, **different** from your local one), `BETTER_AUTH_URL` and `APP_URL` (the public `https://` address), `HOST`, `PORT`.
 
-## Kontribusi dan asal-usul
+The billing scheduler runs in the same process: it ticks every 60 seconds and runs once a day per organization at that organization's scheduler hour, and Telegram cards go out every minute when `TELEGRAM_BOT_TOKEN` is set. Set `SCHEDULER=off` on any process that must not run jobs.
 
-- **Pembuat:** satu peserta hackathon yang approved (pemilik repo).
-- **Dibuat dari nol selama periode hackathon** (mulai 28 Okt 2026). Tidak ada kode yang disalin dari proyek lain; pola desain umum (kontrak komponen form, pola agen) ditulis ulang.
-- **Tooling pihak ketiga** di `.claude/skills/` (`hallmark`, `tailwind-4-docs`) adalah skill panduan pengembangan, bukan bagian produk, lengkap dengan lisensinya masing-masing.
-- Semua data demo adalah seed palsu; tidak ada data klien, kunci API, atau kredensial di repo.
+Run `pnpm start` under a process manager (pm2 or systemd) behind an HTTPS proxy that forwards the `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto` headers. `APP_URL` is read during `pnpm build`, so set it before building.
+
+## Contributors and provenance
+
+- **Author:** one approved hackathon participant (the repository owner).
+- **Built from scratch during the hackathon period** (starting 28 Oct 2026). No code was copied from other projects; common design patterns (form component contracts, agent patterns) were rewritten here.
+- **Third-party tooling** in `.claude/skills/` (`hallmark`, `tailwind-4-docs`) consists of development guidance skills, not part of the product, each with its own license.
+- All demo data is fake seed data; the repo contains no client data, API keys, or credentials.

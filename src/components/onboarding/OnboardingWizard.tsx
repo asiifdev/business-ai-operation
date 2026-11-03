@@ -11,8 +11,8 @@ import { RadioGroup } from '../forms/RadioGroup';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
+import { CompanyProfileEditor, type CompanyData } from '../settings/CompanyProfilePage';
 import { InviteForm, LinkNotice, type InviteResult } from '../settings/InviteUser';
-import { ProfileAutofill } from '../settings/ProfileAutofill';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClasses } from '../ui/Button';
@@ -216,50 +216,16 @@ const set = (setter: (v: string) => void) => (e: { currentTarget: { value: strin
 
 /* ---------------------------------------------------------------- profile */
 
-type Company = { profile: Record<string, string | null> & { socials: Record<string, string> } };
-const PROFILE_KEYS = ['tagline', 'namePronunciation', 'description', 'industry', 'website', 'contactEmail', 'contactPhone', 'address', 'targetAudience', 'valueProps'] as const;
-
-function ProfileForm(p: BodyProps) {
-  return <Loaded fetcher={() => api<Company>('GET', '/api/settings/company')}>{(d) => <ProfileFields {...p} initial={d.profile} />}</Loaded>;
-}
-
-function ProfileFields({ initial, onSaved, refresh }: BodyProps & { initial: Company['profile'] }) {
+/**
+ * The very editor of the company profile page (autofill, identity and logo, contact and social media, customers and
+ * strengths, services), so the AI fills in the same fields and services here as there.
+ */
+function ProfileForm({ onSaved }: BodyProps) {
   const t = useT();
-  const [v, setV] = useState({ industry: initial.industry ?? '', description: initial.description ?? '', tagline: initial.tagline ?? '', targetAudience: initial.targetAudience ?? '', website: initial.website ?? '', contactEmail: initial.contactEmail ?? '', contactPhone: initial.contactPhone ?? '', address: initial.address ?? '', valueProps: initial.valueProps ?? '' });
-  const [socials, setSocials] = useState<Record<string, string>>(initial.socials);
-  const up = (k: keyof typeof v) => set((x) => setV((s) => ({ ...s, [k]: x })));
-  const { busy, error, submit, bad } = useSubmit(async () => {
-    // The save replaces the whole profile, so what this step does not show is sent back unchanged.
-    const keep = Object.fromEntries(PROFILE_KEYS.map((k) => [k, initial[k] ?? '']));
-    await api('POST', '/api/settings/company', { ...keep, ...v, socials });
-    await onSaved();
-  });
-  const err = (k: string) => (bad[k] ? t('errValidation') : null);
-  return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <ProfileAutofill
-        initialUrl={v.website}
-        current={{ ...v, socials }}
-        onServicesAdded={() => void refresh()}
-        onApply={(patch) => { setV((s) => ({ ...s, ...patch.fields })); setSocials((s) => ({ ...s, ...patch.socials })); }}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label={t('companyIndustry')} required error={err('industry')}><TextInput value={v.industry} onChange={up('industry')} maxLength={120} autoComplete="off" /></FormField>
-        <FormField label={t('companyTagline')} help={t('companyTaglineHelp')} error={err('tagline')}><TextInput value={v.tagline} onChange={up('tagline')} maxLength={160} autoComplete="off" /></FormField>
-      </div>
-      <FormField label={t('companyDescription')} required help={t('companyDescriptionHelp')} error={err('description')}><Textarea value={v.description} onChange={up('description')} maxLength={2000} rows={4} /></FormField>
-      <FormField label={t('companyAudience')} help={t('companyAudienceHelp')} error={err('targetAudience')}><Textarea value={v.targetAudience} onChange={up('targetAudience')} maxLength={1000} rows={2} /></FormField>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <FormField label={t('companyWebsite')} help={t('companyWebsiteHelp')} error={err('website')}><TextInput type="url" inputMode="url" value={v.website} onChange={up('website')} maxLength={300} autoComplete="off" /></FormField>
-        <FormField label={t('companyEmail')} error={err('contactEmail')}><TextInput type="email" inputMode="email" value={v.contactEmail} onChange={up('contactEmail')} maxLength={254} autoComplete="off" /></FormField>
-        <FormField label={t('companyPhone')} error={err('contactPhone')}><TextInput type="tel" value={v.contactPhone} onChange={up('contactPhone')} maxLength={40} autoComplete="off" /></FormField>
-      </div>
-      <FormField label={t('companyAddress')} error={err('address')}><TextInput value={v.address} onChange={up('address')} maxLength={500} autoComplete="off" /></FormField>
-      <FormField label={t('companyValueProps')} help={t('companyValuePropsHelp')} error={err('valueProps')}><Textarea value={v.valueProps} onChange={up('valueProps')} maxLength={1000} rows={2} /></FormField>
-      <FormError error={error} bad={{}} />
-      <div><Button type="submit" variant="primary" loading={busy} disabled={!v.industry.trim() || !v.description.trim()}>{t('obSaveNext')}</Button></div>
-    </form>
-  );
+  const load = useLoad(() => api<CompanyData>('GET', '/api/settings/company'), []);
+  if (load.value.state === 'loading') return <Skeleton rows={4} />;
+  if (load.value.state === 'error') return <ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox>;
+  return <CompanyProfileEditor data={load.value.data} canEdit onChanged={() => void load.reload()} step={{ onSaved }} />;
 }
 
 /* ---------------------------------------------------------------- finance */

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { contactFields, sameService } from '../profile-autofill';
+import { answerIsUsable, contactFields, sameService } from '../profile-autofill';
 import { extractContacts } from '../../web/site';
+
+describe('an AI answer worth showing (D-095)', () => {
+  it('needs a description or at least one service; every field empty is a miss to ask again', () => {
+    expect(answerIsUsable({ description: '', services: [] })).toBe(false); // what Muse Wonder answered on 2026-11-03
+    expect(answerIsUsable({ description: '   ', services: [{ name: ' ', description: 'x' }] })).toBe(false);
+    expect(answerIsUsable({ description: 'Studio software untuk UMKM.', services: [] })).toBe(true);
+    expect(answerIsUsable({ description: '', services: [{ name: 'Web app', description: '' }] })).toBe(true);
+  });
+});
 
 describe('profile autofill (D-095)', () => {
   it('takes contacts and social links straight from the page, never from the model', () => {

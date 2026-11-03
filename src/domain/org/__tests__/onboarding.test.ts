@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
-import { auditLog, organizations } from '../../../db/schema';
+import { aiRuns, auditLog, organizations } from '../../../db/schema';
 import { makeOrg } from '../../ai/__tests__/support';
 import { FakeProvider, sayJson } from '../../../ai/fake-provider';
 import { suggestProfileFromSite } from '../profile-autofill';
@@ -98,11 +98,45 @@ describe('profile autofill from a website (D-095)', () => {
     expect(await stat(o.ownerCtx, 'profile')).toBe('todo'); // nothing was saved
   });
 
-  it('is for managers only, and answers plainly when the model gives nothing usable', async () => {
+  it('is for managers only, and answers plainly when the model gives nothing usable twice', async () => {
     const o = await makeOrg();
     await rejects(suggestProfileFromSite(o.staffCtx, { url: 'aksara.id' }, { provider: new FakeProvider(), reader }), 'forbidden');
-    const bad = await suggestProfileFromSite(o.ownerCtx, { url: 'aksara.id' }, { provider: new FakeProvider({ chat: [sayJson({ nope: true })] }), reader });
+    const provider = new FakeProvider({ chat: [sayJson({ nope: true }), sayJson({ nope: true })] });
+    const bad = await suggestProfileFromSite(o.ownerCtx, { url: 'aksara.id' }, { provider, reader });
     expect(bad.ok).toBe(false);
+    expect(provider.chatCalls).toHaveLength(2);
+  });
+
+  // Seen in onboarding on 2026-11-03: Muse Wonder answered the schema with every field empty for seven readable pages,
+  // and the same pages filled everything on the next try. An empty answer must not reach the form as a suggestion.
+  const empty = { tagline: '', industry: '', description: '', targetAudience: '', valueProps: '', services: [] };
+
+  it('asks once more, with more reasoning, when the first answer is empty, and uses the second', async () => {
+    const o = await makeOrg();
+    const provider = new FakeProvider({ chat: [sayJson(empty), sayJson(answer)] });
+    const r = await suggestProfileFromSite(o.ownerCtx, { url: 'aksara.id' }, { provider, reader });
+    expect(r.ok && r.fields).toMatchObject({ industry: 'Software', description: 'Studio software untuk UMKM.' });
+    expect(r.ok && r.services.map((s) => s.name)).toEqual(['Web app']);
+    expect(provider.chatCalls.map((c) => c.effort)).toEqual(['low', 'medium']);
+    const runs = await db.select().from(aiRuns).where(eq(aiRuns.orgId, o.orgId));
+    expect(runs.map((x) => x.status)).toEqual(['ok', 'ok']); // both calls cost tokens, so both are on record
+    const retry = runs.find((x) => x.inputSummary?.includes('diulang'));
+    expect(r.ok && r.runId).toBe(retry?.id);
+  });
+
+  it('gives a plain message, never an empty suggestion, when the second answer is empty too', async () => {
+    const o = await makeOrg();
+    const r = await suggestProfileFromSite(o.ownerCtx, { url: 'aksara.id' }, { provider: new FakeProvider({ chat: [sayJson(empty), sayJson(empty)] }), reader });
+    expect(r).toEqual({ ok: false, message: expect.stringContaining('deskripsi atau layanan') });
+  });
+
+  it('spends no model call on pages without text', async () => {
+    const o = await makeOrg();
+    const blank = async () => ({ ...(await reader()), pages: [{ url: 'https://aksara.id/', title: 'Aksara', text: '  ' }] });
+    const provider = new FakeProvider();
+    const r = await suggestProfileFromSite(o.ownerCtx, { url: 'aksara.id' }, { provider, reader: blank, locale: 'en' });
+    expect(r).toEqual({ ok: false, message: expect.stringContaining('no company description or services') });
+    expect(provider.chatCalls).toHaveLength(0);
   });
 
   it('does not offer again what is already a service or a product (a second run)', async () => {

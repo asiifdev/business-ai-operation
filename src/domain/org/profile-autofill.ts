@@ -20,6 +20,14 @@ const answerSchema = z.object({
   valueProps: z.string().max(2500),
   services: z.array(z.object({ name: z.string().max(300), description: z.string().max(1500) })).max(20),
 });
+type Answer = z.infer<typeof answerSchema>;
+
+/**
+ * Pure: an answer that says something about the company, a description or at least one service. A model can answer the
+ * schema with every field empty although the pages describe the company (seen 2026-11-03 in onboarding: the same seven
+ * pages filled everything on the next try), so an empty answer counts as a miss, not as a suggestion.
+ */
+export const answerIsUsable = (a: Pick<Answer, 'description' | 'services'>) => Boolean(a.description.trim()) || a.services.some((s) => s.name.trim().length >= 2);
 
 const text = (maxLength: number, description: string) => ({ type: 'string', maxLength, description });
 export const autofillJsonSchema = {
@@ -103,7 +111,8 @@ export function contactFields(reading: SiteReading): Pick<ProfileSuggestion['fie
 /**
  * Suggests the company profile from a website (D-095). Code reads the pages (home or the given page plus the about,
  * services, contact and similar pages on the same site) and finds the contacts itself; the model only writes the
- * descriptive parts from that text. Nothing is saved: the person edits the suggestion and saves it like any form.
+ * descriptive parts from that text, and an empty or unreadable answer is asked once more with more reasoning. Nothing is
+ * saved: the person edits the suggestion and saves it like any form.
  */
 export async function suggestProfileFromSite(
   ctx: Ctx,
@@ -114,35 +123,57 @@ export async function suggestProfileFromSite(
   const { url } = z.object({ url: z.string().trim().min(4).max(300) }).parse(raw);
   const reading = await (opts.reader ?? readSite)(/^https?:\/\//i.test(url) ? url : `https://${url}`, { maxPages: 8, pageChars: 6000 });
 
-  const pages = reading.pages.map((p) => wrapUntrusted(p.url, [p.title, p.text].filter(Boolean).join('\n'))).join('\n\n');
   const locale = opts.locale ?? 'id';
-  const out = await chatOnce({
-    db,
-    ctx,
-    provider: opts.provider ?? getAiProvider(),
-    locale,
-    feature: 'agent',
-    inputSummary: `Isi profil dari ${reading.base} (${reading.pages.length} halaman)`.slice(0, 300),
-    entityType: 'organization',
-    entityId: ctx.orgId,
-    request: {
-      messages: [
-        { role: 'developer', content: autofillInstructions(locale === 'id' ? 'Indonesian' : 'English') },
-        { role: 'user', content: pages },
-      ],
-      schema: { name: 'company_profile', schema: autofillJsonSchema as unknown as Record<string, unknown>, strict: true },
-      effort: 'low',
-      maxTokens: 4000,
-    },
-  });
-  // A model that is down or over budget is told plainly; the form stays usable by hand.
-  if (!out.ok) return { ok: false, message: out.message };
+  const nothingFound = locale === 'id'
+    ? 'AI tidak menemukan deskripsi atau layanan perusahaan di halaman yang dibaca. Coba lagi, tempel alamat halaman Tentang atau company profile, atau isi manual.'
+    : 'The AI found no company description or services on the pages it read. Try again, paste the address of the About or company-profile page, or fill it in by hand.';
+  // Pages without text give the model nothing to write from: no call is spent on them.
+  if (!reading.pages.some((p) => p.text.trim())) return { ok: false, message: nothingFound };
 
-  let json: unknown = out.value.json;
-  if (json === undefined && out.value.text) json = (() => { try { return JSON.parse(out.value.text!); } catch { return undefined; } })();
-  const parsed = answerSchema.safeParse(json);
-  if (!parsed.success) return { ok: false, message: locale === 'id' ? 'Jawaban AI belum bisa dibaca. Coba lagi atau isi manual.' : 'The AI answer could not be read. Try again or fill it in by hand.' };
-  const a = parsed.data;
+  const pages = reading.pages.map((p) => wrapUntrusted(p.url, [p.title, p.text].filter(Boolean).join('\n'))).join('\n\n');
+  const provider = opts.provider ?? getAiProvider();
+  const ask = (retry: boolean) =>
+    chatOnce({
+      db,
+      ctx,
+      provider,
+      locale,
+      feature: 'agent',
+      inputSummary: `Isi profil dari ${reading.base} (${reading.pages.length} halaman)${retry ? ', diulang' : ''}`.slice(0, 300),
+      entityType: 'organization',
+      entityId: ctx.orgId,
+      request: {
+        messages: [
+          { role: 'developer', content: autofillInstructions(locale === 'id' ? 'Indonesian' : 'English') },
+          { role: 'user', content: pages },
+        ],
+        schema: { name: 'company_profile', schema: autofillJsonSchema as unknown as Record<string, unknown>, strict: true },
+        // The second try reasons more; reasoning shares the output budget, so it gets more room too.
+        effort: retry ? 'medium' : 'low',
+        maxTokens: retry ? 8000 : 4000,
+      },
+    });
+
+  // An empty or unreadable answer is asked once more (both calls are in ai_runs). Still nothing: a plain message, never
+  // an empty suggestion that looks like the site has nothing to say.
+  let a: Answer | null = null;
+  let runId = '';
+  let unreadable = false;
+  for (const retry of [false, true]) {
+    const out = await ask(retry);
+    // A model that is down or over budget is told plainly; the form stays usable by hand.
+    if (!out.ok) return { ok: false, message: out.message };
+    let json: unknown = out.value.json;
+    if (json === undefined && out.value.text) json = (() => { try { return JSON.parse(out.value.text!); } catch { return undefined; } })();
+    const parsed = answerSchema.safeParse(json);
+    unreadable = !parsed.success;
+    if (parsed.success && answerIsUsable(parsed.data)) {
+      a = parsed.data;
+      runId = out.runId;
+      break;
+    }
+  }
+  if (!a) return { ok: false, message: unreadable ? (locale === 'id' ? 'Jawaban AI belum bisa dibaca. Coba lagi atau isi manual.' : 'The AI answer could not be read. Try again or fill it in by hand.') : nothingFound };
 
   // A second run must not offer what is already there: the services on the profile and the products in Portfolio count.
   const [have, prods] = await Promise.all([
@@ -172,6 +203,6 @@ export async function suggestProfileFromSite(
     services,
     alreadyListed,
     sources: reading.pages.map((p) => p.url),
-    runId: out.runId,
+    runId,
   };
 }
