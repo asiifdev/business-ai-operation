@@ -4,6 +4,9 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 
 ## [Unreleased]
 
+### Changed
+- `README.md` dipercantik untuk juri (banner, badge, embed video demo YouTube lewat thumbnail yang bisa diklik, diagram alur dan arsitektur Mermaid, empat tangkapan layar dari video di `docs/assets/`) dan ditulis ulang dalam bahasa Inggris: ringkasan keunggulan (AI sebagai mesin, persetujuan manusia, angka dari kode), uraian fitur per modul yang sudah ada (asisten, Action Center, onboarding, portofolio, billing, pipeline dan tugas, dokumen, rapat, Marketing Studio, Telegram, koneksi dan deployment, dashboard, audit, pengguna, situs pemasaran), tabel model Meta, arsitektur, dan batas jujur. Status per fitur tetap hanya di `docs/PLAN.md`.
+
 ### Added
 - Pembaca situs menangani situs JavaScript dan mencari harga (D-099): halaman yang isinya dibuat JavaScript dibaca lewat data yang disematkan framework atau browser sungguhan; `read_website` punya `fokus=harga` yang juga mencoba `/pricing`, `/harga`, `/paket`, dan sejenisnya serta mengembalikan baris harga persis seperti tertulis. Asisten dilarang menyerah sebelum mencoba alamat lain dan `search_web`, dan satu merek dengan repositori berbeda dibuat sebagai produk terpisah per repo. Env baru `PAGE_RENDER` dan `PAGE_RENDER_KEY`.
 - Input klien massal (D-098): tool asisten `create_clients` menambah sampai 20 klien sekaligus dari album tangkapan layar kontak atau daftar (satu persetujuan, nama yang sudah ada atau ganda dilewati dan disebut). Telegram menampung sampai 10 foto sekaligus (sebelumnya 4, kelebihannya dibuang diam-diam; kini diberi tahu), dan lampiran asisten naik menjadi 10 per pesan.
