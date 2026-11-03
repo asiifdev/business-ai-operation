@@ -290,14 +290,29 @@ describe('acceptance: budget and limits (BR-M07-06, BR-M07-07, BR-M07-11)', () =
     expect(Number((await runRow(result.runId)).costMicroUsd)).toBe(338);
   });
 
-  it('stops at the round limit with an honest error and records every round', async () => {
+  it('does not fail at the round limit: one more round without tools reports what is done and what is left', async () => {
     const o = await makeOrg();
     const { registry } = build();
-    const fake = new FakeProvider({ chat: Array.from({ length: 3 }, () => callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }])) });
+    const report = 'Sudah: daftar invoice dibaca. Belum: draf pengingat. Balas lanjut.';
+    const fake = new FakeProvider({ chat: [...Array.from({ length: 3 }, () => callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }])), say(report)] });
     const result = await agent(o, fake, { registry, maxRounds: 3 });
-    expect(result).toMatchObject({ ok: false, status: 'error', errorKind: 'rounds', rounds: 3 });
+    expect(result).toMatchObject({ ok: true, status: 'ok', rounds: 4, text: report });
     expect(result.tools).toHaveLength(3);
-    expect(Number((await runRow(result.runId)).costMicroUsd)).toBe(3 * 338);
+    // The report round is given no tools and is told why.
+    expect(fake.chatCalls).toHaveLength(4);
+    expect(fake.chatCalls[3]!.tools).toBeUndefined();
+    expect(JSON.stringify(fake.chatCalls[3]!.messages.at(-1))).toContain('Batas langkah');
+    expect(fake.chatCalls[2]!.tools?.length).toBeGreaterThan(0);
+    expect(Number((await runRow(result.runId)).costMicroUsd)).toBeGreaterThan(3 * 338);
+  });
+
+  it('stops with an honest error when the model still asks for tools in the report round', async () => {
+    const o = await makeOrg();
+    const { registry } = build();
+    const fake = new FakeProvider({ chat: Array.from({ length: 4 }, () => callTools([{ name: 'list_overdue_invoices', args: { limit: 5 } }])) });
+    const result = await agent(o, fake, { registry, maxRounds: 3 });
+    expect(result).toMatchObject({ ok: false, status: 'error', errorKind: 'rounds', rounds: 4 });
+    expect(result.tools).toHaveLength(3);
   });
 
   it('stops at the token limit for one run', async () => {

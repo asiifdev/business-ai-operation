@@ -57,14 +57,26 @@ export const ACT_RISK: Readonly<Record<string, 'low' | 'medium' | 'high'>> = {
   create_deployment: 'medium',
   convert_lead_to_client: 'medium',
   create_subscription: 'high',
+  // A price is money (D-094): adding or changing a package always waits for a click.
+  create_package: 'high',
+  update_package: 'high',
   mark_invoice_sent: 'high',
   finalize_document: 'high',
   start_flow_run: 'high',
 };
 
+/**
+ * The risk of THIS call. Mostly the tool decides, but a product proposed together with packages carries prices, so it is `high`
+ * (D-094) while the same tool without packages stays `low`.
+ */
+export function riskOf(tool: string, args?: unknown): 'low' | 'medium' | 'high' {
+  if (tool === 'create_product' && Array.isArray((args as { packages?: unknown } | undefined)?.packages) && (args as { packages: unknown[] }).packages.length > 0) return 'high';
+  return ACT_RISK[tool] ?? 'high';
+}
+
 /** `careful` never, `balanced` only low, `autonomous` low and medium. High always waits for a click. */
-export function mayAutoRun(level: AutonomyLevel, tool: string): boolean {
-  const risk = ACT_RISK[tool] ?? 'high';
+export function mayAutoRun(level: AutonomyLevel, tool: string, args?: unknown): boolean {
+  const risk = riskOf(tool, args);
   if (risk === 'high') return false;
   if (level === 'autonomous') return true;
   return level === 'balanced' && risk === 'low';

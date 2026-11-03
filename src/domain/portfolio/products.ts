@@ -31,9 +31,17 @@ async function loadProduct(tx: Pick<typeof db, 'select'>, orgId: string, id: str
   return row;
 }
 
-export async function createProduct(ctx: Ctx, raw: z.input<typeof productSchema>) {
+/** Most packages one product may be created with in a single step; more are added one by one with `createPackage`. */
+export const MAX_NEW_PACKAGES = 8;
+
+/**
+ * Adds a product. With `rawPackages` the packages (name, monthly price in whole Rupiah, features) are created in the SAME
+ * transaction, so a product is never left half done: either it exists with all its packages or nothing was saved.
+ */
+export async function createProduct(ctx: Ctx, raw: z.input<typeof productSchema>, rawPackages: ReadonlyArray<z.input<typeof packageSchema>> = []) {
   assertCan(ctx, 'catalog.write');
   const input = productSchema.parse(raw);
+  const pkgs = z.array(packageSchema).max(MAX_NEW_PACKAGES).parse(rawPackages);
   try {
     return await db.transaction(async (tx) => {
       const [row] = await tx
@@ -41,10 +49,20 @@ export async function createProduct(ctx: Ctx, raw: z.input<typeof productSchema>
         .values({ orgId: ctx.orgId, name: input.name, description: input.description ?? null, currentVersion: input.currentVersion ?? null })
         .returning({ id: products.id });
       await recordAudit(tx, who(ctx), { action: 'product.created', entityType: 'product', entityId: row.id, summary: { name: input.name, currentVersion: input.currentVersion ?? null } });
-      return { id: row.id };
+      const packageIds: string[] = [];
+      for (const pkg of pkgs) {
+        const [created] = await tx
+          .insert(packages)
+          .values({ orgId: ctx.orgId, productId: row.id, name: pkg.name, monthlyPrice: pkg.monthlyPrice, features: pkg.features ?? null })
+          .returning({ id: packages.id });
+        await recordAudit(tx, who(ctx), { action: 'package.created', entityType: 'package', entityId: created.id, summary: { productId: row.id, name: pkg.name, monthlyPrice: pkg.monthlyPrice } });
+        packageIds.push(created.id);
+      }
+      return { id: row.id, packageIds };
     });
   } catch (err) {
     if (isUniqueViolation(err, 'uq_products_name_active')) duplicate('a product with this name already exists');
+    if (isUniqueViolation(err, 'uq_packages_name')) duplicate('two packages of this product have the same name');
     throw err;
   }
 }

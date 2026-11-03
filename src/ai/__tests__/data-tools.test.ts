@@ -1,13 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../db/client';
-import { approvals, clients, leads, organizations } from '../../db/schema';
+import { approvals, clients, leads, organizations, packages, products } from '../../db/schema';
 import { decideApproval } from '../../domain/action-center/approvals';
 import { makeOrg } from '../../domain/ai/__tests__/support';
 import type { Ctx } from '../../domain/ctx';
 import { getInvoice, listInvoices } from '../../domain/billing/invoices';
 import { createLead } from '../../domain/pipeline/leads';
 import { createClient } from '../../domain/portfolio/clients';
+import { createProduct } from '../../domain/portfolio/products';
+import { setAutonomy } from '../../domain/action-center/autonomy';
 import { askAssistant } from '../assistant';
 import { FakeProvider, callTools, say } from '../fake-provider';
 import { buildActionRegistry, DATA_ACT_TOOLS } from '../tools/actions';
@@ -45,6 +47,43 @@ describe('data tools (D-077): the assistant adds and changes records only after 
     const [row] = await db.select().from(approvals).where(and(eq(approvals.orgId, o.orgId), eq(approvals.tool, 'create_client')));
     expect((await decideApproval(o.ownerCtx, row.id, { decision: 'approve' })).executed).toBe(true);
     expect(await db.select().from(clients).where(and(eq(clients.orgId, o.orgId), eq(clients.name, 'Toko Baru Jaya')))).toHaveLength(1);
+  });
+
+  it('proposes a product with all its packages in ONE call, always waits for a click, and creates it whole on approval', async () => {
+    const o = await makeOrg();
+    await setAutonomy(o.ownerCtx, { level: 'autonomous' }); // even then: prices wait for a person
+    const args = { name: 'POS Toko Makmur', packages: [{ name: 'Basic', monthlyPrice: 100_000 }, { name: 'Premium', monthlyPrice: 400_000, features: '3 outlet' }] };
+    const fake = new FakeProvider({ chat: [callTools([{ name: 'create_product', args }]), say('Produk beserta paketnya saya ajukan.')] });
+    const reply = await askAssistant(db, o.ownerCtx, { request: { messages: [{ role: 'user', content: 'Input produk POS Toko Makmur dengan paketnya' }] }, organizationName: 'Orbit Studio', locale: 'id', provider: fake });
+    expect(reply.autoRan).toHaveLength(0);
+    expect(reply.pendingApprovals).toHaveLength(1);
+    expect(await db.select().from(products).where(eq(products.orgId, o.orgId))).toHaveLength(0);
+
+    const [row] = await db.select().from(approvals).where(and(eq(approvals.orgId, o.orgId), eq(approvals.tool, 'create_product')));
+    // The approver sees every name and price before deciding.
+    expect(row.rationale).toContain('Premium Rp');
+    expect(row.rationale).toContain('2 paket');
+    expect((await decideApproval(o.ownerCtx, row.id, { decision: 'approve' })).executed).toBe(true);
+    const [product] = await db.select().from(products).where(eq(products.orgId, o.orgId));
+    const made = await db.select().from(packages).where(eq(packages.productId, product.id));
+    expect(made.map((p) => [p.name, p.monthlyPrice]).sort()).toEqual([['Basic', 100_000], ['Premium', 400_000]]);
+  });
+
+  it('adds and changes a package of an existing product only after approval', async () => {
+    const o = await makeOrg();
+    const { id: productId } = await createProduct(o.ownerCtx, { name: 'POS Lama' });
+    const add = new FakeProvider({ chat: [callTools([{ name: 'create_package', args: { productId, name: 'Premium', monthlyPrice: 400_000 } }]), say('Diajukan.')] });
+    expect((await ask(o.ownerCtx, add, 'Tambahkan paket Premium')).pendingApprovals).toHaveLength(1);
+    expect(await db.select().from(packages).where(eq(packages.productId, productId))).toHaveLength(0);
+    const [created] = await db.select().from(approvals).where(and(eq(approvals.orgId, o.orgId), eq(approvals.tool, 'create_package')));
+    expect((await decideApproval(o.ownerCtx, created.id, { decision: 'approve' })).executed).toBe(true);
+    const [pkg] = await db.select().from(packages).where(eq(packages.productId, productId));
+
+    const change = new FakeProvider({ chat: [callTools([{ name: 'update_package', args: { packageId: pkg.id, monthlyPrice: 450_000 } }]), say('Diajukan.')] });
+    expect((await ask(o.ownerCtx, change, 'Naikkan harga Premium')).pendingApprovals).toHaveLength(1);
+    const [changed] = await db.select().from(approvals).where(and(eq(approvals.orgId, o.orgId), eq(approvals.tool, 'update_package')));
+    expect((await decideApproval(o.ownerCtx, changed.id, { decision: 'approve' })).executed).toBe(true);
+    expect((await db.select().from(packages).where(eq(packages.id, pkg.id)))[0].monthlyPrice).toBe(450_000);
   });
 
   it('does not create the client when the approval is rejected', async () => {

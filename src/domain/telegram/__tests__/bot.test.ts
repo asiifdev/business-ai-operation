@@ -522,6 +522,28 @@ describe('files sent to the bot for the assistant to read (D-083)', () => {
     expect(tg.sent.at(-1)!.text).toContain('Ringkasnya');
   });
 
+  it('reads an audio file as an attachment like the web, and keeps /rapat and long recordings as meetings', async () => {
+    const { o, deps, link } = await linkedOrg();
+    const chatId = await link(o.ownerCtx);
+    const made: string[] = [];
+    const asked: Array<{ q: string; ids?: string[] }> = [];
+    const audioUpdate = (extra: { caption?: string; duration?: number } = {}): TelegramUpdate => ({ update_id: uid(), message: { message_id: uid(), from: { id: chatId, is_bot: false, language_code: 'id' }, chat: chat(chatId), date: 0, audio: { file_id: 'aud1', file_name: 'chat-klien.m4a', duration: extra.duration ?? 40 }, caption: extra.caption } as never });
+    const d: BotDeps = { ...deps, client: { ...deps.client, downloadFile: async () => new Uint8Array([1]) }, attach: fakeAttach(made) as never, ask: async (_c, q, _p, opts) => (asked.push({ q, ids: opts?.attachmentIds }), 'Klien minta paket Premium.') };
+    await handleUpdate(audioUpdate({ caption: 'Apa yang diminta klien?' }), d);
+    expect(made).toEqual(['chat-klien.m4a']);
+    expect(asked).toEqual([{ q: 'Apa yang diminta klien?', ids: ['att-1'] }]);
+    // Without words the file waits for the next question, like any other file.
+    await handleUpdate(audioUpdate(), d);
+    expect(made).toHaveLength(2);
+    // A long recording, or one marked /rapat, is not read as an attachment (it becomes minutes, which needs a meeting service).
+    await handleUpdate(audioUpdate({ duration: 20 * 60 }), d).catch(() => undefined);
+    await handleUpdate(audioUpdate({ caption: '/rapat Sinkron mingguan' }), d).catch(() => undefined);
+    expect(made).toHaveLength(2);
+    // `/baca` reads even a long one.
+    await handleUpdate(audioUpdate({ duration: 20 * 60, caption: '/baca ringkas' }), d);
+    expect(made).toHaveLength(3);
+  });
+
   it('reads a photo only when its caption starts with /baca, and leaves other photos to the picture maker', async () => {
     const { o, deps, link } = await linkedOrg();
     const chatId = await link(o.ownerCtx);

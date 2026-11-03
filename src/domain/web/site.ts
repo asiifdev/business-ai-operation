@@ -193,15 +193,16 @@ const merge = (all: SiteContacts[]): SiteContacts => {
   };
 };
 
-export async function readSite(rawUrl: string, opts: { maxPages?: number; fetch?: typeof fetchHtml } = {}): Promise<SiteReading> {
+export async function readSite(rawUrl: string, opts: { maxPages?: number; pageChars?: number; fetch?: typeof fetchHtml } = {}): Promise<SiteReading> {
   const get = opts.fetch ?? fetchHtml;
+  const pageChars = Math.min(Math.max(opts.pageChars ?? PAGE_CHARS, 500), 8000);
   const maxPages = Math.min(Math.max(opts.maxPages ?? 6, 1), MAX_PAGES);
   const home = await get(rawUrl);
   const base = new URL(home.url);
   const pages: SitePage[] = [];
   const contacts: SiteContacts[] = [extractContacts(home.html)];
   const homeFacts = readPage(home.url, home.html);
-  pages.push({ url: home.url, title: homeFacts.title, text: homeFacts.text.slice(0, PAGE_CHARS) });
+  pages.push({ url: home.url, title: homeFacts.title, text: homeFacts.text.slice(0, pageChars) });
 
   const next = pickLinks(base, home.html, maxPages - 1);
   const results = await Promise.allSettled(next.map((u) => get(u)));
@@ -213,7 +214,7 @@ export async function readSite(rawUrl: string, opts: { maxPages?: number; fetch?
     }
     contacts.push(extractContacts(r.value.html));
     const facts = readPage(r.value.url, r.value.html);
-    pages.push({ url: r.value.url, title: facts.title, text: facts.text.slice(0, PAGE_CHARS) });
+    pages.push({ url: r.value.url, title: facts.title, text: facts.text.slice(0, pageChars) });
   });
   if (pages.every((p) => !p.text) && !contacts.some((c) => c.emails.length || c.phones.length)) throw new DomainError('validation', 'page cannot be read');
   return { base: base.origin, pages, contacts: merge(contacts), skipped };

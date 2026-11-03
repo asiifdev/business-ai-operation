@@ -36,6 +36,25 @@ describe('acceptance: products and packages (BR-M02-01, -02)', () => {
     expect((await listProducts(o.staffCtx)).find((x) => x.id === p)?.packageCount).toBe(2);
   });
 
+  it('creates a product together with all its packages in one transaction, and saves nothing when one package is invalid', async () => {
+    const o = await makeOrg();
+    const made = await createProduct(o.ownerCtx, { name: 'POS Toko Makmur' }, [
+      { name: 'Basic', monthlyPrice: 100_000, features: '1 outlet' },
+      { name: 'Premium', monthlyPrice: 400_000 },
+    ]);
+    expect(made.packageIds).toHaveLength(2);
+    const detail = await getProduct(o.ownerCtx, made.id);
+    expect(detail.packages.map((x) => [x.name, x.monthlyPrice])).toEqual([['Basic', 100_000], ['Premium', 400_000]]);
+    expect(await db.select().from(auditLog).where(and(eq(auditLog.orgId, o.orgId), eq(auditLog.action, 'package.created')))).toHaveLength(2);
+
+    // A fractional price, or two packages with the same name, leaves no product behind.
+    await expect(createProduct(o.ownerCtx, { name: 'Setengah' }, [{ name: 'A', monthlyPrice: 1.5 }])).rejects.toThrow();
+    await rejects(createProduct(o.ownerCtx, { name: 'Kembar' }, [{ name: 'Satu', monthlyPrice: 1 }, { name: ' satu ', monthlyPrice: 2 }]), 'duplicate');
+    expect((await listProducts(o.ownerCtx)).map((x) => x.name)).toEqual(['POS Toko Makmur']);
+    // More than the limit is refused.
+    await expect(createProduct(o.ownerCtx, { name: 'Banyak' }, Array.from({ length: 9 }, (_, i) => ({ name: `P${i}`, monthlyPrice: 1 })))).rejects.toThrow();
+  });
+
   it('refuses a negative, fractional or absurd price, and a duplicate package name in one product', async () => {
     const { o, p, q } = await seed();
     for (const monthlyPrice of [-1, 1.5, 1_000_000_000_001]) await expect(createPackage(o.ownerCtx, p, { name: 'X1', monthlyPrice })).rejects.toThrow();

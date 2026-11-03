@@ -66,7 +66,7 @@ export const en: Record<PageSlug, PageContent> = {
     updated,
     sections: [
       { heading: 'How an alert becomes an action', bullets: ['A scheduled rule notices a condition, such as an overdue invoice.', 'The alert is created once; running the rule again never duplicates it.', 'AI explains it and drafts a message using figures read from your data.', 'You approve, reject or edit. Approved actions run through the same code as the manual buttons.'] },
-      { heading: 'What AI cannot do here', bullets: ['Record or change a payment.', 'Change an invoice amount, due date or a package price.', 'Delete data or change roles and settings.', 'Send anything outside the system.'] },
+      { heading: 'What AI cannot do here', bullets: ['Record or change a payment.', 'Change an invoice amount or due date. A package price changes only after you approve it.', 'Delete data or change roles and settings.', 'Send anything outside the system.'] },
     ],
   },
   'product/billing': {

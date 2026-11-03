@@ -8,7 +8,7 @@ import { convertLeadToClient, moveLead, updateLead } from '../../domain/pipeline
 import { createSubscription } from '../../domain/billing/subscriptions';
 import { createClient, updateClient } from '../../domain/portfolio/clients';
 import { createDeployment, updateDeployment } from '../../domain/portfolio/deployments';
-import { createProduct, updateProduct } from '../../domain/portfolio/products';
+import { MAX_NEW_PACKAGES, createPackage, createProduct, updatePackage, updateProduct } from '../../domain/portfolio/products';
 import { setTaskStatus, updateTask } from '../../domain/tasks/service';
 import { TASK_KINDS, TASK_PRIORITIES, TASK_STATUSES } from '../../domain/tasks/rules';
 import { STAGES } from '../../domain/pipeline/stages';
@@ -106,14 +106,47 @@ export const updateClientTool = defineTool({
   describe: () => 'Ubah data klien sesuai isian di bawah. Tidak ada pesan yang dikirim.',
 });
 
+/** One package as the assistant proposes it: whole Rupiah per month, exactly as the person gave it. */
+const packageArgs = z.object({
+  name: text(120).min(2),
+  monthlyPrice: z.number().int().min(0).max(1_000_000_000_000),
+  features: text(2000).optional(),
+});
+
+/** The packages of a proposal as one readable line each, so the person approving sees every name and price before saying yes. */
+const packageLines = (list: ReadonlyArray<{ name: string; monthlyPrice: number }>) => list.map((p) => `${p.name} ${formatRupiah(p.monthlyPrice)}/bulan`).join('; ');
+
 export const createProductTool = defineTool({
   name: 'create_product',
-  description: 'Proposes to ADD a new product to the catalogue (name, description, current version). Packages and prices are set by a person on the product page, never by you. Check list_products first. The system decides whether it runs at once or waits for a person\'s approval.',
+  description: `Proposes to ADD a new product (name, description, current version) WITH ITS PACKAGES in one call. If the person gave packages and prices (typed or read from an attachment), put ALL of them in "packages" (max ${MAX_NEW_PACKAGES}; monthlyPrice = whole Rupiah per month exactly as given, never guessed; features optional): do not create the product first and packages later. Check list_products first. With packages it ALWAYS waits for a person's approval.`,
   tier: 'act',
   permission: 'catalog.write',
-  args: z.object({ name: text(120).min(2), description: text(2000).optional(), currentVersion: text(40).optional() }),
-  execute: async (ctx, args) => createProduct(ctx, args),
-  describe: (args) => `Tambahkan produk baru "${args.name}" ke katalog. Paket dan harga diisi orang di halaman produk.`,
+  args: z.object({ name: text(120).min(2), description: text(2000).optional(), currentVersion: text(40).optional(), packages: z.array(packageArgs).max(MAX_NEW_PACKAGES).optional() }),
+  execute: async (ctx, { packages, ...product }) => createProduct(ctx, product, packages ?? []),
+  describe: (args) =>
+    args.packages?.length
+      ? `Tambahkan produk baru "${args.name}" lengkap dengan ${args.packages.length} paket: ${packageLines(args.packages)}. Periksa nama dan harganya sebelum menyetujui.`
+      : `Tambahkan produk baru "${args.name}" ke katalog tanpa paket. Paket dan harga bisa ditambahkan setelahnya.`,
+});
+
+export const createPackageTool = defineTool({
+  name: 'create_package',
+  description: 'Proposes to ADD one package (name, monthlyPrice in whole Rupiah per month exactly as given, optional features) to an EXISTING product (productId from list_products). For a new product use create_product with packages. Check get_product_packages first to avoid duplicates. ALWAYS waits for a person\'s approval (it sets a price).',
+  tier: 'act',
+  permission: 'catalog.write',
+  args: z.object({ productId: id, name: text(120).min(2), monthlyPrice: z.number().int().min(0).max(1_000_000_000_000), features: text(2000).optional() }),
+  execute: async (ctx, { productId, ...pkg }) => createPackage(ctx, productId, pkg),
+  describe: (args) => `Tambahkan paket "${args.name}" seharga ${formatRupiah(args.monthlyPrice)}/bulan ke produk ini. Periksa harganya sebelum menyetujui.`,
+});
+
+export const updatePackageTool = defineTool({
+  name: 'update_package',
+  description: 'Proposes to CHANGE a package: name, monthlyPrice (whole Rupiah per month, exactly as given) or features. Give only what changes; packageId from get_product_packages. Existing subscriptions and invoices keep their amount. ALWAYS waits for a person\'s approval (it can change a price).',
+  tier: 'act',
+  permission: 'catalog.write',
+  args: z.object({ packageId: id, name: text(120).min(2).optional(), monthlyPrice: z.number().int().min(0).max(1_000_000_000_000).optional(), features: text(2000).optional() }),
+  execute: async (ctx, { packageId, ...patch }) => updatePackage(ctx, packageId, patch),
+  describe: (args) => `Ubah paket ini${args.name ? ` menjadi "${args.name}"` : ''}${args.monthlyPrice !== undefined ? `, harga ${formatRupiah(args.monthlyPrice)}/bulan` : ''}. Langganan dan invoice yang sudah ada tidak berubah.`,
 });
 
 export const updateProductTool = defineTool({
@@ -148,12 +181,12 @@ export const updateDeploymentTool = defineTool({
 
 export const updateLeadTool = defineTool({
   name: 'update_lead',
-  description: 'Proposes to CHANGE a lead (name, contact person, email, phone, source, needs, estimated value in Rupiah, assignedTo = a user id from list_team_members). Give only what changes; leadId from list_leads. The system decides whether it runs at once or waits for a person\'s approval.',
+  description: 'Proposes to CHANGE a lead (name, contact person, email, phone, source, needs, estimated value in Rupiah, assignedTo = a user id from list_team_members). Give only what changes; leadId from list_leads. estimatedValue ONLY when the person (or an attachment) states that exact amount: never multiply, add up or derive it (for example price x outlets), and never copy a catalogue price into it; when unsure leave it out and ask. The system decides whether it runs at once or waits for a person\'s approval.',
   tier: 'act',
   permission: 'lead.update_assigned',
   args: z.object({ leadId: id, name: text(120).min(2).optional(), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), source: text(80).optional(), needsSummary: text(4000).optional(), estimatedValue: z.number().int().min(0).optional(), assignedTo: id.nullable().optional() }),
   execute: async (ctx, { leadId, ...patch }) => updateLead(ctx, leadId, patch),
-  describe: () => 'Ubah data lead sesuai isian di bawah.',
+  describe: (args) => `Ubah data lead sesuai isian di bawah${args.estimatedValue !== undefined ? ` (nilai estimasi menjadi ${formatRupiah(args.estimatedValue)}; periksa angkanya)` : ''}.`,
 });
 
 export const moveLeadTool = defineTool({
@@ -204,7 +237,7 @@ export const createSubscriptionTool = defineTool({
 });
 
 /** The `act` tools on records. Registered in the assistant catalogue and in the registry the approval decision looks tools up in. */
-export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool, ...MANAGE_ACT_TOOLS] as const;
+export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createPackageTool, updatePackageTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool, ...MANAGE_ACT_TOOLS] as const;
 
 export interface ActionFinding {
   id: string;

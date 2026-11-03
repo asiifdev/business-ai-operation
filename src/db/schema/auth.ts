@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
-  bigint, boolean, check, foreignKey, index, integer, pgEnum, pgTable, smallint, text, unique, uniqueIndex,
+  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable, smallint, text, unique, uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { bigAmount, createdAtColumn, idColumn, lower, tstz, updatedAtColumn } from './_shared';
 
@@ -34,6 +34,10 @@ export const organizations = pgTable(
     bankName: text('bank_name'),
     bankAccountName: text('bank_account_name'),
     bankAccountNumber: text('bank_account_number'),
+    /** D-095: when the Owner finished (or set aside) the first-run setup wizard. Null = the wizard is still due. */
+    onboardingCompletedAt: tstz('onboarding_completed_at'),
+    /** D-095: wizard steps the person skipped on purpose or confirmed by hand. Whether a step is done is read from real data. */
+    onboardingProgress: jsonb('onboarding_progress').$type<{ skipped?: string[]; confirmed?: string[] }>().notNull().default(sql`'{}'::jsonb`),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },

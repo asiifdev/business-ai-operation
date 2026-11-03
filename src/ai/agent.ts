@@ -7,7 +7,7 @@ import type { Ctx } from '../domain/ctx';
 import { DomainError } from '../domain/errors';
 import { can } from '../domain/permissions';
 import { AiProviderError, type AiErrorKind } from './errors';
-import { ACTION_DONE_FALLBACK, AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, STEP_LIMIT, detectLocale, friendlyAiError, type Locale } from './messages';
+import { ACTION_DONE_FALLBACK, AI_LABEL, NOT_AI_LABEL, NO_DATA_REFUSAL, OUT_OF_SCOPE_REFUSAL, STEP_LIMIT, WRAP_UP, detectLocale, friendlyAiError, type Locale } from './messages';
 import { findUnverifiedNumbers } from './numbers';
 import type { AiProvider } from './provider';
 import type { ToolRegistry } from './tools/registry';
@@ -16,8 +16,12 @@ import { UNTRUSTED_NOTICE } from './untrusted';
 import { progressDetail, type AgentProgress } from './progress';
 import { entitiesFromOutput, type EntityRef } from '../lib/entity-links';
 
-/** BR-M07-06 default: five rounds of tool calls per run. */
-export const DEFAULT_MAX_ROUNDS = 5;
+/**
+ * BR-M07-06 default: rounds of tool calls per run. Independent calls of one round run together, so a large request (a product
+ * with its packages, a lead update, a proposal) needs few rounds. When the limit is reached the run does not fail: it takes one
+ * more round WITHOUT tools to report what is done and what is left (see `WRAP_UP`), and the person answers "lanjut" to continue.
+ */
+export const DEFAULT_MAX_ROUNDS = 8;
 /**
  * Input plus output tokens one run may use across all rounds (BR-M07-06, CR-11). Every round sends the whole context again,
  * and the assistant's instructions and tools alone are about 45,000 tokens, so 60,000 stopped every task of two rounds or
@@ -74,7 +78,7 @@ export interface AgentInput {
    */
   /** True when the question came with text from outside the person (attachments): nothing in this run may run by itself (D-082, D-083). */
   untrustedInput?: boolean;
-  autoRun?: (approval: { id: string; tool: string }) => Promise<{ executed: boolean; reason?: string; undoable?: boolean } | null>;
+  autoRun?: (approval: { id: string; tool: string; args: unknown }) => Promise<{ executed: boolean; reason?: string; undoable?: boolean } | null>;
 }
 
 export interface AgentResult {
@@ -233,7 +237,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       const describe = tool.describe as (args: unknown) => string;
       const summary = describe(parsed.data);
       const approval = await ask(input.db, aiCtx, { tool: tool.name, args: parsed.data, rationale: summary, findingId: input.findingId ?? null });
-      const outcome = input.autoRun && !readUntrusted && !input.findingId ? await input.autoRun({ id: approval.id, tool: tool.name }).catch(() => null) : null;
+      const outcome = input.autoRun && !readUntrusted && !input.findingId ? await input.autoRun({ id: approval.id, tool: tool.name, args: parsed.data }).catch(() => null) : null;
       if (outcome) {
         autoRan.push({ id: approval.id, tool: tool.name, summary, executed: outcome.executed, reason: outcome.reason, undoable: outcome.undoable === true });
         log(outcome.executed ? 'ok' : 'failed');
@@ -281,7 +285,9 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   };
 
   try {
-    for (rounds = 1; rounds <= maxRounds; rounds += 1) {
+    // One extra round past the limit is the wrap-up: no tools, only a report of what is done and what remains.
+    for (rounds = 1; rounds <= maxRounds + 1; rounds += 1) {
+      const wrapUp = rounds > maxRounds;
       if (rounds > 1) await run.assertBudget();
       try {
         input.onProgress?.({ step: 'think', round: rounds });
@@ -289,10 +295,11 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
         /* see above */
       }
       if (run.tokens >= maxRunTokens) return await stop('run_tokens', STEP_LIMIT[refusalLocale], 'run token limit reached');
+      if (wrapUp) messages.push({ role: 'developer', content: WRAP_UP[refusalLocale] });
 
       const result = await input.provider.chat({
         messages,
-        tools: offered.length ? offered : undefined,
+        tools: offered.length && !wrapUp ? offered : undefined,
         schema: input.schema,
         effort: input.effort,
         maxTokens: input.maxTokens,
@@ -302,6 +309,9 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       });
       run.addChat(result.meta.model, result.usage);
 
+      // A model that still asks for tools after being told it may not has not finished its report: that is the real limit.
+      if (wrapUp && result.toolCalls.length > 0) return await stop('rounds', STEP_LIMIT[refusalLocale], `tool round limit (${maxRounds}) reached`);
+
       if (result.toolCalls.length === 0) {
         const text = result.text ?? '';
         const unverified = findUnverifiedNumbers(text, [...toolOutputs, userText], input.trustedNumbers);
@@ -309,7 +319,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
 
         if (guarded && ((strict && !grounded) || unverified.length > 0)) {
           // One correction, then the fixed refusal: the model's own words are never shown when they rest on nothing.
-          if (corrections < 1 && rounds < maxRounds) {
+          if (corrections < 1 && !wrapUp) {
             corrections += 1;
             messages.push({ role: 'assistant', content: text });
             messages.push({
@@ -394,7 +404,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
         return await stop('tool_args', friendlyAiError('invalid_output', locale), 'the model sent invalid tool arguments twice');
       }
     }
-    rounds = maxRounds;
+    rounds = maxRounds + 1;
     return await stop('rounds', STEP_LIMIT[refusalLocale], `tool round limit (${maxRounds}) reached`);
   } catch (error) {
     if (error instanceof AiProviderError) {

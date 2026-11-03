@@ -12,6 +12,7 @@ import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
 import { LOGO_MAX_BYTES, LOGO_TYPES } from '../portfolio/ProductLogo';
 import { Icon } from '../shell/Icon';
+import { ProfileAutofill } from './ProfileAutofill';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
 import { PageHeader } from '../ui/PageHeader';
@@ -43,7 +44,7 @@ function CompanyProfile({ canEdit }: { canEdit: boolean }) {
       {load.value.state === 'error' && <Panel><ErrorBox onRetry={load.retry}>{t(errorKey(load.value.error))}</ErrorBox></Panel>}
       {load.value.state === 'ready' && (
         <>
-          <ProfileForm initial={load.value.data.profile} canEdit={canEdit} onLogoChanged={() => void load.reload()} />
+          <ProfileForm initial={load.value.data.profile} canEdit={canEdit} onLogoChanged={() => void load.reload()} onServicesAdded={() => void load.reload()} />
           <Services services={load.value.data.services} canEdit={canEdit} onChanged={() => void load.reload()} />
           <p className="m-0 max-w-prose text-sm text-muted">{t('companyAiNote')}</p>
         </>
@@ -59,7 +60,7 @@ const Section = ({ title, children }: { title: string; children: ReactNode }) =>
   </Panel>
 );
 
-function ProfileForm({ initial, canEdit, onLogoChanged }: { initial: Data['profile']; canEdit: boolean; onLogoChanged: () => void }) {
+function ProfileForm({ initial, canEdit, onLogoChanged, onServicesAdded }: { initial: Data['profile']; canEdit: boolean; onLogoChanged: () => void; onServicesAdded: () => void }) {
   const t = useT();
   const [v, setV] = useState({
     tagline: initial.tagline ?? '',
@@ -117,6 +118,14 @@ function ProfileForm({ initial, canEdit, onLogoChanged }: { initial: Data['profi
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+      {canEdit && (
+        <ProfileAutofill
+          initialUrl={v.website}
+          current={{ tagline: v.tagline, industry: v.industry, description: v.description, targetAudience: v.targetAudience, valueProps: v.valueProps, website: v.website, contactEmail: v.contactEmail, contactPhone: v.contactPhone, address: v.address, socials: v.socials }}
+          onServicesAdded={onServicesAdded}
+          onApply={(patch) => { setDone(null); setV((p) => ({ ...p, ...patch.fields, socials: { ...p.socials, ...patch.socials } })); }}
+        />
+      )}
       <Section title={t('companySectionIdentity')}>
         <LogoEditor hasLogo={initial.hasLogo} canEdit={canEdit} onChanged={onLogoChanged} />
         <div className="grid gap-4 sm:grid-cols-2">

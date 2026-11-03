@@ -1,3 +1,4 @@
+import { fixedClock } from '../../../lib/clock';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { db, pg } from '../../../db/client';
@@ -210,7 +211,10 @@ describe('overdue is derived, never stored (BR-M03-02, -12)', () => {
 describe('subscriptions and the renewal scheduler (BR-M03-09, -13, -14)', () => {
   async function withSub(over: Record<string, unknown> = {}) {
     const s = await seed();
-    const sub = await createSubscription(s.o.ownerCtx, { clientId: s.clientId, packageId: s.packageId, startedOn: '2026-10-01', nextDueDate: '2026-11-01', ...over });
+    // Created on its start day, before the draft window opens, so the scheduler (not the creation) makes the first draft.
+    const created = new Date(`${String(over.nextDueDate ?? '2026-11-01')}T03:00:00Z`);
+    created.setUTCDate(created.getUTCDate() - 20);
+    const sub = await createSubscription({ ...s.o.ownerCtx, clock: fixedClock(over.nextDueDate ? created.toISOString() : '2026-10-01T03:00:00Z') }, { clientId: s.clientId, packageId: s.packageId, startedOn: '2026-10-01', nextDueDate: '2026-11-01', ...over });
     return { ...s, subId: sub.id };
   }
 

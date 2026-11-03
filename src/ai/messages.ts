@@ -28,6 +28,14 @@ export const STEP_LIMIT: Record<Locale, string> = {
   id: 'Permintaan ini butuh terlalu banyak langkah sekaligus, jadi saya berhenti sebelum selesai. Coba bagi menjadi langkah yang lebih kecil, misalnya satu proposal atau satu klien dulu.',
   en: 'This request needed too many steps at once, so I stopped before finishing. Try smaller steps, for example one proposal or one client first.',
 };
+/**
+ * Told to the model (not shown) in the last round, when its tools are taken away: it must report honestly instead of the run
+ * ending with an error. What it names comes from the tool results above, so nothing it says about "done" is invented.
+ */
+export const WRAP_UP: Record<Locale, string> = {
+  id: 'Batas langkah untuk satu permintaan sudah tercapai, jadi tool tidak tersedia lagi. Jangan memanggil tool. Tulis laporan singkat dari hasil tool di atas: (1) apa yang SUDAH dikerjakan (sebutkan yang sudah dijalankan dan yang menunggu persetujuan manusia), (2) apa yang BELUM dikerjakan, satu per satu, (3) ajak pengguna membalas "lanjut" agar sisanya dikerjakan di langkah berikutnya. Jangan menyatakan sesuatu selesai bila hasil tool tidak menyatakannya.',
+  en: 'The step limit for one request has been reached, so tools are no longer available. Do not call any tool. Write a short report from the tool results above: (1) what is DONE (say what ran and what waits for a person\'s approval), (2) what is NOT done yet, one by one, (3) ask the user to reply "continue" so the rest is done in the next step. Do not claim anything is finished unless a tool result says so.',
+};
 export const NO_DATA_REFUSAL: Record<Locale, string> = {
   id: 'Saya hanya menjawab dari data dan fungsi yang ada di Orbyte, dan tidak menemukan datanya untuk pertanyaan ini. Tanyakan hal yang ada di data Anda, atau tanyakan "apa yang bisa kamu lakukan?".',
   en: 'I only answer from the data and functions in Orbyte, and I found no data for this question. Ask about something in your data, or ask "what can you do?".',

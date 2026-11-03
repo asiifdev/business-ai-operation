@@ -133,6 +133,8 @@ Tipe `ref` = foreign key komposit ke `(org_id, id)` tabel induk (kecuali disebut
 | `ai_autonomy` | text (`careful` · `balanced` · `autonomous`) | default `balanced` (**D-082, disetujui owner 2026-10-31**): seberapa banyak yang boleh dijalankan asisten sendiri untuk orang yang meminta; aksi berisiko tinggi selalu menunggu klik |
 | `marketing_daily_image_quota` | smallint N | batas gambar Marketing Studio per hari per organisasi (BR-M10-06; **D-088**); `NULL` = ikut bawaan server (`MARKETING_DAILY_IMAGE_QUOTA`, lalu 20); diubah Pemilik di pengaturan organisasi |
 | `bank_name`, `bank_account_name`, `bank_account_number` | text N | info pembayaran di PDF (BR-M03-15) |
+| `onboarding_completed_at` | timestamptz N | kapan Pemilik menyelesaikan atau menutup wizard onboarding (**D-095**); `NULL` = wizard masih tertunda. Organisasi yang sudah ada sebelum migrasi diisi `now()` agar tidak dipaksa masuk wizard |
+| `onboarding_progress` | jsonb | default `{}`; bentuk `{skipped: string[], confirmed: string[]}` berisi kunci langkah yang sengaja dilewati atau dikonfirmasi manual. Status "selesai" tiap langkah dibaca dari data nyata, bukan dari kolom ini (**D-095**) |
 | `created_at`, `updated_at` | timestamptz | |
 
 Batasan: `CHECK` rentang jam 0–23, hari ≥ 0, `tax_rate_bps` 0–10000, `marketing_daily_image_quota` 0–500.

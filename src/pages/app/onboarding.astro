@@ -1,0 +1,14 @@
+---
+import AppShell from '../../layouts/AppShell.astro';
+import { OnboardingWizard } from '../../components/onboarding/OnboardingWizard';
+import { can } from '../../domain/permissions';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+// Staff have nothing to set up here: the settings it writes are for managers.
+if (!can(user.role, 'org.profile.update')) return Astro.redirect('/app');
+---
+
+<AppShell title="Onboarding" current="dashboard">
+  <OnboardingWizard client:load role={user.role === 'owner' ? 'owner' : 'admin'} name={user.name} organizationName={Astro.locals.organizationName ?? ''} />
+</AppShell>

@@ -1,3 +1,4 @@
+import { fixedClock } from '../../../lib/clock';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { callTools, FakeProvider, say } from '../../../ai/fake-provider';
@@ -94,7 +95,7 @@ describe('findings and cards (BRD-M08 section 10)', () => {
     const client = await createClient(o.ownerCtx, { name: 'Bumi Kreatif' });
     const product = await createProduct(o.ownerCtx, { name: 'Orbit HR' });
     const pkg = await createPackage(o.ownerCtx, product.id, { name: 'Dasar', monthlyPrice: 300_000 });
-    const sub = await createSubscription(o.ownerCtx, { clientId: client.id, packageId: pkg.id, startedOn: '2026-10-02', nextDueDate: '2026-11-02' });
+    const sub = await createSubscription({ ...o.ownerCtx, clock: fixedClock('2026-10-02T03:00:00Z') }, { clientId: client.id, packageId: pkg.id, startedOn: '2026-10-02', nextDueDate: '2026-11-02' });
     await Promise.all([emitRenewalUpcoming(o.orgId, o.clock.now()), emitRenewalUpcoming(o.orgId, o.clock.now())]);
     const rows = await db.select().from(findings).where(and(eq(findings.orgId, o.orgId), eq(findings.rule, 'renewal_upcoming')));
     expect(rows).toHaveLength(1);

@@ -10,6 +10,8 @@ export const ACT_TOOL_LABEL: Record<string, MessageKey> = {
   update_client: 'toolUpdateClient',
   create_product: 'toolCreateProduct',
   update_product: 'toolUpdateProduct',
+  create_package: 'toolCreatePackage',
+  update_package: 'toolUpdatePackage',
   create_deployment: 'toolCreateDeployment',
   update_deployment: 'toolUpdateDeployment',
   update_lead: 'toolUpdateLead',

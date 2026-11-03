@@ -66,7 +66,7 @@ export const id: Record<PageSlug, PageContent> = {
     updated,
     sections: [
       { heading: 'Bagaimana peringatan menjadi tindakan', bullets: ['Aturan yang berjalan terjadwal menemukan suatu kondisi, misalnya invoice terlambat.', 'Peringatan hanya dibuat satu kali. Aturan yang berjalan lagi tidak membuat peringatan ganda.', 'AI menjelaskan dan menulis pesan dengan angka yang dibaca dari data Anda.', 'Anda bisa menyetujui, menolak, atau mengedit. Tindakan yang disetujui berjalan dengan cara yang sama seperti tombol manual.'] },
-      { heading: 'Yang tidak bisa dilakukan AI di sini', bullets: ['Mencatat atau mengubah pembayaran.', 'Mengubah nominal invoice, jatuh tempo, atau harga paket.', 'Menghapus data, atau mengubah peran dan pengaturan.', 'Mengirim apa pun ke luar aplikasi.'] },
+      { heading: 'Yang tidak bisa dilakukan AI di sini', bullets: ['Mencatat atau mengubah pembayaran.', 'Mengubah nominal invoice atau jatuh tempo. Harga paket hanya berubah setelah Anda menyetujuinya.', 'Menghapus data, atau mengubah peran dan pengaturan.', 'Mengirim apa pun ke luar aplikasi.'] },
     ],
   },
   'product/billing': {

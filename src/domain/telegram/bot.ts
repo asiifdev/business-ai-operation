@@ -140,8 +140,15 @@ async function onMessage(message: TelegramMessage, deps: BotDeps) {
   }
 
   const audio = message.voice ?? message.audio;
-  if (audio) return onVoice(audio, { forceMeeting: Boolean(message.audio) || /^\/(rapat|meeting)\b/i.test(message.caption?.trim() ?? '') }, ctx, person, deps);
   const readPhoto = message.photo ? readCaption(message.caption) : null;
+  if (audio) {
+    // An audio FILE is something to read, like on the web (D-083), unless it is asked to be minutes (/rapat) or is as long as a
+    // meeting. `/baca` always means read. A voice note stays a message to the assistant or, when long, a recording.
+    const meeting = /^\/(rapat|meeting)\b/i.test(message.caption?.trim() ?? '');
+    const readIt = message.audio && !meeting && (readCaption(message.caption) !== null || audio.duration * 1000 <= CHAT_VOICE_MAX_MS) && deps.attach && deps.ask;
+    if (readIt) return onAttachment(message, readCaption(message.caption), ctx, person, deps);
+    return onVoice(audio, { forceMeeting: Boolean(message.audio) || meeting }, ctx, person, deps);
+  }
   if (message.document || message.video || message.video_note || (message.photo && readPhoto !== null)) return onAttachment(message, readPhoto, ctx, person, deps);
   if (message.photo) return onPhoto(message, ctx, person, deps);
   if (!text) return;
@@ -248,10 +255,10 @@ async function onAttachment(message: TelegramMessage, readPhoto: string | null, 
   // An album would answer once per file; each file is a model call, so the same per-minute cap as questions applies.
   if (!limiter.allow(`telegram-ask:${person.userId}`, ASK_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
 
-  const photo = readPhoto !== null ? pickPhoto(message.photo) : null;
-  const file = message.document ?? message.video ?? message.video_note ?? photo;
+  const photo = readPhoto !== null && message.photo ? pickPhoto(message.photo) : null;
+  const file = message.document ?? message.video ?? message.video_note ?? message.audio ?? photo;
   if (!file) return send(deps, chatId, escapeHtml(t('tgAttachTooLarge')));
-  const name = message.document?.file_name ?? message.video?.file_name ?? (message.video || message.video_note ? `video-${message.message_id}.mp4` : `foto-${message.message_id}.jpg`);
+  const name = message.document?.file_name ?? message.video?.file_name ?? message.audio?.file_name ?? (message.audio ? `suara-${message.message_id}.mp3` : message.video || message.video_note ? `video-${message.message_id}.mp4` : `foto-${message.message_id}.jpg`);
   let bytes: Uint8Array;
   try {
     bytes = await deps.client.downloadFile(file.file_id);

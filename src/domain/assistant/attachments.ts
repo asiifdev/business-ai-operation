@@ -68,7 +68,7 @@ export function classify(name: string, bytes: Uint8Array): AttachmentKind | 'leg
   if (startsWith(bytes, 0x25, 0x50, 0x44, 0x46)) return 'pdf';
   if (startsWith(bytes, 0x89, 0x50, 0x4e, 0x47) || startsWith(bytes, 0xff, 0xd8, 0xff) || (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WEBP')) || ascii(bytes, 0, 'GIF8')) return 'image';
   if (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WAVE')) return 'audio';
-  if (ascii(bytes, 0, 'ID3') || startsWith(bytes, 0xff, 0xfb) || startsWith(bytes, 0xff, 0xf3) || ascii(bytes, 0, 'OggS') || ascii(bytes, 0, 'fLaC')) return 'audio';
+  if (ascii(bytes, 0, 'ID3') || startsWith(bytes, 0xff, 0xfb) || startsWith(bytes, 0xff, 0xf3) || ascii(bytes, 0, 'OggS') || ascii(bytes, 0, 'fLaC') || startsWith(bytes, 0xff, 0xf1) || startsWith(bytes, 0xff, 0xf9) || ascii(bytes, 0, '#!AMR')) return 'audio';
   if (ascii(bytes, 4, 'ftyp')) return /\.(m4a|aac)$/i.test(name) ? 'audio' : 'video';
   if (startsWith(bytes, 0x1a, 0x45, 0xdf, 0xa3)) return /\.(weba|ogg|opus)$/i.test(name) ? 'audio' : 'video'; // Matroska / WebM
   if (isLegacyOffice(bytes)) return 'legacy';

@@ -30,6 +30,14 @@ describe('autonomy rules (D-082)', () => {
     for (const level of ['careful', 'balanced', 'autonomous'] as const) {
       for (const tool of ['delete_client', 'delete_product', 'delete_deployment', 'delete_invoice_draft', 'cancel_invoice', 'stop_subscription']) expect(mayAutoRun(level, tool)).toBe(false);
     }
+    // D-094: a price is money. A product with packages, and any package tool, waits for a click even when a bare product would not.
+    for (const level of ['careful', 'balanced', 'autonomous'] as const) {
+      expect(mayAutoRun(level, 'create_package')).toBe(false);
+      expect(mayAutoRun(level, 'update_package')).toBe(false);
+      expect(mayAutoRun(level, 'create_product', { name: 'POS', packages: [{ name: 'Basic', monthlyPrice: 1 }] })).toBe(false);
+    }
+    expect(mayAutoRun('balanced', 'create_product', { name: 'POS' })).toBe(true);
+    expect(mayAutoRun('balanced', 'create_product', { name: 'POS', packages: [] })).toBe(true);
     expect(mayAutoRun('balanced', 'accept_task_draft')).toBe(true);
     expect(mayAutoRun('balanced', 'archive_client')).toBe(false);
     expect(mayAutoRun('autonomous', 'archive_client')).toBe(true);

@@ -3,15 +3,23 @@ import AppShell from '../../layouts/AppShell.astro';
 import { DashboardHome } from '../../components/DashboardHome';
 import { getCalendarMonth } from '../../domain/billing/summary';
 import { getDashboardOverview } from '../../domain/dashboard/overview';
+import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
+import { getOnboarding, onboardingDue } from '../../domain/org/onboarding';
+import { can } from '../../domain/permissions';
 
 export const prerender = false;
 const user = Astro.locals.user!;
 const ctx = Astro.locals.ctx!;
+// A new Owner lands in the setup wizard first (D-095); every other page stays open, so nobody is trapped in it.
+if (await onboardingDue(ctx)) return Astro.redirect('/app/onboarding');
+// Anyone who may manage settings is reminded until the needed steps are done.
+const onboarding = can(user.role, 'org.profile.update') ? await getOnboarding(ctx) : null;
 // Read on the server so the first paint already holds the figures: no empty frame that fills in a moment later.
 const overview = await getDashboardOverview(ctx);
 const calendar = overview.finance ? await getCalendarMonth(ctx, overview.finance.month) : null;
 ---
 
 <AppShell title="Dashboard" current="dashboard">
+  {onboarding && !onboarding.ready && <OnboardingCard client:load state={onboarding} />}
   <DashboardHome client:load name={user.name} role={user.role} overview={overview} timezone={Astro.locals.timezone} calendar={calendar} />
 </AppShell>

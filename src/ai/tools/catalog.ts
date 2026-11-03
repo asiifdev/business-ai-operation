@@ -653,7 +653,7 @@ export function buildAssistantRegistry(): ToolRegistry {
   registry.register(
     defineTool({
       name: 'draft_lead',
-      description: 'Prepares a DRAFT sales lead (a prospect: name, and optionally contact person, email, phone, where it came from, what they need, estimated value in Rupiah) from what the person said. Check list_leads first to avoid a duplicate. It stays a draft: it is not counted in the pipeline until a person accepts it on the lead page.',
+      description: 'Prepares a DRAFT sales lead (a prospect: name, and optionally contact person, email, phone, where it came from, what they need, estimated value in Rupiah) from what the person said. estimatedValue ONLY when the person or an attachment states that exact amount: never multiply, add up or derive it (price x outlets, etc.); otherwise leave it out and put the figures in needsSummary as written. Check list_leads first to avoid a duplicate. It stays a draft: it is not counted in the pipeline until a person accepts it on the lead page.',
       tier: 'draft',
       permission: 'lead.write',
       args: z.object({
