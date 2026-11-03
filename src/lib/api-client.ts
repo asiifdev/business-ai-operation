@@ -45,6 +45,7 @@ const CODE_TEXT: Record<string, MessageKey> = {
   duplicate: 'errDuplicate',
   email_taken: 'emailTaken',
   last_owner: 'errLastOwner',
+  self_change: 'errSelfChange',
   has_history: 'errHasHistory',
   telegram_token: 'errTelegramToken',
   telegram_unreachable: 'errTelegramUnreachable',

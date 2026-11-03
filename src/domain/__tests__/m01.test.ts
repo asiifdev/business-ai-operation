@@ -130,20 +130,33 @@ describe('user management (M01)', () => {
 
   it('refuses to demote or deactivate the last active Owner, with a domain error', async () => {
     const o = await register();
-    await rejects(setUserRole(o.ctx, o.userId, 'admin'), 'last_owner');
-    await rejects(deactivateUser(o.ctx, o.userId), 'last_owner');
+    const admin = await createUser(o.ctx, { name: 'Admin', email: `la-${unique()}@example.test`, role: 'admin', password: 'temporary-pass-1' });
+    const second = userCtx({ orgId: o.orgId, userId: admin.id, role: 'owner' }); // an owner acting on the sole real owner
+    await rejects(setUserRole(second, o.userId, 'admin'), 'last_owner');
+    await rejects(deactivateUser(second, o.userId), 'last_owner');
     const [still] = await db.select().from(users).where(eq(users.id, o.userId));
     expect(still).toMatchObject({ role: 'owner', isActive: true });
   });
 
-  it('lets an Owner step down once a second Owner exists, and records the role change with who did it', async () => {
+  it('lets a second Owner step the first one down, and records the role change with who did it', async () => {
     const o = await register();
     const second = await createUser(o.ctx, { name: 'Owner Dua', email: `o2-${unique()}@example.test`, role: 'owner', password: 'temporary-pass-1' });
-    await setUserRole(o.ctx, o.userId, 'admin');
+    const secondCtx = userCtx({ orgId: o.orgId, userId: second.id, role: 'owner' });
+    await setUserRole(secondCtx, o.userId, 'admin');
     const [entry] = await db.select().from(auditLog).where(and(eq(auditLog.entityId, o.userId), eq(auditLog.action, 'user.role_changed')));
     expect(entry.summary).toEqual({ from: 'owner', to: 'admin' });
-    expect(entry.actor).toBe(`user:${o.userId}`);
-    expect(second.id).toBeTruthy();
+    expect(entry.actor).toBe(`user:${second.id}`);
+  });
+
+  it('refuses to change your own role or deactivate yourself, and leaves the role untouched', async () => {
+    const o = await register();
+    const admin = await createUser(o.ctx, { name: 'Admin', email: `sa-${unique()}@example.test`, role: 'admin', password: 'temporary-pass-1' });
+    const adminCtx = userCtx({ orgId: o.orgId, userId: admin.id, role: 'admin' });
+    await rejects(setUserRole(adminCtx, admin.id, 'staff'), 'self_change');
+    await rejects(deactivateUser(adminCtx, admin.id), 'self_change');
+    await rejects(setUserRole(o.ctx, o.userId, 'staff'), 'self_change');
+    const [still] = await db.select().from(users).where(eq(users.id, admin.id));
+    expect(still).toMatchObject({ role: 'admin', isActive: true });
   });
 
   it('stops an Admin from changing or removing an Owner', async () => {

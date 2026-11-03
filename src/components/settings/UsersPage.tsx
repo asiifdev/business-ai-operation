@@ -39,12 +39,14 @@ export function UsersPage({ currentUserId, isOwner, timezone }: { currentUserId:
     setRowError(null);
     try {
       await fn();
-      await list.reload();
     } catch (error) {
       setRowError({ id, error });
-    } finally {
       setBusyId(null);
+      return;
     }
+    // The change is saved at this point; a failing refresh must not be reported as a failed change.
+    setBusyId(null);
+    await list.reload();
   }
 
   return (
@@ -82,6 +84,8 @@ export function UsersPage({ currentUserId, isOwner, timezone }: { currentUserId:
                 {list.value.data.users.map((u) => {
                   // An Admin cannot touch an Owner at all, so that row is plain text for them.
                   const locked = u.role === 'owner' && !isOwner;
+                  // Nobody changes their own role or deactivates themselves; another Owner/Admin does it.
+                  const isSelf = u.id === currentUserId;
                   return (
                     <tr key={u.id} role="row" className={tbl.row}>
                       <td data-label={t('usersName')} className={`py-3 pr-3 ${tbl.label} ${tbl.full}`}>
@@ -92,14 +96,14 @@ export function UsersPage({ currentUserId, isOwner, timezone }: { currentUserId:
                         {rowError?.id === u.id && <div className="mt-1 text-sm text-danger" role="alert">{t(errorKey(rowError.error))}</div>}
                       </td>
                       <td data-label={t('usersRole')} className={`py-3 pr-3 ${tbl.label}`}>
-                        {locked || !u.isActive ? t(ROLE_LABEL[u.role]) : (
+                        {locked || isSelf || !u.isActive ? t(ROLE_LABEL[u.role]) : (
                           <div className="min-w-36"><SelectMenu value={u.role} searchable={false} options={roleOptions(roles)} onChange={(v) => v !== u.role && act(u.id, () => api('PATCH', `/api/users/${u.id}`, { role: v }))} disabled={busyId === u.id} /></div>
                         )}
                       </td>
                       <td data-label={t('usersColJoined')} className={`py-3 pr-3 ${tbl.label}`}>{formatDate(u.createdAt.slice(0, 10))}</td>
                       <td className="py-3 sm:text-right">
                         {!u.isActive && isOwner && u.id !== currentUserId && <ConfirmButton message={t('cfmDeleteUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('DELETE', `/api/users/${u.id}`))}>{t('usersDeleteForever')}</ConfirmButton>}
-                        {u.isActive && !locked && <ConfirmButton message={t('cfmDeactivateUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('POST', `/api/users/${u.id}/deactivate`))}>{t('usersDeactivate')}</ConfirmButton>}
+                        {u.isActive && !locked && !isSelf && <ConfirmButton message={t('cfmDeactivateUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('POST', `/api/users/${u.id}/deactivate`))}>{t('usersDeactivate')}</ConfirmButton>}
                       </td>
                     </tr>
                   );

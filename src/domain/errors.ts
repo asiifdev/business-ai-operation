@@ -4,6 +4,8 @@ export type DomainErrorCode =
   | 'validation'
   | 'email_taken'
   | 'last_owner'
+  /** Changing your own role or deactivating yourself is refused: someone else must do it (no self-escalation, no self-lockout). */
+  | 'self_change'
   /** A record that other records point to cannot be deleted for good; keep it deactivated or archived instead (D-097). */
   | 'has_history'
   | 'invalid_state'
@@ -37,6 +39,7 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   not_found: 404,
   email_taken: 409,
   last_owner: 409,
+  self_change: 409,
   has_history: 409,
   invalid_state: 409,
   duplicate: 409,

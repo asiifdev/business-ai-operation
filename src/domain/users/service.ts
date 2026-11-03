@@ -69,6 +69,7 @@ export async function createUser(ctx: Ctx, raw: z.input<typeof createUserSchema>
 
 export async function setUserRole(ctx: Ctx, userId: string, role: Role) {
   assertCan(ctx, 'user.update_role');
+  if (userId === ctx.userId) throw new DomainError('self_change', 'you cannot change your own role');
   const target = await getTarget(ctx, userId);
   assertMayTouchRole(ctx, target.role); // changing an existing owner
   assertMayTouchRole(ctx, role); // promoting someone to owner
@@ -86,6 +87,7 @@ export async function setUserRole(ctx: Ctx, userId: string, role: Role) {
 /** Deactivates a user and revokes every session at once, so access ends immediately (BR-M01-06). */
 export async function deactivateUser(ctx: Ctx, userId: string) {
   assertCan(ctx, 'user.deactivate');
+  if (userId === ctx.userId) throw new DomainError('self_change', 'you cannot deactivate yourself');
   const target = await getTarget(ctx, userId);
   assertMayTouchRole(ctx, target.role);
   if (!target.isActive) return;
