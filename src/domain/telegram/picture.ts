@@ -3,14 +3,15 @@ import type { AiProvider } from '../../ai/provider';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
 import { createFromPrompt, type Attachment } from '../marketing/free';
-import { MAX_ATTACHMENTS } from '../marketing/free-rules';
+/** Photos kept per chat while waiting for their words. A picture is made from at most `MAX_ATTACHMENTS` of them (the newest). */
+export const MAX_WAITING_PHOTOS = 10;
 import { readAssetFile } from '../marketing/service';
 
 /** Photos a person sent that still wait for their words (D-080, D-092): kept this long, per chat, in memory only. */
 const PENDING_TTL_MS = 10 * 60_000;
 
 export class PendingPictures {
-  private readonly byChat = new Map<number, { files: Attachment[]; at: number }>();
+  private readonly byChat = new Map<number, { files: Attachment[]; at: number; dropped: number }>();
 
   private live(chatId: number, now: Date) {
     const entry = this.byChat.get(chatId);
@@ -22,12 +23,22 @@ export class PendingPictures {
     return entry;
   }
 
-  /** Adds a photo; at most four are kept (the newest). Returns how many wait now. */
+  /**
+   * Adds a photo; at most {@link MAX_WAITING_PHOTOS} are kept (the newest), enough for an album of contact screenshots to
+   * read (D-098). Returns how many wait now; `dropped` says how many older ones were let go for this chat meanwhile.
+   */
   add(chatId: number, file: Attachment, now: Date): number {
     for (const [id, e] of this.byChat) if (now.getTime() - e.at > PENDING_TTL_MS) this.byChat.delete(id);
-    const files = [...(this.live(chatId, now)?.files ?? []), file].slice(-MAX_ATTACHMENTS);
-    this.byChat.set(chatId, { files, at: now.getTime() });
+    const before = this.live(chatId, now);
+    const all = [...(before?.files ?? []), file];
+    const files = all.slice(-MAX_WAITING_PHOTOS);
+    this.byChat.set(chatId, { files, at: now.getTime(), dropped: (before?.dropped ?? 0) + (all.length - files.length) });
     return files.length;
+  }
+
+  /** How many photos of this chat were dropped because too many waited. The caller says so once, on the first. */
+  dropped(chatId: number, now: Date): number {
+    return this.live(chatId, now)?.dropped ?? 0;
   }
 
   has(chatId: number, now: Date): boolean {

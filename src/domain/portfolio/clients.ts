@@ -67,6 +67,56 @@ export async function createClient(ctx: Ctx, raw: z.input<typeof clientSchema>) 
   }
 }
 
+/** Most clients one bulk add may carry: a screenshot album or a pasted list, not an import (D-098). */
+export const MAX_BULK_CLIENTS = 20;
+
+export interface BulkClientsResult {
+  created: Array<{ id: string; name: string }>;
+  /** Left out, with why: the name is already a client, repeated in this same batch, or not usable (too short, bad email). */
+  skipped: Array<{ name: string; reason: 'exists' | 'repeated' | 'invalid' }>;
+}
+
+/**
+ * Adds several clients in ONE transaction (D-098), for the case of a screenshot album or a list of contacts: what can be
+ * added is added, and what cannot (the name is already a client, appears twice in the list, or is unusable) is reported by
+ * name instead of failing the whole batch. A client is never added twice: the same name rule as `createClient` applies
+ * (case and spacing do not matter), also against clients that were archived.
+ */
+export async function createClientsBulk(ctx: Ctx, raw: ReadonlyArray<z.input<typeof clientSchema>>): Promise<BulkClientsResult> {
+  assertCan(ctx, 'client.write');
+  const list = z.array(z.unknown()).min(1).max(MAX_BULK_CLIENTS).parse(raw);
+  const skipped: BulkClientsResult['skipped'] = [];
+  const valid: Array<z.output<typeof clientSchema>> = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const parsed = clientSchema.safeParse(item);
+    if (!parsed.success) {
+      skipped.push({ name: String((item as { name?: unknown })?.name ?? '').slice(0, 120), reason: 'invalid' });
+      continue;
+    }
+    const key = nameKey(parsed.data.name);
+    if (seen.has(key)) skipped.push({ name: parsed.data.name, reason: 'repeated' });
+    else {
+      seen.add(key);
+      valid.push(parsed.data);
+    }
+  }
+  if (valid.length === 0) return { created: [], skipped };
+
+  return db.transaction(async (tx) => {
+    // `ON CONFLICT DO NOTHING` on the unique name key answers the race too: two people adding the same name at once.
+    const inserted = await tx
+      .insert(clients)
+      .values(valid.map((c) => ({ orgId: ctx.orgId, name: c.name, nameKey: nameKey(c.name), contactName: c.contactName ?? null, email: c.email ?? null, phone: c.phone ?? null, address: c.address ?? null, notes: c.notes ?? null })))
+      .onConflictDoNothing()
+      .returning({ id: clients.id, nameKey: clients.nameKey, name: clients.name });
+    const made = new Set(inserted.map((r) => r.nameKey));
+    for (const c of valid) if (!made.has(nameKey(c.name))) skipped.push({ name: c.name, reason: 'exists' });
+    for (const row of inserted) await recordAudit(tx, who(ctx), { action: 'client.created', entityType: 'client', entityId: row.id, summary: { name: row.name, bulk: true } });
+    return { created: inserted.map((r) => ({ id: r.id, name: r.name })), skipped };
+  });
+}
+
 export async function updateClient(ctx: Ctx, id: string, raw: z.input<typeof clientPatchSchema>) {
   assertCan(ctx, 'client.write');
   const patch = clientPatchSchema.parse(raw);

@@ -6,7 +6,7 @@ import { finalizeDocument } from '../../domain/documents/service';
 import { startRun } from '../../domain/flows/service';
 import { convertLeadToClient, moveLead, updateLead } from '../../domain/pipeline/leads';
 import { createSubscription } from '../../domain/billing/subscriptions';
-import { createClient, updateClient } from '../../domain/portfolio/clients';
+import { MAX_BULK_CLIENTS, createClient, createClientsBulk, updateClient } from '../../domain/portfolio/clients';
 import { createDeployment, updateDeployment } from '../../domain/portfolio/deployments';
 import { MAX_NEW_PACKAGES, createPackage, createProduct, updatePackage, updateProduct } from '../../domain/portfolio/products';
 import { setTaskStatus, updateTask } from '../../domain/tasks/service';
@@ -94,6 +94,16 @@ export const createClientTool = defineTool({
   args: z.object({ name: text(120).min(2), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() }),
   execute: async (ctx, args) => createClient(ctx, args),
   describe: (args) => `Tambahkan klien baru "${args.name}"${args.contactName ? ` (kontak: ${args.contactName})` : ''}. Tidak ada pesan yang dikirim.`,
+});
+
+export const createClientsTool = defineTool({
+  name: 'create_clients',
+  description: `Proposes to ADD SEVERAL clients in ONE call (max ${MAX_BULK_CLIENTS}), for an album of contact screenshots, a pasted list or a sheet. One entry per person or business; copy name, phone, email, address exactly as shown, never guess. Do not call create_client once per contact. Check list_clients first; existing or repeated names are skipped and reported. Nothing is sent to anyone.`,
+  tier: 'act',
+  permission: 'client.write',
+  args: z.object({ clients: z.array(z.object({ name: text(120).min(2), contactName: text(120).optional(), email: text(254).email().optional(), phone: text(40).optional(), address: text(500).optional(), notes: text(2000).optional() })).min(1).max(MAX_BULK_CLIENTS) }),
+  execute: async (ctx, { clients }) => createClientsBulk(ctx, clients),
+  describe: (args) => `Tambahkan ${args.clients.length} klien baru: ${args.clients.map((c) => (c.phone ? `${c.name} (${c.phone})` : c.name)).join('; ')}. Periksa nama dan nomornya sebelum menyetujui. Yang namanya sudah ada dilewati. Tidak ada pesan yang dikirim.`,
 });
 
 export const updateClientTool = defineTool({
@@ -237,7 +247,7 @@ export const createSubscriptionTool = defineTool({
 });
 
 /** The `act` tools on records. Registered in the assistant catalogue and in the registry the approval decision looks tools up in. */
-export const DATA_ACT_TOOLS = [createClientTool, updateClientTool, createProductTool, updateProductTool, createPackageTool, updatePackageTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool, ...MANAGE_ACT_TOOLS] as const;
+export const DATA_ACT_TOOLS = [createClientTool, createClientsTool, updateClientTool, createProductTool, updateProductTool, createPackageTool, updatePackageTool, createDeploymentTool, updateDeploymentTool, updateLeadTool, moveLeadTool, updateTaskTool, createSubscriptionTool, ...MANAGE_ACT_TOOLS] as const;
 
 export interface ActionFinding {
   id: string;

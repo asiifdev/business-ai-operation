@@ -26,8 +26,8 @@ export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
 export const DIGEST_CHARS = 16_000;
 const SUMMARY_CHARS = 700;
 /** Most attachments waiting for a first message, and most a conversation may hold. */
-export const MAX_PENDING = 6;
-export const MAX_PER_SESSION = 12;
+export const MAX_PENDING = 10;
+export const MAX_PER_SESSION = 30;
 /** Attachments added but never used are dropped after this long. */
 const STALE_MS = 24 * 60 * 60 * 1000;
 const AUDIO_MAX_MS = 10 * 60_000;

@@ -66,6 +66,8 @@
 ```mermaid
 erDiagram
   organizations ||--o{ users : has
+  organizations ||--o{ invitations : invites
+  organizations ||--o{ email_log : mails
   organizations ||--o{ products : owns
   organizations ||--o{ clients : owns
   organizations ||--o{ ai_budgets : sets
@@ -193,6 +195,39 @@ Unik parsial: `UNIQUE (user_id) WHERE unlinked_at IS NULL`.
 | `created_at`, `updated_at` | timestamptz | |
 
 **`org_services`** (D-079): layanan atau jasa yang ditawarkan **di luar produk** Portfolio (produk dan paket resmi tetap dari M02, tidak diduplikasi di sini). `id`, `org_id`, `name` (wajib, maks 120, unik per organisasi tanpa membedakan huruf besar), `description text N` (maks 600), `sort_order smallint` (default 0), `created_at`, `updated_at`.
+
+**`invitations`** · BR-M01 (undangan lewat email, **D-096**)
+
+| Kolom | Tipe | Aturan |
+|---|---|---|
+| `id` | text PK | ULID |
+| `org_id` | text → `organizations.id` | wajib |
+| `email` | text | huruf kecil; calon pengguna |
+| `name` | text N | nama yang disarankan pengundang; orangnya boleh mengubahnya saat menerima |
+| `role` | `user_role` | `owner`, `admin`, atau `staff`; hanya Pemilik yang boleh mengundang Pemilik |
+| `locale` | text | `id`/`en`, bahasa email dan akun |
+| `token_hash` | text | UNIQUE; **SHA-256 dari token acak**. Token asli hanya ada di tautan email dan tidak pernah disimpan |
+| `invited_by` | text | `FK (org_id, invited_by) → users` |
+| `expires_at` | timestamptz | 7 hari sejak dibuat atau dikirim ulang |
+| `accepted_at`, `revoked_at` | timestamptz N | undangan berakhir bila salah satunya terisi |
+| `sent_at` | timestamptz N | terakhir berhasil dikirim |
+| `send_status` | text | `sent` · `failed` · `not_configured` (email belum disiapkan di server: pengundang diberi tautan untuk dibagikan sendiri) |
+| `created_at` | timestamptz | |
+
+Batasan: `UNIQUE (org_id, lower(email)) WHERE accepted_at IS NULL AND revoked_at IS NULL` (satu undangan aktif per email per organisasi; mengirim ulang menukar token lama).
+
+**`email_log`** · setiap upaya kirim email (**D-096**). Tidak menyimpan isi email, token, atau tautan.
+
+| Kolom | Tipe | Aturan |
+|---|---|---|
+| `id` | text PK | ULID |
+| `org_id` | text → `organizations.id` | wajib |
+| `template` | text | `invitation`, `welcome`, dst. |
+| `recipient` | text | alamat tujuan |
+| `status` | text | `sent` · `failed` · `skipped` (email belum disiapkan) |
+| `provider_id` | text N | id pesan dari penyedia (Resend) |
+| `error` | text N | jenis galat singkat, tanpa isi pesan |
+| `created_at` | timestamptz | `INDEX (org_id, created_at)` |
 
 ### 3.2 Portofolio (M02)
 
@@ -371,7 +406,7 @@ Peristiwa koneksi dan run tercatat di `audit_log` tanpa rahasia (BR-M17-14); per
 
 | Berkas | Tabel |
 |---|---|
-| `auth.ts` | `organizations`, `users`, `sessions`, `accounts`, `verifications`, `telegram_links`, `telegram_pairing_codes`, `telegram_updates` |
+| `auth.ts` | `organizations`, `users`, `sessions`, `accounts`, `verifications`, `invitations`, `email_log`, `telegram_links`, `telegram_pairing_codes`, `telegram_updates` |
 | `portfolio.ts` | `products`, `packages`, `clients`, `deployments` |
 | `billing.ts` | `subscriptions`, `invoices`, `invoice_items`, `payments`, `number_counters` |
 | `pipeline.ts` | `leads`, `tasks` |

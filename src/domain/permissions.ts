@@ -22,6 +22,8 @@ export const PERMISSIONS = {
   'user.create': MANAGERS,
   'user.update_role': MANAGERS,
   'user.deactivate': MANAGERS,
+  // D-097: removing a deactivated person for good is the Owner's call alone.
+  'user.delete': OWNER,
   // Catalogue (products, packages, clients, deployments)
   'catalog.read': ALL,
   'catalog.price.read': ALL,

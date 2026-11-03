@@ -40,4 +40,4 @@ const SAVES = /^\/api\/(?:settings|profile|ai\/budgets)(?:\/|$)/;
 const SETTINGS = /^\/api\/settings\//;
 
 /** Calls whose screen already says something specific, and POSTs that only read (the diagram check the flow editor runs by itself): nothing was created or changed, so no toast. */
-const OWN_TOAST: RegExp[] = [/^\/api\/runs\//, /^\/api\/marketing\/videos\/[^/]+\/render$/, /^\/api\/flows\/validate$/];
+const OWN_TOAST: RegExp[] = [/^\/api\/users\/invit/, /^\/api\/runs\//, /^\/api\/marketing\/videos\/[^/]+\/render$/, /^\/api\/flows\/validate$/];

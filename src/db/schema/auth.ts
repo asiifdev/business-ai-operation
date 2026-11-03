@@ -76,6 +76,50 @@ export const users = pgTable(
   ],
 );
 
+/**
+ * D-096: an email invitation to join the organization. Only the SHA-256 of the random token is stored; the token itself
+ * lives in the emailed link. One open invitation per address per organization.
+ */
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    email: text('email').notNull(),
+    name: text('name'),
+    role: userRole('role').notNull().default('staff'),
+    locale: text('locale', { enum: ['id', 'en'] }).notNull().default('id'),
+    tokenHash: text('token_hash').notNull().unique(),
+    invitedBy: text('invited_by').notNull(),
+    expiresAt: tstz('expires_at').notNull(),
+    acceptedAt: tstz('accepted_at'),
+    revokedAt: tstz('revoked_at'),
+    sentAt: tstz('sent_at'),
+    sendStatus: text('send_status', { enum: ['sent', 'failed', 'not_configured'] }).notNull().default('not_configured'),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.orgId, t.invitedBy], foreignColumns: [users.orgId, users.id], name: 'fk_invitations_inviter' }),
+    uniqueIndex('uq_invitations_open').on(t.orgId, lower(t.email)).where(sql`${t.acceptedAt} is null and ${t.revokedAt} is null`),
+  ],
+);
+
+/** D-096: one row per attempt to send an email. Never holds the message, a token or a link. */
+export const emailLog = pgTable(
+  'email_log',
+  {
+    id: idColumn(),
+    orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+    template: text('template').notNull(),
+    recipient: text('recipient').notNull(),
+    status: text('status', { enum: ['sent', 'failed', 'skipped'] }).notNull(),
+    providerId: text('provider_id'),
+    error: text('error'),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [index('idx_email_log_org').on(t.orgId, t.createdAt)],
+);
+
 /** Better Auth "session" (generated shape, plural table name). */
 export const sessions = pgTable(
   'sessions',

@@ -4,6 +4,8 @@ export type DomainErrorCode =
   | 'validation'
   | 'email_taken'
   | 'last_owner'
+  /** A record that other records point to cannot be deleted for good; keep it deactivated or archived instead (D-097). */
+  | 'has_history'
   | 'invalid_state'
   | 'duplicate'
   | 'rate_limited'
@@ -35,6 +37,7 @@ export const HTTP_STATUS: Record<DomainErrorCode, number> = {
   not_found: 404,
   email_taken: 409,
   last_owner: 409,
+  has_history: 409,
   invalid_state: 409,
   duplicate: 409,
   rate_limited: 429,

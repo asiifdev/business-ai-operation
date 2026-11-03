@@ -9,6 +9,7 @@ import { useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { SelectMenu } from '../forms/SelectMenu';
 import { TextInput } from '../forms/TextInput';
+import { InviteForm, LinkNotice, PendingInvitations, type InviteResult, type PendingRow } from './InviteUser';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ConfirmButton } from '../ui/ConfirmButton';
@@ -22,10 +23,12 @@ type RoleName = 'owner' | 'admin' | 'staff';
 const ROLE_LABEL: Record<RoleName, MessageKey> = { owner: 'roleOwner', admin: 'roleAdmin', staff: 'roleStaff' };
 
 /** Colleagues and their roles (BRD-M01). Only an Owner can hand out or take away the Owner role. */
-export function UsersPage({ currentUserId, isOwner }: { currentUserId: string; isOwner: boolean }) {
+export function UsersPage({ currentUserId, isOwner, timezone }: { currentUserId: string; isOwner: boolean; timezone: string }) {
   const t = useT();
   const list = useLoad(() => api<{ users: Row[] }>('GET', '/api/users'), []);
-  const [adding, setAdding] = useState(false);
+  const pending = useLoad(() => api<{ invitations: PendingRow[] }>('GET', '/api/users/invitations'), []);
+  const [mode, setMode] = useState<'invite' | 'manual' | null>(null);
+  const [invited, setInvited] = useState<{ email: string; result: InviteResult } | null>(null);
   const [rowError, setRowError] = useState<{ id: string; error: unknown } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const roles = (isOwner ? ['owner', 'admin', 'staff'] : ['admin', 'staff']) as RoleName[];
@@ -46,8 +49,21 @@ export function UsersPage({ currentUserId, isOwner }: { currentUserId: string; i
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('usersTitle')} intro={t('usersIntro')} action={!adding ? <Button variant="primary" onClick={() => setAdding(true)}>{t('usersAdd')}</Button> : undefined} />
-      {adding && <AddUser roles={roles} onDone={() => { setAdding(false); void list.reload(); }} onCancel={() => setAdding(false)} />}
+      <PageHeader
+        title={t('usersTitle')}
+        intro={t('usersIntro')}
+        action={mode === null ? <span className="flex flex-wrap gap-2"><Button onClick={() => { setInvited(null); setMode('manual'); }}>{t('usersAddManual')}</Button><Button variant="primary" onClick={() => { setInvited(null); setMode('invite'); }}>{t('usersInvite')}</Button></span> : undefined}
+      />
+      {mode === 'invite' && (
+        <Panel className="flex flex-col gap-4">
+          <InviteForm roles={roles} onCancel={() => setMode(null)} onInvited={(email, result) => { setInvited({ email, result }); setMode(null); void pending.reload(); }} />
+        </Panel>
+      )}
+      {invited && <Panel><LinkNotice email={invited.email} result={invited.result} /></Panel>}
+      {mode === 'manual' && <AddUser roles={roles} onDone={() => { setMode(null); void list.reload(); }} onCancel={() => setMode(null)} />}
+      {pending.value.state === 'ready' && pending.value.data.invitations.length > 0 && (
+        <Panel><PendingInvitations rows={pending.value.data.invitations} timezone={timezone} onChanged={() => void pending.reload()} /></Panel>
+      )}
       <Panel aria-busy={list.value.state === 'loading'}>
         {list.value.state === 'loading' && <Skeleton rows={5} />}
         {list.value.state === 'error' && <ErrorBox onRetry={list.retry}>{t(errorKey(list.value.error))}</ErrorBox>}
@@ -82,6 +98,7 @@ export function UsersPage({ currentUserId, isOwner }: { currentUserId: string; i
                       </td>
                       <td data-label={t('usersColJoined')} className={`py-3 pr-3 ${tbl.label}`}>{formatDate(u.createdAt.slice(0, 10))}</td>
                       <td className="py-3 sm:text-right">
+                        {!u.isActive && isOwner && u.id !== currentUserId && <ConfirmButton message={t('cfmDeleteUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('DELETE', `/api/users/${u.id}`))}>{t('usersDeleteForever')}</ConfirmButton>}
                         {u.isActive && !locked && <ConfirmButton message={t('cfmDeactivateUser')} variant="danger" busy={busyId === u.id} onConfirm={() => act(u.id, () => api('POST', `/api/users/${u.id}/deactivate`))}>{t('usersDeactivate')}</ConfirmButton>}
                       </td>
                     </tr>

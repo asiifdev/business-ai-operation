@@ -9,5 +9,5 @@ if (!can(user.role, 'user.read')) return Astro.redirect('/app');
 ---
 
 <AppShell title="Pengguna" current="users">
-  <UsersPage client:load currentUserId={user.id} isOwner={user.role === 'owner'} />
+  <UsersPage client:load currentUserId={user.id} isOwner={user.role === 'owner'} timezone={Astro.locals.timezone} />
 </AppShell>

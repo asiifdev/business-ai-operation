@@ -2,7 +2,9 @@ import type { APIRoute } from 'astro';
 import { ZodError } from 'zod';
 import { auth } from '../../auth/auth';
 import { DomainError, HTTP_STATUS } from '../../domain/errors';
+import { sendEmail } from '../../domain/email/service';
 import { registerOrganization } from '../../domain/org/service';
+import { appUrl } from '../../lib/app-url';
 import { limiter } from '../../lib/rate-limit';
 
 export const prerender = false;
@@ -37,6 +39,18 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const signIn = await auth.api.signInEmail({ body: { email: created.email, password }, asResponse: true });
     const headers = new Headers();
     for (const cookie of signIn.headers.getSetCookie()) headers.append('set-cookie', cookie);
+    // The welcome email is a courtesy: it is sent after the account exists and never holds up or fails the sign-up.
+    const base = appUrl();
+    const input = body as { name: string; organizationName: string; locale?: 'id' | 'en' };
+    if (base) {
+      void sendEmail({
+        orgId: created.orgId,
+        to: created.email,
+        locale: input.locale === 'en' ? 'en' : 'id',
+        idempotencyKey: `welcome:${created.userId}`,
+        message: { template: 'welcome', data: { name: String(input.name).trim(), organizationName: String(input.organizationName).trim(), link: `${base}/app/onboarding` } },
+      });
+    }
     return json({ ok: true, data: { orgId: created.orgId } }, 201, headers);
   } catch (err) {
     if (err instanceof ZodError) {

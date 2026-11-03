@@ -7,6 +7,7 @@ export const ACT_TOOL_LABEL: Record<string, MessageKey> = {
   start_flow_run: 'toolStartFlowRun',
   convert_lead_to_client: 'toolConvertLead',
   create_client: 'toolCreateClient',
+  create_clients: 'toolCreateClients',
   update_client: 'toolUpdateClient',
   create_product: 'toolCreateProduct',
   update_product: 'toolUpdateProduct',

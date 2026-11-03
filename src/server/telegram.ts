@@ -25,9 +25,15 @@ export function telegramClient(): TelegramClient {
   return globalForBot.__telegram;
 }
 
-/** The bot's @username for deep links, asked once from `getMe` and remembered. */
+/**
+ * The bot's @username for deep links. `TELEGRAM_BOT_USERNAME` answers at once with no network call; without it the name is
+ * asked once from `getMe` and remembered. That lookup gets ONE quick try (8 seconds): the person is waiting at a button, so
+ * "Telegram cannot be reached" must show up in seconds, not after the long retries the sending client uses.
+ */
 export function botUsername(): Promise<string> {
-  globalForBot.__botUsername ??= telegramClient()
+  const fixed = env('TELEGRAM_BOT_USERNAME')?.trim().replace(/^@/, '');
+  if (fixed) return Promise.resolve(fixed);
+  globalForBot.__botUsername ??= new TelegramClient({ token: env('TELEGRAM_BOT_TOKEN') ?? '', maxAttempts: 1, timeoutMs: 8_000 })
     .getMe()
     .then((me) => {
       if (!me.username) throw new Error('the bot has no username');

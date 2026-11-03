@@ -1,10 +1,10 @@
 import { hashPassword } from 'better-auth/crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { isUniqueViolation, pgError } from '../../db/errors';
 import { newId } from '../../db/ids';
-import { accounts, sessions, users } from '../../db/schema';
+import { accounts, invitations, leads, sessions, tasks, telegramLinks, telegramPairingCodes, users } from '../../db/schema';
 import { recordAudit } from '../audit/service';
 import type { Ctx } from '../ctx';
 import { DomainError } from '../errors';
@@ -96,6 +96,34 @@ export async function deactivateUser(ctx: Ctx, userId: string) {
       await recordAudit(tx, who(ctx), { action: 'user.deactivated', entityType: 'user', entityId: userId, summary: { role: target.role } });
     });
   } catch (err) {
+    mapLastOwner(err);
+  }
+}
+
+/**
+ * Deletes a deactivated person for good (D-097), so their address can be used again. Owner only, never yourself, and only
+ * after deactivation (two deliberate steps). Their leads and tasks become unassigned, their Telegram link and unused
+ * invitations go with them, and the audit trail stays (it holds no foreign key to users). Anyone who left records behind
+ * (approvals they decided, AI runs, documents they finalized, invitations that were accepted) cannot be deleted: those
+ * records must keep pointing at a real person, so the answer is `has_history` and they stay deactivated.
+ */
+export async function deleteUserPermanently(ctx: Ctx, userId: string) {
+  assertCan(ctx, 'user.delete');
+  const target = await getTarget(ctx, userId);
+  if (target.id === ctx.userId) throw new DomainError('invalid_state', 'you cannot delete yourself');
+  if (target.isActive) throw new DomainError('invalid_state', 'deactivate the user first');
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(leads).set({ assignedTo: null }).where(and(eq(leads.orgId, ctx.orgId), eq(leads.assignedTo, userId)));
+      await tx.update(tasks).set({ assigneeId: null }).where(and(eq(tasks.orgId, ctx.orgId), eq(tasks.assigneeId, userId)));
+      await tx.delete(telegramPairingCodes).where(and(eq(telegramPairingCodes.orgId, ctx.orgId), eq(telegramPairingCodes.userId, userId)));
+      await tx.delete(telegramLinks).where(and(eq(telegramLinks.orgId, ctx.orgId), eq(telegramLinks.userId, userId)));
+      await tx.delete(invitations).where(and(eq(invitations.orgId, ctx.orgId), eq(invitations.invitedBy, userId), isNull(invitations.acceptedAt)));
+      await tx.delete(users).where(and(eq(users.orgId, ctx.orgId), eq(users.id, userId)));
+      await recordAudit(tx, who(ctx), { action: 'user.deleted', entityType: 'user', entityId: userId, summary: { role: target.role } });
+    });
+  } catch (err) {
+    if (pgError(err).code === '23503') throw new DomainError('has_history', 'this user has records that point to them');
     mapLastOwner(err);
   }
 }

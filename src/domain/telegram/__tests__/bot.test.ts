@@ -484,7 +484,11 @@ describe('pictures from Telegram (D-080)', () => {
     expect(pendingPictures.has(777, new Date(now.getTime() + 9 * 60_000))).toBe(true);
     expect(pendingPictures.has(777, new Date(now.getTime() + 11 * 60_000))).toBe(false);
     for (let i = 0; i < 6; i++) pendingPictures.add(778, file, now);
-    expect(pendingPictures.take(778, now)).toHaveLength(4); // at most four are kept
+    expect(pendingPictures.dropped(778, now)).toBe(0);
+    expect(pendingPictures.take(778, now)).toHaveLength(6); // an album of screenshots all wait (D-098)
+    for (let i = 0; i < 12; i++) pendingPictures.add(779, file, now);
+    expect(pendingPictures.dropped(779, now)).toBe(2); // ten are kept, and the loss is counted so the person can be told
+    expect(pendingPictures.take(779, now)).toHaveLength(10);
     expect(pendingPictures.take(778, now)).toHaveLength(0);
   });
 });
@@ -581,15 +585,15 @@ describe('files sent to the bot for the assistant to read (D-083)', () => {
     expect(tg.sent.at(-1)!.text).toContain('Perintah');
   });
 
-  it('forgets files after ten minutes and keeps at most six', async () => {
+  it('forgets files after ten minutes and keeps at most ten', async () => {
     const { PendingAttachments } = await import('../attachments');
     const store = new PendingAttachments();
     const now = new Date('2026-11-01T10:00:00Z');
     store.add(1, 'a', now);
     expect(store.ids(1, new Date(now.getTime() + 9 * 60_000))).toEqual(['a']);
     expect(store.ids(1, new Date(now.getTime() + 11 * 60_000))).toEqual([]);
-    for (let i = 0; i < 8; i++) store.add(2, `x${i}`, now);
-    expect(store.ids(2, now)).toEqual(['x2', 'x3', 'x4', 'x5', 'x6', 'x7']);
+    for (let i = 0; i < 12; i++) store.add(2, `x${i}`, now);
+    expect(store.ids(2, now)).toEqual(['x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10', 'x11']);
   });
 
   it('sends the Undo button once after a typed request and once after a voice note', async () => {

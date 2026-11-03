@@ -8,7 +8,7 @@ import { saveOwnLocale } from './domain/users/profile';
 import { isLocale } from './lib/i18n';
 
 /** Paths that never need a session. Everything else under /app and /api requires one. */
-const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register$/, /^\/api\/health$/, /^\/api\/telegram\/webhook$/, /^\/api\/github\/webhook$/];
+const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register$/, /^\/api\/invitations\/accept$/, /^\/api\/health$/, /^\/api\/telegram\/webhook$/, /^\/api\/github\/webhook$/];
 const isAsset = (p: string) => p.startsWith('/_astro/') || /\.[a-z0-9]{2,5}$/i.test(p);
 
 export const onRequest = defineMiddleware(async (context, next) => {

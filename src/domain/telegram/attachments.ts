@@ -5,7 +5,7 @@
  */
 const TTL_MS = 10 * 60_000;
 /** Same as the web: at most this many wait for a question. */
-const MAX_WAITING = 6;
+const MAX_WAITING = 10;
 
 export class PendingAttachments {
   private readonly byChat = new Map<number, { ids: string[]; at: number }>();

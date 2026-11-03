@@ -28,7 +28,8 @@ import { listTasks } from '../tasks/service';
 import { outcomeText, tasksMessage, type DecisionOutcome } from './cards';
 import { findLinkedUser, redeemPairingCode, unlinkChat, type LinkedUser } from './links';
 import { pendingAttachments, readCaption } from './attachments';
-import { pendingPictures, makePicture, pictureJpeg } from './picture';
+import { pendingPictures, makePicture, pictureJpeg, MAX_WAITING_PHOTOS } from './picture';
+import { MAX_ATTACHMENTS } from '../marketing/free-rules';
 import type { PhotoUse } from './photo-intent';
 import type { AttachResult } from '../assistant/attachments';
 import type { Attachment } from '../marketing/free';
@@ -291,7 +292,7 @@ async function answerWithAttachments(words: string, ctx: Ctx, person: LinkedUser
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 /** Photos of one album arrive as separate updates; the one with the words waits this long for the rest. */
-const ALBUM_WAIT_MS = 1_200;
+const ALBUM_WAIT_MS = 2_500;
 const PICTURES_PER_MINUTE = 3;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -313,6 +314,8 @@ async function onPhoto(message: TelegramMessage, ctx: Ctx, person: LinkedUser, d
     throw err;
   }
   const waiting = pendingPictures.add(person.chatId, { bytes, name: `foto-${message.message_id}.jpg` }, deps.clock.now());
+  // Too many photos at once: the oldest are let go, and the person is told (once), not left to wonder what was read.
+  if (pendingPictures.dropped(person.chatId, deps.clock.now()) === 1 && waiting === MAX_WAITING_PHOTOS) await send(deps, person.chatId, escapeHtml(t('tgPhotosDropped', { max: MAX_WAITING_PHOTOS })));
   const words = message.caption?.trim();
   if (!words) {
     // The other photos of an album would each get this reply; one is enough.
@@ -338,7 +341,7 @@ async function onPhotoWords(words: string, ctx: Ctx, person: LinkedUser, deps: B
   let use: PhotoUse = canPicture ? 'picture' : 'read';
   if (decide) {
     await deps.client.sendChatAction(chatId, 'typing').catch(() => undefined);
-    use = await deps.photoUse!(ctx, words, pendingPictures.peek(chatId, deps.clock.now()), person);
+    use = await deps.photoUse!(ctx, words, pendingPictures.peek(chatId, deps.clock.now()).slice(-MAX_ATTACHMENTS), person);
   }
   if (use === 'picture') return onPicture(words.slice(0, 1500), ctx, person, deps);
   if (!canRead) return send(deps, chatId, escapeHtml(t('errForbidden')));
@@ -374,7 +377,8 @@ async function onPicture(words: string, ctx: Ctx, person: LinkedUser, deps: BotD
   if (!deps.client.sendPhoto) return send(deps, chatId, escapeHtml(t('tgPictureFailed')));
   // Checked before the photos are taken, so a person told to slow down does not lose them.
   if (!limiter.allow(`telegram-picture:${person.userId}`, PICTURES_PER_MINUTE, 60_000)) return send(deps, chatId, escapeHtml(t('tgSlowDown')));
-  const files = pendingPictures.take(chatId, deps.clock.now());
+  // A picture takes the newest few as references; reading (above) takes them all.
+  const files = pendingPictures.take(chatId, deps.clock.now()).slice(-MAX_ATTACHMENTS);
   await send(deps, chatId, escapeHtml(t('tgPictureMaking')));
   await deps.client.sendChatAction(chatId, 'upload_photo').catch(() => undefined);
   try {

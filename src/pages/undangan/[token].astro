@@ -1,0 +1,18 @@
+---
+import Base from '../../layouts/Base.astro';
+import { AcceptInvitation } from '../../components/AcceptInvitation';
+import { previewInvitation } from '../../domain/users/invitations';
+
+export const prerender = false;
+const token = Astro.params.token ?? '';
+const invitation = await previewInvitation(token);
+// The link carries a secret: it must not be cached or leak through the Referer header.
+Astro.response.headers.set('cache-control', 'no-store');
+Astro.response.headers.set('referrer-policy', 'no-referrer');
+---
+
+<Base title="Undangan">
+  {invitation.state === 'valid'
+    ? <AcceptInvitation client:load state="valid" token={token} organizationName={invitation.organizationName} email={invitation.email} name={invitation.name} role={invitation.role} />
+    : <AcceptInvitation client:load state={invitation.state} />}
+</Base>

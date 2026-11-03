@@ -26,6 +26,8 @@ export const autonomySchema = z.object({ level: z.enum(AUTONOMY_LEVELS) });
  */
 export const ACT_RISK: Readonly<Record<string, 'low' | 'medium' | 'high'>> = {
   create_client: 'low',
+  // Several records at once and not undoable in one tap (D-098): waits for a click unless the organization chose the highest level.
+  create_clients: 'medium',
   update_client: 'low',
   create_product: 'low',
   update_product: 'low',

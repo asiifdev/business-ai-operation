@@ -77,6 +77,15 @@ export const processors: Processor[] = [
     inDevelopment: true,
   },
   {
+    name: 'Resend',
+    hosts: ['api.resend.com'],
+    purpose: { en: 'Sends the emails the system produces: invitations to colleagues and the welcome message after sign-up.', id: 'Mengirim email yang dihasilkan sistem: undangan untuk rekan kerja dan pesan selamat datang setelah mendaftar.' },
+    data: {
+      en: 'The recipient address, the sender name and the text of the email (for an invitation: your name, the organization name and a one-time link). Passwords are never sent by email.',
+      id: 'Alamat penerima, nama pengirim, dan isi email (untuk undangan: nama Anda, nama organisasi, dan tautan sekali pakai). Kata sandi tidak pernah dikirim lewat email.',
+    },
+  },
+  {
     name: 'Cloudflare',
     hosts: ['challenges.cloudflare.com', 'r2.cloudflarestorage.com'],
     purpose: { en: 'Delivers the site (DNS, proxy), stores files in R2 object storage and, once enabled, checks sign-ups with Turnstile.', id: 'Menyajikan situs (DNS, proxy), menyimpan berkas di penyimpanan objek R2, dan setelah diaktifkan memeriksa pendaftaran dengan Turnstile.' },

@@ -3,7 +3,7 @@ import type { OnboardingState, OnboardingStep } from '../../domain/org/onboardin
 import { api, badFields, errorKey } from '../../lib/api-client';
 import type { MessageKey } from '../../lib/i18n';
 import { useLoad } from '../../lib/use-load';
-import { useLocale, useT } from '../../lib/use-t';
+import { useT } from '../../lib/use-t';
 import { FormField } from '../forms/FormField';
 import { MoneyInput } from '../forms/MoneyInput';
 import { NumberInput } from '../forms/NumberInput';
@@ -11,6 +11,7 @@ import { RadioGroup } from '../forms/RadioGroup';
 import { SelectMenu } from '../forms/SelectMenu';
 import { Textarea } from '../forms/Textarea';
 import { TextInput } from '../forms/TextInput';
+import { InviteForm, LinkNotice, type InviteResult } from '../settings/InviteUser';
 import { ProfileAutofill } from '../settings/ProfileAutofill';
 import { Icon } from '../shell/Icon';
 import { Badge } from '../ui/Badge';
@@ -433,33 +434,15 @@ function ClientForm({ state, onNext, onSaved }: BodyProps) {
 
 /* ------------------------------------------------------------------- team */
 
-function TeamForm({ onNext, state }: BodyProps) {
+function TeamForm({ onNext, state, refresh }: BodyProps) {
   const t = useT();
-  const locale = useLocale();
-  const [v, setV] = useState({ name: '', email: '', password: '', role: 'staff' });
-  const [added, setAdded] = useState<string[]>([]);
-  const up = (k: 'name' | 'email' | 'password') => set((x) => setV((s) => ({ ...s, [k]: x })));
-  const { busy, error, submit, bad } = useSubmit(async () => {
-    await api('POST', '/api/users', { ...v, locale });
-    setAdded((a) => [...a, v.name.trim()]);
-    setV({ name: '', email: '', password: '', role: v.role });
-  });
-  const duplicate = error !== null && (error as { code?: string }).code === 'email_taken';
+  const [sent, setSent] = useState<Array<{ email: string; result: InviteResult }>>([]);
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      {added.map((n) => <p key={n} role="status" className="m-0 text-sm text-success">{t('obTeamAdded', { name: n })}</p>)}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label={t('usersName')} required error={bad.name ? t('errValidation') : null}><TextInput value={v.name} onChange={up('name')} maxLength={120} autoComplete="off" /></FormField>
-        <FormField label={t('usersEmail')} required error={bad.email ? t('errValidation') : duplicate ? t(errorKey(error)) : null}><TextInput type="email" inputMode="email" value={v.email} onChange={up('email')} maxLength={254} autoComplete="off" /></FormField>
-        <FormField label={t('usersInitialPassword')} required help={t('usersInitialPasswordHelp')} error={bad.password ? t('errValidation') : null}><TextInput type="password" value={v.password} onChange={up('password')} maxLength={128} autoComplete="new-password" /></FormField>
-        <FormField label={t('usersRole')}><RadioGroup variant="segmented" value={v.role} onChange={(x) => setV((s) => ({ ...s, role: x }))} options={[{ value: 'staff', label: t('roleStaff') }, { value: 'admin', label: t('roleAdmin') }]} /></FormField>
-      </div>
-      <FormError error={duplicate ? null : error} bad={bad} />
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" loading={busy} disabled={v.name.trim().length < 2 || !v.email.includes('@') || v.password.length < 10}>{added.length ? t('obAddAnother') : t('usersCreate')}</Button>
-        {(added.length > 0 || state.status === 'done') && <Button onClick={onNext}>{t('obNext')}</Button>}
-      </div>
-    </form>
+    <div className="flex flex-col gap-4">
+      {sent.map(({ email, result }) => <LinkNotice key={email} email={email} result={result} />)}
+      <InviteForm roles={['staff', 'admin']} onInvited={(email, result) => setSent((all) => [...all.filter((x) => x.email !== email), { email, result }])} />
+      {(sent.length > 0 || state.status === 'done') && <div><Button variant="primary" onClick={() => { void refresh(); onNext(); }}>{t('obNext')}</Button></div>}
+    </div>
   );
 }
 
