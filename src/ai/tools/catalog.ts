@@ -315,14 +315,14 @@ export function buildAssistantRegistry(): ToolRegistry {
   registry.register(
     defineTool({
       name: 'read_website',
-      description: 'Opens a public website from its base address and reads it as a whole: the home page plus the pages that usually hold contact and company information (contact, about, services, team). Returns the e-mail addresses, phone numbers, WhatsApp links, social media profiles and postal addresses the code found, and the text of each page. Use it when the person gives a web address and asks for contacts, social profiles, services or anything else the site says. Only what is on the site: say what was not found, never guess.',
+      description: 'Opens a public website and reads it: the home page plus pages that usually hold contact and company facts (contact, about, services, team). Returns the e-mails, phones, WhatsApp links, social profiles and addresses the code found, and the text of each page. Pages built by JavaScript are opened in a real browser. Set fokus=harga for prices, packages or plans: it also tries /pricing, /harga, /paket and similar addresses and returns the lines that state a price. Only what is on the site; say what was not found, never guess.',
       tier: 'read',
       permission: 'assistant.use',
-      args: z.object({ url: z.string().trim().url().max(500) }),
+      args: z.object({ url: z.string().trim().url().max(500), fokus: z.enum(['umum', 'harga']).optional() }),
       run: async (_ctx, args) => {
         let site;
         try {
-          site = await readSite(args.url);
+          site = await readSite(args.url, { focus: args.fokus === 'harga' ? 'pricing' : 'general' });
         } catch {
           return { dibaca: false, alasan: 'Situs tidak bisa dibuka: harus alamat https publik yang bisa dijangkau server.' };
         }
@@ -331,6 +331,17 @@ export function buildAssistantRegistry(): ToolRegistry {
           situs: site.base,
           halamanDibaca: site.pages.length,
           halamanGagal: site.skipped,
+          halamanDirender: site.rendered,
+          ...(site.pricing
+            ? {
+                harga: {
+                  ditemukan: site.pricing.found,
+                  baris: site.pricing.lines.map((l) => wrapUntrusted('harga situs', l)),
+                  alamatDicoba: site.pricing.tried,
+                  petunjuk: site.pricing.found ? 'Salin nama paket dan harga persis seperti tertulis; periode (bulan/tahun) ikut disebut.' : 'Harga belum ditemukan di halaman ini. JANGAN menyerah: panggil read_website lagi dengan alamat lain (mis. /pricing, /harga, halaman paket yang tertaut), lalu search_web. Minta pengguna hanya bila semuanya gagal.',
+                },
+              }
+            : {}),
           kontak: {
             email: site.contacts.emails,
             telepon: site.contacts.phones,

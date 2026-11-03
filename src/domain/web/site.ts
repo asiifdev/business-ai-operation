@@ -1,5 +1,6 @@
 import { DomainError } from '../errors';
 import { fetchHtml, readPage } from '../marketing/page';
+import { embeddedText, substantial, hasPrice, looksEmpty, markdownToAnchors, priceLines, renderRemote } from './render';
 
 /**
  * Reads a whole website from its base address (D-084). Code does the finding: it opens the home page, follows the few links
@@ -33,7 +34,18 @@ export interface SiteReading {
   contacts: SiteContacts;
   /** Pages that were meant to be read but could not be. */
   skipped: number;
+  /** Pages whose content only appeared after a real browser opened them (D-099). */
+  rendered: number;
+  /** Only when asked for prices: what the pages state, and the extra addresses that were tried. */
+  pricing?: { found: boolean; lines: string[]; tried: string[] };
 }
+
+export type SiteFocus = 'general' | 'pricing';
+
+/** Addresses where price lists usually live, tried when the pages that were linked did not show a price. */
+export const PRICING_PATHS = ['/pricing', '/harga', '/paket', '/price', '/plans', '/tarif', '/biaya', '/daftar-harga', '/paket-harga', '/pricelist'];
+const PRICING_WORDS = /harga|pricing|price|paket|package|plans?\b|tarif|biaya/;
+const MAX_RENDERS = 3;
 
 // Only ever written into the answer as a link the person can click; the server never connects to these (see tests/data-practices).
 const WA_SHORT = 'wa.me';
@@ -159,7 +171,7 @@ const KEYWORDS: Array<[RegExp, number]> = [
 ];
 
 /** Pure: the same-site links most likely to hold contact and company facts, best first, home page excluded. */
-export function pickLinks(base: URL, html: string, limit: number): string[] {
+export function pickLinks(base: URL, html: string, limit: number, focus: SiteFocus = 'general'): string[] {
   const host = (h: string) => h.toLowerCase().replace(/^www\./, '');
   const scored = new Map<string, number>();
   for (const raw of hrefs(html)) {
@@ -175,7 +187,8 @@ export function pickLinks(base: URL, html: string, limit: number): string[] {
     const path = u.pathname.replace(/\/$/, '') || '/';
     if (path === '/' || path === (base.pathname.replace(/\/$/, '') || '/')) continue;
     const key = `${u.origin}${path}`;
-    const score = KEYWORDS.reduce((sum, [re, w]) => sum + (re.test(path.toLowerCase()) ? w : 0), 0);
+    const lower = path.toLowerCase();
+    const score = KEYWORDS.reduce((sum, [re, w]) => sum + (re.test(lower) ? w : 0), 0) + (PRICING_WORDS.test(lower) ? (focus === 'pricing' ? 20 : 5) : 0);
     if (score > 0 && !scored.has(key)) scored.set(key, score);
   }
   return [...scored.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([k]) => k);
@@ -193,29 +206,79 @@ const merge = (all: SiteContacts[]): SiteContacts => {
   };
 };
 
-export async function readSite(rawUrl: string, opts: { maxPages?: number; pageChars?: number; fetch?: typeof fetchHtml } = {}): Promise<SiteReading> {
-  const get = opts.fetch ?? fetchHtml;
-  const pageChars = Math.min(Math.max(opts.pageChars ?? PAGE_CHARS, 500), 8000);
-  const maxPages = Math.min(Math.max(opts.maxPages ?? 6, 1), MAX_PAGES);
-  const home = await get(rawUrl);
-  const base = new URL(home.url);
-  const pages: SitePage[] = [];
-  const contacts: SiteContacts[] = [extractContacts(home.html)];
-  const homeFacts = readPage(home.url, home.html);
-  pages.push({ url: home.url, title: homeFacts.title, text: homeFacts.text.slice(0, pageChars) });
+interface Loaded {
+  url: string;
+  html: string;
+  title: string | null;
+  text: string;
+  rendered: boolean;
+  prices: string[];
+}
 
-  const next = pickLinks(base, home.html, maxPages - 1);
-  const results = await Promise.allSettled(next.map((u) => get(u)));
-  let skipped = 0;
-  results.forEach((r) => {
-    if (r.status !== 'fulfilled') {
-      skipped += 1;
-      return;
+/**
+ * One page, read as a visitor sees it. The plain GET comes first; when its text is only an app shell the data the
+ * framework embedded is read, and when that is still thin (or a price page shows no price) a real browser renders it.
+ */
+async function loadPage(get: typeof fetchHtml, url: string, pageChars: number, focus: SiteFocus, budget: { renders: number }): Promise<Loaded> {
+  const raw = await get(url);
+  const facts = readPage(raw.url, raw.html, 20_000);
+  let text = facts.text;
+  let html = raw.html;
+  let rendered = false;
+  // Framework state counts as the page only when it is substantial; a few stray strings are not a price list.
+  const embedded = looksEmpty(text, raw.html) ? embeddedText(raw.html) : '';
+  if (substantial(embedded)) text = `${text} ${embedded}`.trim();
+  const pricePage = focus === 'pricing' && PRICING_WORDS.test(new URL(raw.url).pathname.toLowerCase());
+  const thin = looksEmpty(text, raw.html) && !substantial(embedded);
+  if ((thin || (pricePage && !hasPrice(text))) && budget.renders > 0) {
+    budget.renders -= 1;
+    const md = await renderRemote(raw.url);
+    if (md && md.length > text.length / 2) {
+      text = md;
+      html = `${raw.html}\n${markdownToAnchors(md)}`;
+      rendered = true;
     }
-    contacts.push(extractContacts(r.value.html));
-    const facts = readPage(r.value.url, r.value.html);
-    pages.push({ url: r.value.url, title: facts.title, text: facts.text.slice(0, pageChars) });
-  });
-  if (pages.every((p) => !p.text) && !contacts.some((c) => c.emails.length || c.phones.length)) throw new DomainError('validation', 'page cannot be read');
-  return { base: base.origin, pages, contacts: merge(contacts), skipped };
+  }
+  return { url: raw.url, html, title: facts.title, text: text.slice(0, pageChars), rendered, prices: priceLines(text) };
+}
+
+export async function readSite(rawUrl: string, opts: { maxPages?: number; pageChars?: number; focus?: SiteFocus; fetch?: typeof fetchHtml } = {}): Promise<SiteReading> {
+  const get = opts.fetch ?? fetchHtml;
+  const focus = opts.focus ?? 'general';
+  const pageChars = Math.min(Math.max(opts.pageChars ?? (focus === 'pricing' ? 6000 : PAGE_CHARS), 500), 8000);
+  const maxPages = Math.min(Math.max(opts.maxPages ?? 6, 1), MAX_PAGES);
+  const budget = { renders: MAX_RENDERS };
+  const home = await loadPage(get, rawUrl, pageChars, focus, budget);
+  const base = new URL(home.url);
+  const loaded: Loaded[] = [home];
+  let skipped = 0;
+
+  const next = pickLinks(base, home.html, maxPages - 1, focus);
+  const results = await Promise.allSettled(next.map((u) => loadPage(get, u, pageChars, focus, budget)));
+  results.forEach((r) => (r.status === 'fulfilled' ? loaded.push(r.value) : void (skipped += 1)));
+
+  // A price page nobody linked to, or whose link only exists after JavaScript ran: ask for the usual addresses before giving up.
+  const tried: string[] = [];
+  if (focus === 'pricing' && !loaded.some((p) => hasPrice(p.text))) {
+    const seen = new Set(loaded.map((p) => new URL(p.url).pathname.replace(/\/$/, '') || '/'));
+    const guesses = PRICING_PATHS.filter((p) => !seen.has(p)).map((p) => `${base.origin}${p}`);
+    const probes = await Promise.allSettled(guesses.map((u) => loadPage(get, u, pageChars, focus, budget)));
+    probes.forEach((r, i) => {
+      tried.push(guesses[i]!);
+      if (r.status === 'fulfilled' && (r.value.text.length > 200 || hasPrice(r.value.text))) loaded.push(r.value);
+    });
+  }
+
+  const contacts = merge(loaded.map((p) => extractContacts(p.html)));
+  const pages: SitePage[] = loaded.map((p) => ({ url: p.url, title: p.title, text: p.text }));
+  if (pages.every((p) => !p.text) && !(contacts.emails.length || contacts.phones.length)) throw new DomainError('validation', 'page cannot be read');
+  const prices = [...new Set(loaded.flatMap((p) => p.prices))].slice(0, 60);
+  return {
+    base: base.origin,
+    pages,
+    contacts,
+    skipped,
+    rendered: loaded.filter((p) => p.rendered).length,
+    ...(focus === 'pricing' ? { pricing: { found: prices.length > 0, lines: prices, tried } } : {}),
+  };
 }

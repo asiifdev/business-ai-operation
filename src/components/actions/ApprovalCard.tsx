@@ -69,12 +69,35 @@ export function ApprovalCard({ approval, timezone, onDecided }: { approval: Json
       <div className="flex flex-col gap-1">
         <span className="text-sm text-muted">{t('apArgs')}</span>
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded bg-paper-2 px-3 py-2 text-sm">
-          {approvalArgRows(approval.args, t).map((r) => (
-            <div key={r.key} className="contents">
-              <dt className="text-muted">{r.label}</dt>
-              <dd className="m-0 text-ink [overflow-wrap:anywhere]">{r.value}</dd>
-            </div>
-          ))}
+          {approvalArgRows(approval.args, t).map((r) =>
+            r.items ? (
+              <div key={r.key} className="col-span-2 mt-1 flex flex-col gap-2">
+                <dt className="text-muted">{r.label} <span className="font-mono tabular-nums">({r.items.length})</span></dt>
+                <dd className="m-0 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {r.items.map((item, i) => (
+                    <div key={i} className="flex flex-col gap-1 rounded-input border border-rule bg-paper p-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                        <span className="font-medium text-ink">{item.title}</span>
+                        {item.price && <span className="font-mono tabular-nums text-ink">{item.price}</span>}
+                      </div>
+                      {item.details.length > 0 && (
+                        <ul className="m-0 list-disc pl-4 text-xs text-ink-2 marker:text-muted">
+                          {item.details.map((d, j) => (
+                            <li key={j}>{d}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            ) : (
+              <div key={r.key} className="contents">
+                <dt className="text-muted">{r.label}</dt>
+                <dd className="m-0 text-ink [overflow-wrap:anywhere]">{r.value}</dd>
+              </div>
+            ),
+          )}
         </dl>
       </div>
 

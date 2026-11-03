@@ -86,6 +86,15 @@ export const processors: Processor[] = [
     },
   },
   {
+    name: 'Jina AI (Reader)',
+    hosts: ['r.jina.ai'],
+    purpose: { en: 'Opens a public web page in a real browser when the assistant is asked to read a site whose content is built by JavaScript, such as a price list.', id: 'Membuka halaman web publik di browser sungguhan saat asisten diminta membaca situs yang isinya dibuat oleh JavaScript, misalnya daftar harga.' },
+    data: {
+      en: 'Only the public address of the page. No cookie, login, client or organization data is sent. Can be turned off by the server owner.',
+      id: 'Hanya alamat publik halamannya. Tidak ada cookie, login, data klien, atau data organisasi yang dikirim. Pemilik server bisa mematikannya.',
+    },
+  },
+  {
     name: 'Cloudflare',
     hosts: ['challenges.cloudflare.com', 'r2.cloudflarestorage.com'],
     purpose: { en: 'Delivers the site (DNS, proxy), stores files in R2 object storage and, once enabled, checks sign-ups with Turnstile.', id: 'Menyajikan situs (DNS, proxy), menyimpan berkas di penyimpanan objek R2, dan setelah diaktifkan memeriksa pendaftaran dengan Turnstile.' },

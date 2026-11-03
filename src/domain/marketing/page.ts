@@ -73,7 +73,7 @@ const meta = (html: string, name: string) => {
 };
 
 /** The title, description and readable text of an HTML page. Scripts, styles and markup are dropped. Pure, so it is easy to test. */
-export function readPage(url: string, html: string): PageFacts {
+export function readPage(url: string, html: string, limit = PAGE_TEXT_CHARS): PageFacts {
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
   const text = decode(
     html
@@ -83,7 +83,7 @@ export function readPage(url: string, html: string): PageFacts {
   )
     .replace(/\s+/g, ' ')
     .trim();
-  return { url, title: title ? decode(title).replace(/\s+/g, ' ').trim() || null : null, description: meta(html, 'description') ?? meta(html, 'og:description'), text: text.slice(0, PAGE_TEXT_CHARS) };
+  return { url, title: title ? decode(title).replace(/\s+/g, ' ').trim() || null : null, description: meta(html, 'description') ?? meta(html, 'og:description'), text: text.slice(0, limit) };
 }
 
 /**

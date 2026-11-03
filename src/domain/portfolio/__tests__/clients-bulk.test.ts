@@ -24,7 +24,7 @@ describe('adding clients in bulk (D-098)', () => {
       { name: 'Budi', email: 'bukan-email' }, // unusable email
     ]);
     expect(r.created.map((c) => c.name).sort()).toEqual(['Bu Ratna', 'CV Maju Jaya']);
-    expect(r.skipped.map((s) => `${s.reason}:${s.name.trim()}`).sort()).toEqual(['exists:pak   fatoni shiha prestige', 'invalid:Budi', 'invalid:X', 'repeated:bu ratna']);
+    expect(r.skipped.map((s) => `${s.reason}:${s.name.trim()}`).sort()).toEqual(['exists:pak fatoni shiha prestige', 'invalid:Budi', 'invalid:X', 'repeated:bu ratna']);
     const rows = await db.select().from(clients).where(eq(clients.orgId, o.orgId));
     expect(rows).toHaveLength(3);
     expect(rows.find((c) => c.name === 'Bu Ratna')).toMatchObject({ phone: '+62 812-0000-1111' });
