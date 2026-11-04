@@ -5,6 +5,7 @@ Format [Keep a Changelog](https://keepachangelog.com/). Entri terbaru di atas. P
 ## [Unreleased]
 
 ### Changed
+- `README.md` ditambah bagian untuk juri: "Try it in 3 minutes", "By the numbers" (1.556 tes lulus, 86 tool AI, 29 migrasi; semua diperiksa dari repo 2026-11-05), dan "Built during the hackathon" (jejak per hari dari riwayat git, serta keterangan bahwa pengerjaan dibantu asisten kode AI).
 - `README.md` dipercantik untuk juri (banner, badge, embed video demo YouTube lewat thumbnail yang bisa diklik, diagram alur dan arsitektur Mermaid, empat tangkapan layar dari video di `docs/assets/`) dan ditulis ulang dalam bahasa Inggris: ringkasan keunggulan (AI sebagai mesin, persetujuan manusia, angka dari kode), uraian fitur per modul yang sudah ada (asisten, Action Center, onboarding, portofolio, billing, pipeline dan tugas, dokumen, rapat, Marketing Studio, Telegram, koneksi dan deployment, dashboard, audit, pengguna, situs pemasaran), tabel model Meta, arsitektur, dan batas jujur. Status per fitur tetap hanya di `docs/PLAN.md`.
 
 ### Added

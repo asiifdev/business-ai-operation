@@ -18,6 +18,7 @@ An AI business operating system for software agencies and startups, built on Met
 
 <p align="center">
   <a href="#demo">Demo</a> ·
+  <a href="#try-it-in-3-minutes">Try it</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#what-makes-it-different">Why it is different</a> ·
   <a href="#features">Features</a> ·
@@ -40,6 +41,20 @@ Orbyte keeps your clients, products, subscriptions, invoices, leads, tasks, docu
 </p>
 
 What the video shows: sign up and let Muse Spark fill in the company profile from a website, one sentence to the assistant that searches the web and prepares a client and a product, human approval in the Action Center, a poster designed by Muse Image, and the AI usage and audit log that record everything.
+
+## Try it in 3 minutes
+
+You do not need an API key. The live app runs on our own Meta Model API key, with a daily budget per feature.
+
+1. Open <https://ai-business.asiifdev.com>, press **Get started** and create an organization. Use any fake company; sign-up takes about a minute.
+2. In the setup wizard, paste a company website into **Fill in from your website** and press **Fill in with AI**. Muse Spark reads the site and suggests the company profile. Nothing is saved until you review it.
+3. Open **Assistant** and send: *Add the product invly.id with Basic, Pro and Enterprise packages, add Arunika Trans Rental as a client, and draft a proposal for the Pro package.* The assistant searches the web for real pricing, then **Action Center** shows approval cards with the exact change. Approve them.
+4. Open **Marketing Studio**, describe a poster, add a web page and press **Make picture**. Muse Image designs it in about 15 to 40 seconds.
+5. Open **AI usage** (every model call with tokens and cost) and **Audit log** (every change, who and when).
+
+Other questions to try in the assistant: "Which clients are behind on the product version?", "How much AI budget is left today?", "Is anything waiting for approval?"
+
+Prefer a local run with fake demo data? See [Running locally](#running-locally): `pnpm db:seed` creates demo organizations and logins.
 
 ## How it works
 
@@ -186,6 +201,20 @@ The model proposes, a person decides, and plain code makes the change. The model
 - Public site in English and Indonesian (17 pages) with SEO, structured data, `llms.txt`, a pricing page and a feature list that is checked against `docs/PLAN.md` so it never promises more than exists.
 - Own design system and component library in React (forms, data tables, modals, toasts, tabs, steps, dropdowns, command palette), responsive down to phone size, with a component gallery at `/dev/komponen` in development.
 
+## By the numbers
+
+All figures were checked against this repository on 5 Nov 2026.
+
+| What | Value |
+|---|---|
+| Automated tests | **1,556 passing** in 133 files (unit, service and database integration); the full run takes about 35 seconds |
+| Typed AI tools | **86** (read, draft and act) |
+| Domain modules | 26, behind 131 API route files and 46 pages |
+| Database migrations | 29 |
+| Design decisions written down | 99, in [`docs/DECISIONS.md`](docs/DECISIONS.md) |
+| Commits | 63, from 28 Oct to 4 Nov 2026 |
+| Cost of an assistant run | **USD 0.02 to 0.14** per run in the demo's AI usage log (about 3,000 to 110,000 tokens, depending on how many tools it calls) |
+
 ## Meta models used
 
 | Capability | Model | Used for |
@@ -221,6 +250,21 @@ flowchart TB
 - Layers: UI (`src/pages`, `src/components`) calls thin endpoints (`src/pages/api`, Zod validation), which call services (`src/domain/<module>/service.ts`) that hold all business logic. The web, Telegram and the AI tools all call the same services, so numbers never differ between channels.
 - A background worker in the server process handles meeting processing, video rendering and deploy flows; a scheduler ticks every 60 seconds.
 - 16 module BRDs, a PRD and an ERD drive the schema; migrations come only from the ERD.
+
+## Built during the hackathon
+
+Everything in this repository was written between **28 Oct and 4 Nov 2026**; the first commit is dated 28 Oct. The git history is the record (63 commits). A summary by day:
+
+| Date | What was built |
+|---|---|
+| 28 Oct | Project scaffold and form component library; BRD, PRD and ERD; authentication and multi-tenancy; AI core (provider layer, tool registry, agent loop, budgets, run log); grounded web assistant; portfolio; billing (invoices, subscriptions); Action Center; pipeline and tasks; landing site |
+| 29 Oct | Meetings with audio processing and live speech transcription; documents and proposals; SSH and aaPanel connections; Marketing Studio (posters, brand kit, captions); audit timelines |
+| 30 to 31 Oct | Assistant upgrades (attachments, website reading, streaming progress, autonomy levels, conversation history); company profile; narrated video projects; data tables |
+| 1 Nov | Daily image quota; deploy flow editor with AI assistance; dictation and chat export; client and product management tools |
+| 2 to 3 Nov | Lead documents and conversion to a subscription; onboarding wizard with Fill in with AI; user invitations by email; role-change guard; demo data seed |
+| 4 Nov | Onboarding polish, README and submission assets |
+
+How it was built: the author directed and reviewed the work with an AI coding assistant (Claude Code); the development guidance skills are in `.claude/skills/`. Nothing was copied from earlier projects. At runtime, the AI in the product is Meta's Muse models only.
 
 ## Honest limits
 
